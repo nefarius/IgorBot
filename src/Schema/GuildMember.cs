@@ -50,7 +50,7 @@ internal sealed partial class GuildMember : IEntity, INotifyPropertyChanged
 
     public override string ToString()
     {
-        return Member;
+        return string.IsNullOrEmpty(Member) ? ID : Member;
     }
 
     /// <summary>
@@ -104,6 +104,7 @@ internal sealed partial class GuildMember : IEntity, INotifyPropertyChanged
         };
 
         statusEmbed.AddField("Member", Mention);
+        statusEmbed.AddField("Database ID", ID);
         statusEmbed.AddField("Created at", Formatter.Timestamp(CreatedAt));
         statusEmbed.AddField("Joined at", Formatter.Timestamp(JoinedAt));
 
@@ -129,7 +130,7 @@ internal sealed partial class GuildMember : IEntity, INotifyPropertyChanged
 
         if (LeftAt.HasValue && LeftAt.Value > JoinedAt && !RemovedByModeration)
         {
-            statusEmbed.AddField("Left by themselves at", Formatter.Timestamp(LeftAt.Value));
+            statusEmbed.AddField("Left at", Formatter.Timestamp(LeftAt.Value));
         }
 
         return statusEmbed;

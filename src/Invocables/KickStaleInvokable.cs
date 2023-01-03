@@ -35,6 +35,8 @@ internal class KickStaleInvokable : IInvocable
 
     public async Task Invoke()
     {
+        _logger.LogDebug("Running stale kick timer");
+
         // Enumerate guild configs with an active idle timespan set
         foreach (GuildConfig config in _config.Value.Guilds
                      .Where(gc => gc.Value.IdleKickTimeSpan.HasValue)
@@ -46,7 +48,7 @@ internal class KickStaleInvokable : IInvocable
                     // match the Guild we're enumerating
                     m.Eq(f => f.GuildId, config.GuildId) &
                     // don't kick users with a pending submission
-                    m.Ne(f => f.Application.QuestionnaireSubmittedAt, null) &
+                    m.Eq(f => f.Application.QuestionnaireSubmittedAt, null) &
                     // auto-kick might be disabled
                     m.Eq(f => f.Application.IsAutoKickEnabled, true) &
                     // get embeds that are older than the configured timespan
