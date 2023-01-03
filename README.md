@@ -20,6 +20,7 @@ It's recommended to use Docker and docker-compose to bring up the bot and its co
 
 ## 3rd party credits
 
+- [DSharpPlus](https://github.com/DSharpPlus/DSharpPlus)
 - [Nefarius.DSharpPlus.Extensions.Hosting](https://github.com/nefarius/Nefarius.DSharpPlus.Extensions.Hosting)
 - [MongoDB.Entities](https://mongodb-entities.com/)
 - [Coravel](https://docs.coravel.net/)
