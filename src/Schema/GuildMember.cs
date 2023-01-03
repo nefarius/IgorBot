@@ -101,6 +101,11 @@ internal sealed partial class GuildMember : IEntity, INotifyPropertyChanged
         statusEmbed.AddField("Created at", Formatter.Timestamp(CreatedAt));
         statusEmbed.AddField("Joined at", Formatter.Timestamp(JoinedAt));
 
+        if (Channel is not null)
+        {
+            statusEmbed.AddField("Newbie channel", Channel.Mention);
+        }
+
         if (KickedAt.HasValue)
         {
             statusEmbed.AddField("Kicked at", Formatter.Timestamp(KickedAt.Value));

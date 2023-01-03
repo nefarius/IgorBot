@@ -28,10 +28,15 @@ internal sealed class NewbieChannel : IEntity
     public string ChannelName { get; init; }
 
     /// <summary>
+    ///     Channel mention string.
+    /// </summary>
+    public string Mention { get; init; }
+
+    /// <summary>
     ///     Creation timestamp.
     /// </summary>
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-
+    
     public override string ToString()
     {
         return $"Channel {ChannelName} ({ChannelId})";

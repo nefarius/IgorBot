@@ -62,7 +62,7 @@ internal sealed partial class GuildMember
     public async Task CreateNewbieChannel(DiscordGuild guild, DiscordChannel channel)
     {
         NewbieChannel newbieChannel =
-            new() { GuildId = guild.Id, ChannelId = channel.Id, ChannelName = channel.Name };
+            new() { GuildId = guild.Id, ChannelId = channel.Id, ChannelName = channel.Name, Mention = channel.Mention };
         await newbieChannel.SaveAsync();
 
         Channel = newbieChannel;
