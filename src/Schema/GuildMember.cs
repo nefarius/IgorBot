@@ -53,6 +53,9 @@ internal sealed partial class GuildMember : IEntity, INotifyPropertyChanged
         return Member;
     }
 
+    /// <summary>
+    ///     Builds an interaction response.
+    /// </summary>
     private DiscordWebhookBuilder GetInteractionResponse(DiscordClient client)
     {
         DiscordWebhookBuilder builder = new();
@@ -74,6 +77,9 @@ internal sealed partial class GuildMember : IEntity, INotifyPropertyChanged
         return builder;
     }
 
+    /// <summary>
+    ///     Builds the status widget (Discord message embed).
+    /// </summary>
     private DiscordEmbedBuilder GetStatusWidget(DiscordClient client)
     {
         DiscordGuild guild = client.Guilds[GuildId];
@@ -104,6 +110,11 @@ internal sealed partial class GuildMember : IEntity, INotifyPropertyChanged
         if (Channel is not null)
         {
             statusEmbed.AddField("Newbie channel", Channel.Mention);
+        }
+
+        if (PromotedAt.HasValue)
+        {
+            statusEmbed.AddField("Promoted at", Formatter.Timestamp(PromotedAt.Value));
         }
 
         if (KickedAt.HasValue)
