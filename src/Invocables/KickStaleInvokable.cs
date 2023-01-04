@@ -15,6 +15,9 @@ using Nefarius.DSharpPlus.Extensions.Hosting;
 
 namespace IgorBot.Invocables;
 
+/// <summary>
+///     Scheduled task to query for stale users and kick them.
+/// </summary>
 [SuppressMessage("ReSharper", "ClassNeverInstantiated.Global")]
 internal class KickStaleInvokable : IInvocable
 {
