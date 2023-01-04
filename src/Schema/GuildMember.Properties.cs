@@ -5,6 +5,7 @@ using MongoDB.Bson.Serialization.Attributes;
 namespace IgorBot.Schema;
 
 [SuppressMessage("ReSharper", "MemberCanBePrivate.Global")]
+[SuppressMessage("ReSharper", "UnusedMember.Global")]
 internal sealed partial class GuildMember
 {
     /// <summary>
@@ -30,15 +31,15 @@ internal sealed partial class GuildMember
     /// <summary>
     ///     Creation timestamp.
     /// </summary>
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime CreatedAt { get; } = DateTime.UtcNow;
 
     /// <summary>
-    ///     Las guild join timestamp.
+    ///     Last guild join timestamp.
     /// </summary>
     public DateTime JoinedAt { get; set; } = DateTime.UtcNow;
 
     /// <summary>
-    ///     Las guild leave timestamp.
+    ///     Last guild leave timestamp.
     /// </summary>
     public DateTime? LeftAt { get; set; } = DateTime.UtcNow;
 
@@ -73,12 +74,36 @@ internal sealed partial class GuildMember
     public string Mention { get; set; }
 
     /// <summary>
+    ///     True if member jas freshly joined.
+    /// </summary>
+    public bool IsNew => !PromotedAt.HasValue &&
+                         !KickedAt.HasValue &&
+                         !AutoKickedAt.HasValue &&
+                         !BannedAt.HasValue;
+
+    /// <summary>
     ///     True if this member is no longer in the guild.
     /// </summary>
     public bool HasLeftGuild =>
-        (KickedAt.HasValue && KickedAt.Value > JoinedAt) || 
-        (BannedAt.HasValue && BannedAt.Value > JoinedAt) || 
+        (KickedAt.HasValue && KickedAt.Value > JoinedAt) ||
+        (BannedAt.HasValue && BannedAt.Value > JoinedAt) ||
+        (AutoKickedAt.HasValue && AutoKickedAt.Value > JoinedAt) ||
         (LeftAt.HasValue && LeftAt.Value > JoinedAt);
+
+    /// <summary>
+    ///     True if this member is currently present in the guild.
+    /// </summary>
+    public bool IsInGuild => !HasLeftGuild;
+
+    /// <summary>
+    ///     True if the member is in the guild and has full member role.
+    /// </summary>
+    public bool IsFullMember => IsInGuild && PromotedAt.HasValue;
+
+    /// <summary>
+    ///     True if the member got banned.
+    /// </summary>
+    public bool IsBanned => BannedAt.HasValue;
 
     /// <summary>
     ///     True if member left guild by moderator action, true if left on their own.

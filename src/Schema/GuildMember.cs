@@ -13,6 +13,7 @@ namespace IgorBot.Schema;
 /// </summary>
 [SuppressMessage("ReSharper", "MemberCanBePrivate.Global")]
 [SuppressMessage("ReSharper", "UnusedMember.Global")]
+[SuppressMessage("ReSharper", "UnusedMember.Local")]
 internal sealed partial class GuildMember : IEntity, INotifyPropertyChanged
 {
     internal const string StrangerCommandKick = "kick";
@@ -43,14 +44,35 @@ internal sealed partial class GuildMember : IEntity, INotifyPropertyChanged
         }
     }
 
+    /// <summary>
+    ///     The embed color depending on member state.
+    /// </summary>
+    private DiscordColor EmbedColor
+    {
+        get
+        {
+            if (IsNew)
+            {
+                return DiscordColor.Blue;
+            }
+
+            if (HasLeftGuild)
+            {
+                return DiscordColor.DarkGray;
+            }
+
+            if (IsBanned)
+            {
+                return DiscordColor.Red;
+            }
+
+            return IsFullMember ? DiscordColor.Green : DiscordColor.None;
+        }
+    }
+
     public string GenerateNewID()
     {
         return $"{GuildId}-{MemberId}";
-    }
-
-    public override string ToString()
-    {
-        return string.IsNullOrEmpty(Member) ? ID : Member;
     }
 
     /// <summary>
@@ -97,6 +119,7 @@ internal sealed partial class GuildMember : IEntity, INotifyPropertyChanged
             Title = $"Stranger {Member}",
             Description = "Stranger status panel",
             Timestamp = DateTimeOffset.UtcNow,
+            Color = EmbedColor,
             Footer = new DiscordEmbedBuilder.EmbedFooter
             {
                 IconUrl = client.CurrentUser.AvatarUrl, Text = "Onboarding by Igor"
@@ -106,7 +129,7 @@ internal sealed partial class GuildMember : IEntity, INotifyPropertyChanged
         statusEmbed.AddField("Member", Mention);
         statusEmbed.AddField("Database ID", ID);
         statusEmbed.AddField("Created at", Formatter.Timestamp(CreatedAt));
-        statusEmbed.AddField("Joined at", Formatter.Timestamp(JoinedAt));
+        statusEmbed.AddField("Joined at", Formatter.Timestamp(JoinedAt), true);
 
         if (Channel is not null)
         {
@@ -139,5 +162,10 @@ internal sealed partial class GuildMember : IEntity, INotifyPropertyChanged
         }
 
         return statusEmbed;
+    }
+
+    public override string ToString()
+    {
+        return string.IsNullOrEmpty(Member) ? ID : Member;
     }
 }

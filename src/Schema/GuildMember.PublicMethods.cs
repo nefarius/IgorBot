@@ -18,6 +18,8 @@ internal sealed partial class GuildMember
         LeftAt = null;
         KickedAt = null;
         BannedAt = null;
+        AutoKickedAt = null;
+        PromotedAt = null;
         Application = null;
         Channel = null;
     }
