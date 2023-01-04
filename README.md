@@ -2,7 +2,7 @@
 
 # IgorBot
 
-![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/nefarius/IgorBot/docker-image.yml) ![Docker Pulls](https://img.shields.io/docker/pulls/containinger/igor-bot) ![Docker Image Version (latest by date)](https://img.shields.io/docker/v/containinger/igor-bot)
+![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/nefarius/IgorBot/docker-image.yml) ![Docker Pulls](https://img.shields.io/docker/pulls/containinger/igor-bot) ![Docker Image Version (latest by date)](https://img.shields.io/docker/v/containinger/igor-bot) ![Docker Image Size (latest by date)](https://img.shields.io/docker/image-size/containinger/igor-bot)
 
 Simple Discord bot to automate new Member on-boarding.
 
