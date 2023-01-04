@@ -4,7 +4,7 @@
 
 ![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/nefarius/IgorBot/docker-image.yml) [![Requirements](https://img.shields.io/badge/Requirements-.NET%207.0-blue.svg)](https://github.com/dotnet/core/blob/main/release-notes/7.0/supported-os.md) ![Docker Pulls](https://img.shields.io/docker/pulls/containinger/igor-bot) ![Docker Image Version (latest by date)](https://img.shields.io/docker/v/containinger/igor-bot) ![Docker Image Size (latest by date)](https://img.shields.io/docker/image-size/containinger/igor-bot)
 
-Simple Discord bot to automate new Member on-boarding.
+Advanced Discord bot to automate new Member on-boarding.
 
 ## About
 
