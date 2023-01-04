@@ -75,6 +75,9 @@ internal class KickStaleInvokable : IInvocable
                     await member.RemoveAsync("Member removed due to idle timeout");
 
                     _logger.LogInformation("Removed {Member} due to idle timeout", member);
+
+                    guildMember.AutoKickedAt = DateTime.UtcNow;
+                    await guildMember.SaveAsync();
                 }
                 catch (Exception ex)
                 {

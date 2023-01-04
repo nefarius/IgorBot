@@ -53,6 +53,11 @@ internal sealed partial class GuildMember
     public DateTime? KickedAt { get; set; }
 
     /// <summary>
+    ///     If set, the timestamp at which the member got kicked by timers.
+    /// </summary>
+    public DateTime? AutoKickedAt { get; set; }
+
+    /// <summary>
     ///     If set, the timestamp at which the member got banned by moderator action.
     /// </summary>
     public DateTime? BannedAt { get; set; }

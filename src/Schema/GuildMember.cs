@@ -123,6 +123,11 @@ internal sealed partial class GuildMember : IEntity, INotifyPropertyChanged
             statusEmbed.AddField("Kicked at", Formatter.Timestamp(KickedAt.Value));
         }
 
+        if (AutoKickedAt.HasValue)
+        {
+            statusEmbed.AddField("Auto-Kicked at", Formatter.Timestamp(AutoKickedAt.Value));
+        }
+
         if (BannedAt.HasValue)
         {
             statusEmbed.AddField("Banned at", Formatter.Timestamp(BannedAt.Value));
