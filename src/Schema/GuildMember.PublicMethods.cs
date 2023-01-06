@@ -4,8 +4,6 @@ using DSharpPlus.EventArgs;
 
 using MongoDB.Entities;
 
-using Serilog;
-
 namespace IgorBot.Schema;
 
 internal sealed partial class GuildMember
@@ -100,13 +98,11 @@ internal sealed partial class GuildMember
 
         if (!HasLeftGuild)
         {
-            Log.Information("Adding ButtonComponents");
             messageBuilder.AddComponents(ButtonComponents);
         }
 
         if (!HasLeftGuild && application.ButtonComponents.Any())
         {
-            Log.Information("Adding application.ButtonComponents");
             messageBuilder.AddComponents(application.ButtonComponents);
         }
 
