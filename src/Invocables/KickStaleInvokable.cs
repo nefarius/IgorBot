@@ -54,7 +54,8 @@ internal class KickStaleInvokable : IInvocable
                     m.Eq(f => f.Application.QuestionnaireSubmittedAt, null) &
                     m.Eq(f => f.PromotedAt, null) &
                     m.Eq(f => f.StrangerRoleRemovedAt, null) & 
-                    m.Eq(f => f.FullMemberAt, null)
+                    m.Eq(f => f.FullMemberAt, null) &
+                    m.Eq(f => f.AutoKickedAt, null)
                 );
 
             DiscordGuild guild = _discord.Client.Guilds[config.GuildId];
@@ -75,11 +76,18 @@ internal class KickStaleInvokable : IInvocable
                     guildMember.AutoKickedAt = DateTime.UtcNow;
                     await guildMember.SaveAsync();
 
-                    DiscordMember member = await guild.GetMemberAsync(guildMember.MemberId);
+                    try
+                    {
+                        DiscordMember member = await guild.GetMemberAsync(guildMember.MemberId);
 
-                    await member.RemoveAsync("Member removed due to idle timeout");
+                        await member.RemoveAsync("Member removed due to idle timeout");
 
-                    _logger.LogWarning("Removed {@Member} due to idle timeout", member);
+                        _logger.LogWarning("Removed {@Member} due to idle timeout", guildMember);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Failed to auto-remove {@Member}", guildMember);
+                    }
                 }
                 catch (Exception ex)
                 {
