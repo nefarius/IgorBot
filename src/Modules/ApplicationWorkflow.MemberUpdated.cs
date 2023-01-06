@@ -86,7 +86,7 @@ internal partial class ApplicationWorkflow
             //
             // Member needs to have only the Stranger role
             // 
-            if (e.RolesAfter.Count() > 1 || e.RolesAfter.All(r => r != strangerRole))
+            if (e.RolesAfter.Count > 1 || e.RolesAfter.All(r => r != strangerRole))
             {
                 _logger.LogWarning("{Member} must have only {Role} assigned, has {Roles}",
                     e.Member, strangerRole, e.RolesAfter);
