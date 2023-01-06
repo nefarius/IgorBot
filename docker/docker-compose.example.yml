@@ -13,6 +13,8 @@ services:
     environment:
       - TZ=Europe/Vienna
       - Bot__Discord__Token=<bot-token-here>
+    labels:
+      - traefik.enable=false
     logging:
       options:
         max-size: "10m"
@@ -28,6 +30,8 @@ services:
       - ./data/mongo/config:/data/configdb
     environment:
       - TZ=Europe/Vienna
+    labels:
+      - traefik.enable=false
     logging:
       options:
         max-size: "10m"
@@ -35,16 +39,18 @@ services:
 
   # MongoDB Web Admin UI (optional)
   igor-bot-db-ui:
-    image: mongo-express
+    image: ugleiton/mongo-gui:latest
     container_name: igor-bot-db-ui
     restart: unless-stopped
     depends_on:
       - igor-bot-db
     environment:
       - TZ=Europe/Vienna
-      - ME_CONFIG_MONGODB_URL=mongodb://igor-bot-db:27017
+      - MONGO_URL=mongodb://igor-bot-db:27017
     ports:
-      - 127.0.0.1:8081:8081
+      - 127.0.0.1:8081:4321
+    labels:
+      - traefik.enable=false
     logging:
       options:
         max-size: "10m"
