@@ -76,7 +76,7 @@ internal partial class ApplicationWorkflow
                 {
                     if (member.RemovedByModeration)
                     {
-                        _logger.LogInformation("{Member} left due to moderator action", e.Member);
+                        _logger.LogWarning("{Member} left due to moderator action", e.Member);
                         return;
                     }
 

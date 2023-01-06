@@ -48,14 +48,13 @@ internal class KickStaleInvokable : IInvocable
             // query for members of the current guild where the application lifetime has exceeded the allowed idle time
             List<GuildMember> staleMembers = await DB.Find<GuildMember>()
                 .ManyAsync(m =>
-                    // match the Guild we're enumerating
+                    m.Lt(f => f.Application.CreatedAt, DateTime.UtcNow.Add(-config.IdleKickTimeSpan!.Value)) &
                     m.Eq(f => f.GuildId, config.GuildId) &
-                    // don't kick users with a pending submission
-                    m.Eq(f => f.Application.QuestionnaireSubmittedAt, null) &
-                    // auto-kick might be disabled
                     m.Eq(f => f.Application.IsAutoKickEnabled, true) &
-                    // get embeds that are older than the configured timespan
-                    m.Lt(f => f.Application.CreatedAt, DateTime.UtcNow.Add(-config.IdleKickTimeSpan.Value))
+                    m.Eq(f => f.Application.QuestionnaireSubmittedAt, null) &
+                    m.Eq(f => f.PromotedAt, null) &
+                    m.Eq(f => f.StrangerRoleRemovedAt, null) & 
+                    m.Eq(f => f.FullMemberAt, null)
                 );
 
             DiscordGuild guild = _discord.Client.Guilds[config.GuildId];
@@ -73,14 +72,14 @@ internal class KickStaleInvokable : IInvocable
 
                 try
                 {
+                    guildMember.AutoKickedAt = DateTime.UtcNow;
+                    await guildMember.SaveAsync();
+
                     DiscordMember member = await guild.GetMemberAsync(guildMember.MemberId);
 
                     await member.RemoveAsync("Member removed due to idle timeout");
 
-                    _logger.LogInformation("Removed {Member} due to idle timeout", member);
-
-                    guildMember.AutoKickedAt = DateTime.UtcNow;
-                    await guildMember.SaveAsync();
+                    _logger.LogWarning("Removed {@Member} due to idle timeout", member);
                 }
                 catch (Exception ex)
                 {

@@ -20,6 +20,8 @@ internal sealed partial class GuildMember
         BannedAt = null;
         AutoKickedAt = null;
         PromotedAt = null;
+        StrangerRoleRemovedAt = null;
+
         Application = null;
         Channel = null;
     }

@@ -64,6 +64,16 @@ internal sealed partial class GuildMember
     public DateTime? BannedAt { get; set; }
 
     /// <summary>
+    ///     If set, the timestamp at which the stranger role got removed from the member.
+    /// </summary>
+    public DateTime? StrangerRoleRemovedAt { get; set; }
+
+    /// <summary>
+    ///     If set, the timestamp at which the full member role got added to the member.
+    /// </summary>
+    public DateTime? FullMemberAt { get; set; }
+
+    /// <summary>
     ///     Cached member string containing username, discriminator and snowflake ID.
     /// </summary>
     public string Member { get; set; }
@@ -108,7 +118,7 @@ internal sealed partial class GuildMember
     /// <summary>
     ///     True if member left guild by moderator action, true if left on their own.
     /// </summary>
-    public bool RemovedByModeration => HasLeftGuild && (KickedAt.HasValue || BannedAt.HasValue);
+    public bool RemovedByModeration => HasLeftGuild && (KickedAt.HasValue || BannedAt.HasValue || AutoKickedAt.HasValue);
 
     /// <summary>
     ///     MongoDB ID.

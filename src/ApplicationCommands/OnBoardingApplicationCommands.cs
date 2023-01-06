@@ -67,6 +67,10 @@ public sealed class OnBoardingApplicationCommands : ApplicationCommandModule
             return;
         }
 
+        dbMember.Application.IsAutoKickEnabled = false;
+        await dbMember.SaveAsync();
+        await dbMember.UpdateApplicationWidget(ctx.Client);
+
         #endregion
 
         #region Questionaire logic

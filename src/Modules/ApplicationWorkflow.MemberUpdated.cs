@@ -36,7 +36,7 @@ internal partial class ApplicationWorkflow
             _logger.LogWarning("{Member} not found in DB", e.Member);
             return;
         }
-        
+
         GuildConfig guildConfig = _config.Value.Guilds[e.Guild.Id.ToString()];
 
         DiscordChannel strangerStatusChannel = e.Guild.GetChannel(guildConfig.StrangerStatusChannelId);
@@ -48,8 +48,19 @@ internal partial class ApplicationWorkflow
 
         _ = Task.Run(async () =>
         {
+            // Full member role added
+            if (e.RolesBefore.All(role => role.Id != guildConfig.MemberRoleId) &&
+                e.RolesAfter.Any(role => role.Id == guildConfig.MemberRoleId))
+            {
+                _logger.LogInformation("Full member role set for {Member}", e.Member);
+                member.FullMemberAt = DateTime.UtcNow;
+                await member.SaveAsync();
+                return;
+            }
+
             // Stranger role was removed
-            if (e.RolesAfter.All(role => role.Id != guildConfig.StrangerRoleId))
+            if (e.RolesBefore.Any(role => role.Id == guildConfig.StrangerRoleId) &&
+                e.RolesAfter.All(role => role.Id != guildConfig.StrangerRoleId))
             {
                 await ProcessStrangerRoleRemoved(sender, e, member);
 
@@ -231,6 +242,9 @@ internal partial class ApplicationWorkflow
     )
     {
         _logger.LogInformation("Stranger role removed for {Member}", member);
+
+        member.StrangerRoleRemovedAt = DateTime.UtcNow;
+        await member.SaveAsync();
 
         // Remove channel
         NewbieChannel newbieChannel = member.Channel;

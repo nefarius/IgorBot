@@ -156,9 +156,14 @@ internal sealed partial class GuildMember : IEntity, INotifyPropertyChanged
             statusEmbed.AddField("Banned at", Formatter.Timestamp(BannedAt.Value));
         }
 
-        if (LeftAt.HasValue && LeftAt.Value > JoinedAt && !RemovedByModeration)
+        if (HasLeftGuild && !RemovedByModeration)
         {
-            statusEmbed.AddField("Left at", Formatter.Timestamp(LeftAt.Value));
+            statusEmbed.AddField("Left at", Formatter.Timestamp(LeftAt!.Value));
+        }
+
+        if (HasLeftGuild && RemovedByModeration)
+        {
+            statusEmbed.AddField("Removed by moderation action at", Formatter.Timestamp(LeftAt!.Value));
         }
 
         return statusEmbed;
