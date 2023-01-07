@@ -232,6 +232,7 @@ internal partial class ApplicationWorkflow :
         _logger.LogInformation("Disabling auto-kick for {Member}", entry);
 
         entry.Application.IsAutoKickEnabled = false;
+        await entry.Application.SaveAsync();
 
         await entry.SaveAsync();
 
