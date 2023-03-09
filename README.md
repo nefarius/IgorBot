@@ -8,7 +8,7 @@ Advanced Discord bot to automate new Member on-boarding.
 
 ## About
 
-Work in progress, may explode at any moment, stay away 😆
+Work in progress, use with care 🔥
 
 ## Setup
 
