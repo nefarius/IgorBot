@@ -26,7 +26,7 @@ To be done...
 
 ### Discord server preparations
 
-As of the time of writing the bot doesn't have any server setup commands so some elbow grease is required to get it up and running 💪 No worries though, I've got you covered:'
+As of the time of writing the bot doesn't have any server setup commands so some elbow grease is required to get it up and running 💪 No worries though, I've got you covered! Adjust your `appsettings.Production.json` with the values outlined below:
 
 - Create a new Guild entry in the config file with your server's ID as the key name
 - Set the `GuildId` config value to the same ID
