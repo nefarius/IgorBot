@@ -20,6 +20,10 @@ It's recommended to use Docker and docker-compose to bring up the bot and its co
 - Run `docker-compose up -d igor-bot-app igor-bot-db` to bring the bot and database services online
   - Optionally you can simply run `docker-compose up -d` which will also start the MongoDB web UI, which you might not need running all the time
 
+## Configuration
+
+To be done...
+
 ## 3rd party credits
 
 - [DSharpPlus](https://github.com/DSharpPlus/DSharpPlus)
