@@ -26,6 +26,8 @@ To be done...
 
 ### Discord server preparations
 
+As of the time of writing the bot doesn't have any server setup commands so some elbow grease is required to get it up and running 💪 No worries though, I've got you covered:'
+
 - Create a new Guild entry in the config file with your server's ID as the key name
 - Set the `GuildId` config value to the same ID
 - Add a "Lurker" role and copy its ID to the `StrangerRoleId` config value
