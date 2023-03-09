@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics.CodeAnalysis;
+using System.Drawing;
 
 using DSharpPlus;
 using DSharpPlus.Entities;
@@ -210,6 +211,11 @@ public sealed class OnBoardingApplicationCommands : ApplicationCommandModule
                     {
                         Title = "Timeout", Description = error, Color = DiscordColor.IndianRed
                     }));
+
+                    await interactionChannel.SendMessageAsync(new DiscordEmbedBuilder
+                    {
+                        Title = "Timeout", Description = error, Color = DiscordColor.IndianRed
+                    });
                 }
 
                 return;
