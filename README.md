@@ -24,6 +24,21 @@ It's recommended to use Docker and docker-compose to bring up the bot and its co
 
 To be done...
 
+### Discord server preparations
+
+- Create a new Guild entry in the config file with your server's ID as the key name
+- Set the `GuildId` config value to the same ID
+- Add a "Lurker" role and copy its ID to the `StrangerRoleId` config value
+  - This is the role new members should get assigned to get identified. More on that later on.
+- Add a "Full Member" role and copy its ID to the `MemberRoleId` config value
+  - This is the role that promoted/unlocked members will get assigned when approved by a moderator
+- Create a new category "Newbies" and copy its ID to the `ApplicationCategoryId` config value
+- (Optional) Add one ore more moderator role IDs to `ApplicationModeratorRoleIds` to give those power to kick, ban or approve new members
+- Add a **private** channel for bot status messages and copy its ID to `StrangerStatusChannelId` config value
+- Add a **public** channel for the welcome messages and copy its ID to `MemberWelcomeMessageChannelId` config value
+
+To be done...
+
 ## 3rd party credits
 
 - [DSharpPlus](https://github.com/DSharpPlus/DSharpPlus)
