@@ -5,6 +5,7 @@ using DSharpPlus.Interactivity.Enums;
 
 using IgorBot.ApplicationCommands;
 using IgorBot.Core;
+using IgorBot.Handlers;
 using IgorBot.Invocables;
 
 using MongoDB.Driver;
@@ -13,6 +14,9 @@ using MongoDB.Entities;
 using Nefarius.DSharpPlus.Extensions.Hosting;
 using Nefarius.DSharpPlus.Interactivity.Extensions.Hosting;
 using Nefarius.DSharpPlus.SlashCommands.Extensions.Hosting;
+
+using Rebus.Config;
+using Rebus.Transport.InMem;
 
 using Serilog;
 using Serilog.Core;
@@ -35,6 +39,13 @@ IHostBuilder builder = Host.CreateDefaultBuilder(args)
         DB.InitAsync("IgorBot", MongoClientSettings.FromConnectionString(connectionString))
             .GetAwaiter()
             .GetResult();
+
+        services.AddRebus(
+            configure => configure
+                .Transport(t => t.UseInMemoryTransport(new InMemNetwork(), "Applications"))
+        );
+
+        services.AddRebusHandler<NewMemberHandler>();
 
         ConfigureLogging(hostContext, services);
 

@@ -12,6 +12,8 @@ using MongoDB.Entities;
 
 using Nefarius.DSharpPlus.Extensions.Hosting.Events;
 
+using Rebus.Bus;
+
 namespace IgorBot.Modules;
 
 [DiscordGuildMemberAddedEventSubscriber]
@@ -25,13 +27,14 @@ internal partial class ApplicationWorkflow :
     IDiscordComponentInteractionCreatedEventSubscriber
 {
     private readonly IOptions<IgorConfig> _config;
-
     private readonly ILogger<ApplicationWorkflow> _logger;
+    private readonly IBus _messageBus;
 
-    public ApplicationWorkflow(ILogger<ApplicationWorkflow> logger, IOptions<IgorConfig> config)
+    public ApplicationWorkflow(ILogger<ApplicationWorkflow> logger, IOptions<IgorConfig> config, IBus messageBus)
     {
         _logger = logger;
         _config = config;
+        _messageBus = messageBus;
     }
 
     public async Task DiscordOnComponentInteractionCreated(DiscordClient sender,
