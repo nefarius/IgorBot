@@ -370,3 +370,4 @@ FodyWeavers.xsd
 /docker/data
 /docker/docker-compose.yml
 /.idea
+/src/appsettings.Development.json
