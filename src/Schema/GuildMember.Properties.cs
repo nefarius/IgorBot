@@ -1,4 +1,5 @@
-﻿using System.Diagnostics.CodeAnalysis;
+﻿#nullable enable
+using System.Diagnostics.CodeAnalysis;
 
 using MongoDB.Bson.Serialization.Attributes;
 
@@ -21,12 +22,12 @@ internal sealed partial class GuildMember
     /// <summary>
     ///     The current active application embed assigned to this member.
     /// </summary>
-    public StrangerApplicationEmbed Application { get; private set; }
+    public StrangerApplicationEmbed? Application { get; private set; }
 
     /// <summary>
     ///     The current active newbie channel assigned to this member.
     /// </summary>
-    public NewbieChannel Channel { get; private set; }
+    public NewbieChannel? Channel { get; private set; }
 
     /// <summary>
     ///     Creation timestamp.
@@ -120,6 +121,11 @@ internal sealed partial class GuildMember
     /// </summary>
     public bool RemovedByModeration => HasLeftGuild && (KickedAt.HasValue || BannedAt.HasValue || AutoKickedAt.HasValue);
 
+    /// <summary>
+    ///     True if newbie workflow is starting, false otherwise.
+    /// </summary>
+    public bool IsOnboardingInProgress { get; set; }
+    
     /// <summary>
     ///     MongoDB ID.
     /// </summary>

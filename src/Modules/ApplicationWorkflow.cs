@@ -4,6 +4,7 @@ using DSharpPlus.EventArgs;
 using DSharpPlus.Exceptions;
 
 using IgorBot.Core;
+using IgorBot.Handlers;
 using IgorBot.Schema;
 
 using Microsoft.Extensions.Options;

@@ -4,6 +4,7 @@ using DSharpPlus.EventArgs;
 using DSharpPlus.Exceptions;
 
 using IgorBot.Core;
+using IgorBot.Handlers;
 using IgorBot.Schema;
 using IgorBot.Util;
 
@@ -93,7 +94,7 @@ internal partial class ApplicationWorkflow
                 return;
             }
 
-            await ProcessStrangerAssignment(e, sender, guildConfig, member, strangerStatusChannel);
+            await ProcessStrangerAssignment(e, guildConfig, member);
         });
     }
 
@@ -102,10 +103,8 @@ internal partial class ApplicationWorkflow
     /// </summary>
     private async Task ProcessStrangerAssignment(
         GuildMemberUpdateEventArgs e,
-        DiscordClient client,
         GuildConfig guildConfig,
-        GuildMember member,
-        DiscordChannel strangerStatusChannel
+        GuildMember member
     )
     {
         GuildProperties guildRuntime = await DB.Find<GuildProperties>().OneAsync(e.Guild.Id.ToString());
@@ -116,120 +115,14 @@ internal partial class ApplicationWorkflow
             await guildRuntime.SaveAsync();
         }
 
-        DiscordChannel parentCategory = e.Guild.GetChannel(guildConfig.ApplicationCategoryId);
-
-        _logger.LogInformation("Application category: {Category}", parentCategory);
-
-        string applicationChannelName =
-            string.Format(guildConfig.ApplicationChannelNameFormat, guildRuntime.ApplicationChannels);
-
-        _logger.LogInformation("Building overwrites");
-
-        List<DiscordOverwriteBuilder> overwrites = new();
-
-        DiscordRole everyoneRole = e.Guild.EveryoneRole;
-
-        overwrites.Add(new DiscordOverwriteBuilder(everyoneRole).Deny(Permissions.AccessChannels));
-
-        //
-        // Add channel permissions for moderators
-        // 
-        foreach (ulong moderatorRoleId in guildConfig.ApplicationModeratorRoleIds)
+        NewMemberMessage message = new()
         {
-            DiscordRole role = e.Guild.GetRole(moderatorRoleId);
+            GuildProperties = guildRuntime, GuildConfig = guildConfig, MemberEntiryId = member.ID
+        };
 
-            if (role is null)
-            {
-                _logger.LogWarning("Role with ID {Id} wasn't found in the Discord universe, skipping",
-                    moderatorRoleId);
-                continue;
-            }
+        _logger.LogInformation("Submitting new member workflow message");
 
-            DiscordOverwriteBuilder overwrite = new(role);
-
-            overwrite.Allow(Permissions.AccessChannels);
-            overwrite.Allow(Permissions.ReadMessageHistory);
-            overwrite.Allow(Permissions.ManageMessages);
-            overwrite.Allow(Permissions.SendMessages);
-            overwrite.Allow(Permissions.EmbedLinks);
-            overwrite.Allow(Permissions.AddReactions);
-
-            overwrites.Add(overwrite);
-        }
-
-        //
-        // Add channel permissions for the affected member
-        // 
-        DiscordOverwriteBuilder memberOverwrite = new(e.Member);
-
-        memberOverwrite.Allow(Permissions.AccessChannels);
-        memberOverwrite.Allow(Permissions.ReadMessageHistory);
-        memberOverwrite.Allow(Permissions.SendMessages);
-        memberOverwrite.Allow(Permissions.AttachFiles);
-        memberOverwrite.Allow(Permissions.EmbedLinks);
-        memberOverwrite.Allow(Permissions.AddReactions);
-
-        overwrites.Add(memberOverwrite);
-
-        _logger.LogInformation("Created {Count} overwrites", overwrites.Count);
-
-        DiscordChannel channel;
-
-        try
-        {
-            _logger.LogInformation("Attempting to create channel {Channel}", applicationChannelName);
-
-            //
-            // Create new text channel private to the member and staff
-            // 
-            channel = await e.Guild.CreateChannelAsync(
-                applicationChannelName,
-                ChannelType.Text,
-                parentCategory,
-                overwrites: overwrites
-            );
-
-            _logger.LogInformation("Created {Channel}", channel);
-
-            //
-            // Channel created successfully, increment and save counter
-            // 
-            guildRuntime.ApplicationChannels++;
-            await guildRuntime.SaveAsync();
-
-            //
-            // Store member to channel association
-            // 
-            await member.CreateNewbieChannel(e.Guild, channel);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Channel creation failed");
-            return;
-        }
-
-        try
-        {
-            //
-            // Get users attention by adding welcome message
-            // 
-
-            await channel.SendMessageAsync(new DiscordMessageBuilder()
-                .WithContent(string.Format(guildConfig.NewbieWelcomeTemplate, e.Member.Mention)));
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Sending welcome message failed");
-        }
-
-        try
-        {
-            await member.CreateApplicationWidget(client, e.Guild, strangerStatusChannel);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Creating status message failed");
-        }
+        await _messageBus.SendLocal(message);
     }
 
     /// <summary>
@@ -244,6 +137,7 @@ internal partial class ApplicationWorkflow
         _logger.LogInformation("Stranger role removed for {Member}", member);
 
         member.StrangerRoleRemovedAt = DateTime.UtcNow;
+        member.IsOnboardingInProgress = false;
         await member.SaveAsync();
 
         // Remove channel

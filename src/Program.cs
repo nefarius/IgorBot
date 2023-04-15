@@ -16,6 +16,7 @@ using Nefarius.DSharpPlus.Interactivity.Extensions.Hosting;
 using Nefarius.DSharpPlus.SlashCommands.Extensions.Hosting;
 
 using Rebus.Config;
+using Rebus.Routing.TypeBased;
 using Rebus.Transport.InMem;
 
 using Serilog;
@@ -40,12 +41,17 @@ IHostBuilder builder = Host.CreateDefaultBuilder(args)
             .GetAwaiter()
             .GetResult();
 
-        services.AddRebus(
-            configure => configure
-                .Transport(t => t.UseInMemoryTransport(new InMemNetwork(), "Applications"))
-        );
+        // Register handlers 
+        services.AutoRegisterHandlersFromAssemblyOf<NewMemberHandler>();
 
-        services.AddRebusHandler<NewMemberHandler>();
+        // Configure and register Rebus
+        services.AddRebus(configure => configure
+            .Options(o => {
+                o.SetNumberOfWorkers(1);
+                o.SetMaxParallelism(1);
+            })
+            .Transport(t => t.UseInMemoryTransport(new InMemNetwork(), "NewMembers"))
+            .Routing(r => r.TypeBased().MapAssemblyOf<NewMemberMessage>("NewMembers")));
 
         ConfigureLogging(hostContext, services);
 
