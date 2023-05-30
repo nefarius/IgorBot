@@ -161,7 +161,7 @@ internal sealed partial class GuildMember : IEntity, INotifyPropertyChanged
             statusEmbed.AddField("Left at", Formatter.Timestamp(LeftAt!.Value));
         }
 
-        if (HasLeftGuild && RemovedByModeration)
+        if (HasLeftGuild && RemovedByModeration && LeftAt.HasValue)
         {
             statusEmbed.AddField("Removed by moderation action at", Formatter.Timestamp(LeftAt!.Value));
         }
