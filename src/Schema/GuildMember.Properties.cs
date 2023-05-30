@@ -119,13 +119,13 @@ internal sealed partial class GuildMember
     /// <summary>
     ///     True if member left guild by moderator action, true if left on their own.
     /// </summary>
-    public bool RemovedByModeration => HasLeftGuild && (KickedAt.HasValue || BannedAt.HasValue || AutoKickedAt.HasValue);
+    public bool RemovedByModeration { get; set; }
 
     /// <summary>
     ///     True if newbie workflow is starting, false otherwise.
     /// </summary>
     public bool IsOnboardingInProgress { get; set; }
-    
+
     /// <summary>
     ///     MongoDB ID.
     /// </summary>

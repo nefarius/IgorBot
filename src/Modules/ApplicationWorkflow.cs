@@ -205,6 +205,7 @@ internal partial class ApplicationWorkflow :
 
         await member.BanAsync();
 
+        entry.RemovedByModeration = true;
         entry.BannedAt = DateTime.UtcNow;
 
         await entry.SaveAsync();
@@ -221,6 +222,7 @@ internal partial class ApplicationWorkflow :
 
         await member.RemoveAsync();
 
+        entry.RemovedByModeration = true;
         entry.KickedAt = DateTime.UtcNow;
 
         await entry.SaveAsync();
