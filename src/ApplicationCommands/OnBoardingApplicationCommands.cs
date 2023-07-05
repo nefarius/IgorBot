@@ -1,5 +1,4 @@
 ﻿using System.Diagnostics.CodeAnalysis;
-using System.Drawing;
 
 using DSharpPlus;
 using DSharpPlus.Entities;
@@ -38,7 +37,7 @@ public sealed class OnBoardingApplicationCommands : ApplicationCommandModule
 
         await ctx.DeferAsync();
 
-        GuildMember dbMember = await DB.Find<GuildMember>().OneAsync(ctx.ToEntityId());;
+        GuildMember dbMember = await DB.Find<GuildMember>().OneAsync(ctx.ToEntityId());
 
         if (dbMember is null)
         {
