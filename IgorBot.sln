@@ -11,9 +11,11 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 		.editorconfig = .editorconfig
 		docker\appsettings.Production.example.json = docker\appsettings.Production.example.json
 		docker\docker-compose.example.yml = docker\docker-compose.example.yml
+		.github\workflows\docker-image.yml = .github\workflows\docker-image.yml
 		Dockerfile = Dockerfile
 		LICENSE = LICENSE
 		README.md = README.md
+		.github\workflows\support.yml = .github\workflows\support.yml
 	EndProjectSection
 EndProject
 Global
