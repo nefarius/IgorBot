@@ -36,17 +36,29 @@ internal sealed class NewbieChannel : IEntity
     ///     Creation timestamp.
     /// </summary>
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-    
+
     public override string ToString()
     {
         return $"Channel {ChannelName} ({ChannelId})";
     }
 
+    [SuppressMessage("ReSharper", "InconsistentNaming")]
     public string GenerateNewID()
     {
         return $"{GuildId}-{ChannelId}";
     }
 
+    public bool HasDefaultID()
+    {
+        return true;
+    }
+
+    [SuppressMessage("ReSharper", "InconsistentNaming")]
     [BsonId]
     public string ID { get; set; }
+
+    object IEntity.GenerateNewID()
+    {
+        return GenerateNewID();
+    }
 }

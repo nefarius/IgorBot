@@ -76,11 +76,23 @@ internal sealed class StrangerApplicationEmbed : IEntity
         }
     }
 
+    [SuppressMessage("ReSharper", "InconsistentNaming")]
     public string GenerateNewID()
     {
         return $"{GuildId}-{ChannelId}-{MessageId}";
     }
 
+    public bool HasDefaultID()
+    {
+        return true;
+    }
+
     [BsonId]
+    [SuppressMessage("ReSharper", "InconsistentNaming")]
     public string ID { get; set; }
+
+    object IEntity.GenerateNewID()
+    {
+        return GenerateNewID();
+    }
 }
