@@ -98,9 +98,6 @@ void ConfigureDiscord(IServiceCollection serviceCollection, IgorConfig igorConfi
     });
 
     serviceCollection.AddDiscordHostedService();
-
-    serviceCollection.AddSingleton<Global>();
-    serviceCollection.AddHostedService<GlobalService>();
 }
 
 void ConfigureLogging(HostBuilderContext hostBuilderContext, IServiceCollection serviceCollection)
