@@ -10,6 +10,8 @@ Advanced Discord bot to automate new Member on-boarding.
 
 Work in progress, use with care 🔥
 
+I am using it successfully for a couple years on my community servers now, however especially configuration simplification has missing features. You have been warned.
+
 ## Setup
 
 It's recommended to use Docker and docker-compose to bring up the bot and its companion services.
