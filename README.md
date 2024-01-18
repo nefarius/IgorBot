@@ -43,6 +43,12 @@ As of the time of writing the bot doesn't have any server setup commands so some
 
 To be done...
 
+## How to build
+
+```bash
+docker build --platform linux/amd64 -t containinger/igor-bot . ; docker push containinger/igor-bot
+```
+
 ## 3rd party credits
 
 - [DSharpPlus](https://github.com/DSharpPlus/DSharpPlus)
