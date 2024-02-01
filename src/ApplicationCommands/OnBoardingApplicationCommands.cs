@@ -256,7 +256,7 @@ public sealed class OnBoardingApplicationCommands : ApplicationCommandModule
         // Build submission message with Embed as primary content
         // 
         DiscordMessageBuilder submission = new DiscordMessageBuilder()
-            .WithEmbed(submissionEmbed);
+            .AddEmbed(submissionEmbed);
 
         //
         // If configured, add action buttons

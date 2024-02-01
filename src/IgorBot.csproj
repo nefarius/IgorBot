@@ -35,12 +35,12 @@
     <PackageReference Include="Microsoft.Extensions.Logging" Version="8.0.0" />
     <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.19.6" />
     <PackageReference Include="MongoDB.Entities" Version="23.0.1" />
-    <PackageReference Include="Nefarius.DSharpPlus.Interactivity.Extensions.Hosting" Version="5.1.0" />
-    <PackageReference Include="Nefarius.DSharpPlus.SlashCommands.Extensions.Hosting" Version="5.1.0" />
+    <PackageReference Include="Nefarius.DSharpPlus.Interactivity.Extensions.Hosting" Version="5.2.0" />
+    <PackageReference Include="Nefarius.DSharpPlus.SlashCommands.Extensions.Hosting" Version="5.2.0" />
     <PackageReference Include="PropertyChanged.Fody" Version="4.1.0">
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="Rebus.ServiceProvider" Version="10.0.0" />
+    <PackageReference Include="Rebus.ServiceProvider" Version="10.1.0" />
     <PackageReference Include="Serilog.Extensions.Logging" Version="8.0.0" />
     <PackageReference Include="Serilog.Settings.Configuration" Version="8.0.0" />
     <PackageReference Include="Serilog.Sinks.Console" Version="5.0.1" />
