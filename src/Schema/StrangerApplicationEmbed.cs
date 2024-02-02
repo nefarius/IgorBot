@@ -10,6 +10,7 @@ namespace IgorBot.Schema;
 
 [SuppressMessage("ReSharper", "MemberCanBePrivate.Global")]
 [SuppressMessage("ReSharper", "UnusedMember.Global")]
+[SuppressMessage("ReSharper", "AutoPropertyCanBeMadeGetOnly.Global")]
 internal sealed class StrangerApplicationEmbed : IEntity
 {
     internal const string StrangerCommandPromote = "promote";
