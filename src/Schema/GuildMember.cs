@@ -78,7 +78,7 @@ internal sealed partial class GuildMember : IEntity, INotifyPropertyChanged
 
     public bool HasDefaultID()
     {
-        return true;
+        return false;
     }
 
     /// <summary>

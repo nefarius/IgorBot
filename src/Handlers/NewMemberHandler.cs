@@ -44,6 +44,8 @@ internal sealed class NewMemberHandler : IHandleMessages<NewMemberMessage>
 
         GuildMember dbMember = await DB.Find<GuildMember>().OneAsync(message.MemberEntiryId);
         
+        _logger.LogDebug("Got member from DB: {@Member}", dbMember);
+        
         if (dbMember.Channel is not null || dbMember.IsOnboardingInProgress)
         {
             _logger.LogWarning("Member {Member} already has an active newbie channel, aborting", dbMember);

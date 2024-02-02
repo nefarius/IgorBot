@@ -84,7 +84,7 @@ internal sealed class StrangerApplicationEmbed : IEntity
 
     public bool HasDefaultID()
     {
-        return true;
+        return false;
     }
 
     [BsonId]

@@ -28,7 +28,7 @@ public class GuildProperties : IEntity
 
     public bool HasDefaultID()
     {
-        return true;
+        return false;
     }
 
     [SuppressMessage("ReSharper", "InconsistentNaming")]
