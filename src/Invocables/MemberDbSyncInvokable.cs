@@ -30,7 +30,7 @@ internal class MemberDbSyncInvokable : IInvocable
 
     public async Task Invoke()
     {
-        _logger.LogDebug("Running members database synchronization");
+        _logger.LogInformation("Running members database synchronization");
 
         foreach (GuildConfig config in _config.Value.Guilds.Select(gc => gc.Value))
         {
@@ -66,6 +66,6 @@ internal class MemberDbSyncInvokable : IInvocable
             }
         }
 
-        _logger.LogDebug("Members database synchronization done");
+        _logger.LogInformation("Members database synchronization done");
     }
 }
