@@ -72,7 +72,7 @@ internal sealed class NewMemberHandler : IHandleMessages<NewMemberMessage>
             string applicationChannelName =
                 string.Format(guildConfig.ApplicationChannelNameFormat, guildProperties.ApplicationChannels);
 
-            _logger.LogInformation("Building overwrites");
+            _logger.LogDebug("Building overwrites");
 
             List<DiscordOverwriteBuilder> overwrites = new();
 
@@ -120,13 +120,13 @@ internal sealed class NewMemberHandler : IHandleMessages<NewMemberMessage>
 
             overwrites.Add(memberOverwrite);
 
-            _logger.LogInformation("Created {Count} overwrites", overwrites.Count);
+            _logger.LogDebug("Created {Count} overwrites", overwrites.Count);
 
             DiscordChannel channel;
 
             try
             {
-                _logger.LogInformation("Attempting to create channel {Channel}", applicationChannelName);
+                _logger.LogDebug("Attempting to create channel {Channel}", applicationChannelName);
 
                 //
                 // Create new text channel private to the member and staff
