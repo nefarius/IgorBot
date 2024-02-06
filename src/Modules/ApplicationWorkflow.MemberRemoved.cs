@@ -80,7 +80,10 @@ internal partial class ApplicationWorkflow
                         return;
                     }
 
-                    _logger.LogInformation("{Member} left by themselves", e.Member);
+                    _logger.LogInformation(
+                        member.AutoKickedAt.HasValue
+                            ? "{Member} removed due to idle timeout"
+                            : "{Member} left by themselves", e.Member);
 
                     await member.DeleteApplicationWidget(sender);
 
