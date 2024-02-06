@@ -83,10 +83,7 @@ internal sealed class StrangerApplicationEmbed : IEntity
         return $"{GuildId}-{ChannelId}-{MessageId}";
     }
 
-    public bool HasDefaultID()
-    {
-        return false;
-    }
+    public bool HasDefaultID() => string.IsNullOrEmpty(ID);
 
     [BsonId]
     [SuppressMessage("ReSharper", "InconsistentNaming")]

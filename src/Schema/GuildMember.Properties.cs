@@ -1,6 +1,8 @@
 ﻿#nullable enable
 using System.Diagnostics.CodeAnalysis;
 
+using Microsoft.CodeAnalysis.CSharp.Syntax;
+
 using MongoDB.Bson.Serialization.Attributes;
 
 namespace IgorBot.Schema;
@@ -12,12 +14,12 @@ internal sealed partial class GuildMember
     /// <summary>
     ///     Discord user/member ID.
     /// </summary>
-    public ulong MemberId { get; init; }
+    public required ulong MemberId { get; init; }
 
     /// <summary>
     ///     Guild ID.
     /// </summary>
-    public ulong GuildId { get; init; }
+    public required ulong GuildId { get; init; }
 
     /// <summary>
     ///     The current active application embed assigned to this member.
@@ -77,12 +79,12 @@ internal sealed partial class GuildMember
     /// <summary>
     ///     Cached member string containing username, discriminator and snowflake ID.
     /// </summary>
-    public string Member { get; set; }
+    public required string Member { get; set; }
 
     /// <summary>
     ///     Cached mention string of the member.
     /// </summary>
-    public string Mention { get; set; }
+    public required string Mention { get; set; }
 
     /// <summary>
     ///     True if member jas freshly joined.

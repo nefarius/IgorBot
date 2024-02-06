@@ -26,10 +26,7 @@ public class GuildProperties : IEntity
         return $"{GuildId}";
     }
 
-    public bool HasDefaultID()
-    {
-        return false;
-    }
+    public bool HasDefaultID() => string.IsNullOrEmpty(ID);
 
     [SuppressMessage("ReSharper", "InconsistentNaming")]
     [BsonId]

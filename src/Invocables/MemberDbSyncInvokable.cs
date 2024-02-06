@@ -45,7 +45,8 @@ internal class MemberDbSyncInvokable : IInvocable
                     continue;
                 }
 
-                GuildMember guildMember = await DB.Find<GuildMember>().OneAsync(member.ToEntityId());
+                string id = member.ToEntityId();
+                GuildMember guildMember = await DB.Find<GuildMember>().OneAsync(id);
 
                 if (guildMember is not null)
                 {
@@ -59,7 +60,7 @@ internal class MemberDbSyncInvokable : IInvocable
                     Member = member.ToString(),
                     Mention = member.Mention
                 };
-
+                
                 await guildMember.SaveAsync();
 
                 _logger.LogInformation("{Member} added to DB", member);

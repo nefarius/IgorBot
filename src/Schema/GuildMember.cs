@@ -76,10 +76,7 @@ internal sealed partial class GuildMember : IEntity, INotifyPropertyChanged
         return $"{GuildId}-{MemberId}";
     }
 
-    public bool HasDefaultID()
-    {
-        return false;
-    }
+    public bool HasDefaultID() => string.IsNullOrEmpty(ID);
 
     /// <summary>
     ///     Builds an interaction response.
