@@ -44,7 +44,7 @@ internal sealed partial class GuildMember
     /// <summary>
     ///     Last guild leave timestamp.
     /// </summary>
-    public DateTime? LeftAt { get; set; } = DateTime.UtcNow;
+    public DateTime? LeftAt { get; set; }
 
     /// <summary>
     ///     If set, the timestamp at which the member got promoted.
