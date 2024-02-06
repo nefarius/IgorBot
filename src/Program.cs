@@ -7,6 +7,7 @@ using IgorBot.ApplicationCommands;
 using IgorBot.Core;
 using IgorBot.Handlers;
 using IgorBot.Invocables;
+using IgorBot.Services;
 
 using MongoDB.Driver;
 using MongoDB.Entities;
@@ -58,6 +59,8 @@ IHostBuilder builder = Host.CreateDefaultBuilder(args)
         ConfigureScheduler(services);
 
         ConfigureDiscord(services, config);
+
+        services.AddHostedService<StartupTasks>();
     });
 
 IHost host = builder.Build();
@@ -120,6 +123,8 @@ void ConfigureLogging(HostBuilderContext hostBuilderContext, IServiceCollection 
 void ConfigureScheduler(IServiceCollection serviceCollection)
 {
     serviceCollection.AddScheduler();
+    serviceCollection.AddQueue();
 
     serviceCollection.AddTransient<KickStaleInvokable>();
+    serviceCollection.AddTransient<MemberDbSyncInvokable>();
 }
