@@ -1,6 +1,7 @@
 ﻿using DSharpPlus;
 using DSharpPlus.Entities;
 using DSharpPlus.EventArgs;
+using DSharpPlus.Exceptions;
 
 using IgorBot.Schema;
 using IgorBot.Util;
@@ -52,19 +53,19 @@ internal partial class ApplicationWorkflow
 
             if (newbieChannel is not null)
             {
-                DiscordChannel discordChannel = e.Guild.GetChannel(newbieChannel.ChannelId);
+                try
+                {
+                    DiscordChannel discordChannel = e.Guild.GetChannel(newbieChannel.ChannelId);
 
-                if (discordChannel is null)
-                {
-                    _logger.LogWarning("Couldn't find temporary channel to delete");
-                }
-                else
-                {
                     _logger.LogInformation("Removing channel {Channel}", discordChannel);
 
                     await discordChannel.DeleteAsync($"{e.Member} has been removed");
 
                     await member.DeleteChannel();
+                }
+                catch (ServerErrorException)
+                {
+                    _logger.LogWarning("Couldn't find temporary channel to delete");
                 }
             }
 
