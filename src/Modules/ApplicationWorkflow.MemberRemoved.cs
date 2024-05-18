@@ -22,7 +22,7 @@ internal partial class ApplicationWorkflow
             return;
         }
 
-        if (!_config.Value.Guilds.ContainsKey(e.Guild.Id.ToString()))
+        if (!_config.CurrentValue.Guilds.ContainsKey(e.Guild.Id.ToString()))
         {
             return;
         }

@@ -21,13 +21,13 @@ namespace IgorBot.Invocables;
 [SuppressMessage("ReSharper", "ClassNeverInstantiated.Global")]
 internal class KickStaleInvokable : IInvocable
 {
-    private readonly IOptions<IgorConfig> _config;
+    private readonly IOptionsMonitor<IgorConfig> _config;
     private readonly IDiscordClientService _discord;
     private readonly ILogger<KickStaleInvokable> _logger;
 
     public KickStaleInvokable(
         ILogger<KickStaleInvokable> logger,
-        IOptions<IgorConfig> config,
+        IOptionsMonitor<IgorConfig> config,
         IDiscordClientService discord
     )
     {
@@ -41,7 +41,7 @@ internal class KickStaleInvokable : IInvocable
         _logger.LogDebug("Running stale kick timer");
 
         // Enumerate guild configs with an active idle timespan set
-        foreach (GuildConfig config in _config.Value.Guilds
+        foreach (GuildConfig config in _config.CurrentValue.Guilds
                      .Where(gc => gc.Value.IdleKickTimeSpan.HasValue)
                      .Select(gc => gc.Value))
         {

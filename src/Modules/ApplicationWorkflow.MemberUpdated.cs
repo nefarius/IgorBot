@@ -24,7 +24,7 @@ internal partial class ApplicationWorkflow
             return;
         }
 
-        if (!_config.Value.Guilds.ContainsKey(e.Guild.Id.ToString()))
+        if (!_config.CurrentValue.Guilds.ContainsKey(e.Guild.Id.ToString()))
         {
             return;
         }
@@ -38,7 +38,7 @@ internal partial class ApplicationWorkflow
             return;
         }
 
-        GuildConfig guildConfig = _config.Value.Guilds[e.Guild.Id.ToString()];
+        GuildConfig guildConfig = _config.CurrentValue.Guilds[e.Guild.Id.ToString()];
 
         DiscordChannel strangerStatusChannel = e.Guild.GetChannel(guildConfig.StrangerStatusChannelId);
 

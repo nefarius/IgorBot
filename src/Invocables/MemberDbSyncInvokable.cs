@@ -16,11 +16,11 @@ namespace IgorBot.Invocables;
 
 internal class MemberDbSyncInvokable : IInvocable
 {
-    private readonly IOptions<IgorConfig> _config;
+    private readonly IOptionsMonitor<IgorConfig> _config;
     private readonly IDiscordClientService _discord;
     private readonly ILogger<MemberDbSyncInvokable> _logger;
 
-    public MemberDbSyncInvokable(IOptions<IgorConfig> config, IDiscordClientService discord,
+    public MemberDbSyncInvokable(IOptionsMonitor<IgorConfig> config, IDiscordClientService discord,
         ILogger<MemberDbSyncInvokable> logger)
     {
         _config = config;
@@ -32,7 +32,7 @@ internal class MemberDbSyncInvokable : IInvocable
     {
         _logger.LogInformation("Running members database synchronization");
 
-        foreach (GuildConfig config in _config.Value.Guilds.Select(gc => gc.Value))
+        foreach (GuildConfig config in _config.CurrentValue.Guilds.Select(gc => gc.Value))
         {
             DiscordGuild guild = _discord.Client.Guilds[config.GuildId];
 

@@ -76,9 +76,9 @@ public sealed class OnBoardingApplicationCommands : ApplicationCommandModule
 
         #region Questionaire logic
 
-        IOptions<IgorConfig> config = ctx.Services.GetRequiredService<IOptions<IgorConfig>>();
+        IOptionsMonitor<IgorConfig> config = ctx.Services.GetRequiredService<IOptionsMonitor<IgorConfig>>();
         DiscordGuild guild = ctx.Guild;
-        GuildConfig guildConfig = config.Value.Guilds[guild.Id.ToString()];
+        GuildConfig guildConfig = config.CurrentValue.Guilds[guild.Id.ToString()];
         Questionnaire questionnaire = guildConfig.Questionnaires["Member"];
         DiscordMember member = (DiscordMember)ctx.User;
 

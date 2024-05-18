@@ -26,11 +26,11 @@ internal partial class ApplicationWorkflow :
     IDiscordGuildMemberRemovedEventSubscriber,
     IDiscordComponentInteractionCreatedEventSubscriber
 {
-    private readonly IOptions<IgorConfig> _config;
+    private readonly IOptionsMonitor<IgorConfig> _config;
     private readonly ILogger<ApplicationWorkflow> _logger;
     private readonly IBus _messageBus;
 
-    public ApplicationWorkflow(ILogger<ApplicationWorkflow> logger, IOptions<IgorConfig> config, IBus messageBus)
+    public ApplicationWorkflow(ILogger<ApplicationWorkflow> logger, IOptionsMonitor<IgorConfig> config, IBus messageBus)
     {
         _logger = logger;
         _config = config;
@@ -62,7 +62,7 @@ internal partial class ApplicationWorkflow :
             return;
         }
 
-        GuildConfig guildConfig = _config.Value.Guilds[args.Guild.Id.ToString()];
+        GuildConfig guildConfig = _config.CurrentValue.Guilds[args.Guild.Id.ToString()];
 
         _logger.LogDebug("Got {Collection} - {Id} with action {Action}", category, dbId, action);
 
