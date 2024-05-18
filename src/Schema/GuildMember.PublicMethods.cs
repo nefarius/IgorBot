@@ -145,8 +145,8 @@ internal sealed partial class GuildMember
 
         DiscordGuild guild = client.Guilds[GuildId];
 
-        DiscordMessage statusMessage = await guild
-            .GetChannel(Application.ChannelId)
+        DiscordMessage statusMessage = await (await guild
+                .GetChannelAsync(Application.ChannelId))
             .GetMessageAsync(Application.MessageId);
 
         await statusMessage.ModifyAsync(status);

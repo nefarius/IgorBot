@@ -23,7 +23,7 @@ namespace IgorBot.ApplicationCommands;
 [SuppressMessage("ReSharper", "ClassNeverInstantiated.Global")]
 public sealed class OnBoardingApplicationCommands : ApplicationCommandModule
 {
-    [SlashRequirePermissions(Permissions.SendMessages)]
+    [SlashRequirePermissions(DiscordPermissions.SendMessages)]
     [SlashCommand("member", "Apply for regular membership.")]
     public async Task Member(
         InteractionContext ctx
@@ -273,9 +273,35 @@ public sealed class OnBoardingApplicationCommands : ApplicationCommandModule
                 )));
         }
 
-        DiscordChannel submissionChannel = ctx.Guild.GetChannel(questionnaire.SubmissionChannelId);
+        try
+        {
+            DiscordChannel submissionChannel = await ctx.Guild.GetChannelAsync(questionnaire.SubmissionChannelId);
 
-        if (submissionChannel is null)
+            try
+            {
+                //
+                // All prepared, send submission message
+                // 
+                await submissionChannel.SendMessageAsync(submission);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Failed to send submission message");
+            }
+
+            //
+            // Inform the user of success
+            // 
+            await interactionChannel.SendMessageAsync(new DiscordEmbedBuilder
+            {
+                Title = "Questionnaire submitted",
+                Description =
+                    $"Nicely done {ctx.Member.Mention}, I've submitted your answers to {submissionChannel.Mention}. " +
+                    "Please be patient until a moderator acknowledges it.",
+                Color = new DiscordColor(0x00FF00)
+            });
+        }
+        catch (NotFoundException)
         {
             DiscordEmoji emoji = DiscordEmoji.FromName(ctx.Client, ":no_entry:");
 
@@ -291,30 +317,6 @@ public sealed class OnBoardingApplicationCommands : ApplicationCommandModule
         }
 
         logger.LogInformation("{User} finished questionnaire {Name}", ctx.Member, questionnaire.Name);
-
-        try
-        {
-            //
-            // All prepared, send submission message
-            // 
-            await submissionChannel.SendMessageAsync(submission);
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Failed to send submission message");
-        }
-
-        //
-        // Inform the user of success
-        // 
-        await interactionChannel.SendMessageAsync(new DiscordEmbedBuilder
-        {
-            Title = "Questionnaire submitted",
-            Description =
-                $"Nicely done {ctx.Member.Mention}, I've submitted your answers to {submissionChannel.Mention}. " +
-                "Please be patient until a moderator acknowledges it.",
-            Color = new DiscordColor(0x00FF00)
-        });
 
         logger.LogInformation("{Member} finished application command", ctx.Member);
 

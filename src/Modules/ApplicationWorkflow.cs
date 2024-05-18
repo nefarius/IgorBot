@@ -56,7 +56,7 @@ internal partial class ApplicationWorkflow :
             _logger.LogError(ex, "Failed to parse custom ID");
 
             _ = Task.Run(async () => await args.Interaction.CreateResponseAsync(
-                InteractionResponseType.UpdateMessage,
+                DiscordInteractionResponseType.UpdateMessage,
                 new DiscordInteractionResponseBuilder(
                     new DiscordMessageBuilder().WithContent($"Exception: {ex.Message}"))));
             return;
@@ -66,7 +66,7 @@ internal partial class ApplicationWorkflow :
 
         _logger.LogDebug("Got {Collection} - {Id} with action {Action}", category, dbId, action);
 
-        await args.Interaction.CreateResponseAsync(InteractionResponseType.DeferredMessageUpdate);
+        await args.Interaction.CreateResponseAsync(DiscordInteractionResponseType.DeferredMessageUpdate);
 
         _ = Task.Run(async () =>
         {
@@ -184,7 +184,7 @@ internal partial class ApplicationWorkflow :
 
         try
         {
-            DiscordChannel welcomeChannel = args.Guild.GetChannel(guildConfig.MemberWelcomeMessageChannelId);
+            DiscordChannel welcomeChannel = await args.Guild.GetChannelAsync(guildConfig.MemberWelcomeMessageChannelId);
 
             await welcomeChannel
                 .SendMessageAsync(string.Format(guildConfig.MemberWelcomeTemplate, member.Mention));

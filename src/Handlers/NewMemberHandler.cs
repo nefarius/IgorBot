@@ -64,9 +64,9 @@ internal sealed class NewMemberHandler : IHandleMessages<NewMemberMessage>
 
             DiscordGuild guild = client.Guilds[guildConfig.GuildId];
             DiscordMember guildMember = await guild.GetMemberAsync(dbMember.MemberId);
-            DiscordChannel strangerStatusChannel = guild.GetChannel(guildConfig.StrangerStatusChannelId);
+            DiscordChannel strangerStatusChannel = await guild.GetChannelAsync(guildConfig.StrangerStatusChannelId);
 
-            DiscordChannel parentCategory = guild.GetChannel(guildConfig.ApplicationCategoryId);
+            DiscordChannel parentCategory = await guild.GetChannelAsync(guildConfig.ApplicationCategoryId);
 
             _logger.LogInformation("Application category: {Category}", parentCategory);
 
@@ -79,7 +79,7 @@ internal sealed class NewMemberHandler : IHandleMessages<NewMemberMessage>
 
             DiscordRole everyoneRole = guild.EveryoneRole;
 
-            overwrites.Add(new DiscordOverwriteBuilder(everyoneRole).Deny(Permissions.AccessChannels));
+            overwrites.Add(new DiscordOverwriteBuilder(everyoneRole).Deny(DiscordPermissions.AccessChannels));
 
             //
             // Add channel permissions for moderators
@@ -91,12 +91,12 @@ internal sealed class NewMemberHandler : IHandleMessages<NewMemberMessage>
                     DiscordRole role = guild.GetRole(moderatorRoleId);
                     DiscordOverwriteBuilder overwrite = new(role);
 
-                    overwrite.Allow(Permissions.AccessChannels);
-                    overwrite.Allow(Permissions.ReadMessageHistory);
-                    overwrite.Allow(Permissions.ManageMessages);
-                    overwrite.Allow(Permissions.SendMessages);
-                    overwrite.Allow(Permissions.EmbedLinks);
-                    overwrite.Allow(Permissions.AddReactions);
+                    overwrite.Allow(DiscordPermissions.AccessChannels);
+                    overwrite.Allow(DiscordPermissions.ReadMessageHistory);
+                    overwrite.Allow(DiscordPermissions.ManageMessages);
+                    overwrite.Allow(DiscordPermissions.SendMessages);
+                    overwrite.Allow(DiscordPermissions.EmbedLinks);
+                    overwrite.Allow(DiscordPermissions.AddReactions);
 
                     overwrites.Add(overwrite);
                 }
@@ -112,12 +112,12 @@ internal sealed class NewMemberHandler : IHandleMessages<NewMemberMessage>
             // 
             DiscordOverwriteBuilder memberOverwrite = new(guildMember);
 
-            memberOverwrite.Allow(Permissions.AccessChannels);
-            memberOverwrite.Allow(Permissions.ReadMessageHistory);
-            memberOverwrite.Allow(Permissions.SendMessages);
-            memberOverwrite.Allow(Permissions.AttachFiles);
-            memberOverwrite.Allow(Permissions.EmbedLinks);
-            memberOverwrite.Allow(Permissions.AddReactions);
+            memberOverwrite.Allow(DiscordPermissions.AccessChannels);
+            memberOverwrite.Allow(DiscordPermissions.ReadMessageHistory);
+            memberOverwrite.Allow(DiscordPermissions.SendMessages);
+            memberOverwrite.Allow(DiscordPermissions.AttachFiles);
+            memberOverwrite.Allow(DiscordPermissions.EmbedLinks);
+            memberOverwrite.Allow(DiscordPermissions.AddReactions);
 
             overwrites.Add(memberOverwrite);
 
@@ -134,7 +134,7 @@ internal sealed class NewMemberHandler : IHandleMessages<NewMemberMessage>
                 // 
                 channel = await guild.CreateChannelAsync(
                     applicationChannelName,
-                    ChannelType.Text,
+                    DiscordChannelType.Text,
                     parentCategory,
                     overwrites: overwrites
                 );

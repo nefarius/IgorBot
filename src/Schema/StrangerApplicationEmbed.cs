@@ -58,7 +58,7 @@ internal sealed class StrangerApplicationEmbed : IEntity
             if (QuestionnaireSubmittedAt.HasValue)
             {
                 components.Add(new DiscordButtonComponent(
-                    ButtonStyle.Success,
+                    DiscordButtonStyle.Success,
                     $"strangers|{ID}|{StrangerCommandPromote}",
                     "Promote"
                 ));
@@ -67,7 +67,7 @@ internal sealed class StrangerApplicationEmbed : IEntity
             if (IsAutoKickEnabled)
             {
                 components.Add(new DiscordButtonComponent(
-                    ButtonStyle.Secondary,
+                    DiscordButtonStyle.Secondary,
                     $"strangers|{ID}|{StrangerCommandDisableAutoKick}",
                     "Disable auto-kick"
                 ));

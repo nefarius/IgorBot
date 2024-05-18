@@ -40,7 +40,7 @@ internal partial class ApplicationWorkflow
 
         GuildConfig guildConfig = _config.CurrentValue.Guilds[e.Guild.Id.ToString()];
 
-        DiscordChannel strangerStatusChannel = e.Guild.GetChannel(guildConfig.StrangerStatusChannelId);
+        DiscordChannel strangerStatusChannel = await e.Guild.GetChannelAsync(guildConfig.StrangerStatusChannelId);
 
         if (strangerStatusChannel is null)
         {
@@ -145,15 +145,19 @@ internal partial class ApplicationWorkflow
 
         if (newbieChannel is not null)
         {
-            DiscordChannel discordChannel = e.Guild.GetChannel(newbieChannel.ChannelId);
-
-            if (discordChannel is not null)
+            try
             {
+                DiscordChannel discordChannel = await e.Guild.GetChannelAsync(newbieChannel.ChannelId);
+
                 _logger.LogInformation("Removing channel {Channel}", discordChannel);
 
                 await discordChannel.DeleteAsync($"{e.Member} is no longer a stranger");
 
                 await member.DeleteChannel();
+            }
+            catch (NotFoundException)
+            {
+                _logger.LogWarning("Newbie channel with ID {Id} not found", newbieChannel.ChannelId);
             }
         }
 
