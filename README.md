@@ -1,8 +1,10 @@
-<img src="assets/NSS-128x128.png" align="right" />
+# <img src="assets/NSS-128x128.png" align="left" />IgorBot
 
-# IgorBot
-
-[![Docker Image CI](https://github.com/nefarius/IgorBot/actions/workflows/docker-image.yml/badge.svg)](https://github.com/nefarius/IgorBot/actions/workflows/docker-image.yml) [![Requirements](https://img.shields.io/badge/Requirements-.NET%208.0-blue.svg)](https://github.com/dotnet/core/blob/main/release-notes/8.0/supported-os.md) [![Docker Pulls](https://img.shields.io/docker/pulls/containinger/igor-bot)](https://hub.docker.com/r/containinger/igor-bot) ![Docker Image Version (latest by date)](https://img.shields.io/docker/v/containinger/igor-bot) ![Docker Image Size (latest by date)](https://img.shields.io/docker/image-size/containinger/igor-bot)
+[![Docker Image CI](https://github.com/nefarius/IgorBot/actions/workflows/docker-image.yml/badge.svg)](https://github.com/nefarius/IgorBot/actions/workflows/docker-image.yml)
+[![Requirements](https://img.shields.io/badge/Requirements-.NET%208.0-blue.svg)](https://github.com/dotnet/core/blob/main/release-notes/8.0/supported-os.md)
+[![Docker Pulls](https://img.shields.io/docker/pulls/containinger/igor-bot)](https://hub.docker.com/r/containinger/igor-bot)
+![Docker Image Version (latest by date)](https://img.shields.io/docker/v/containinger/igor-bot)
+![Docker Image Size (latest by date)](https://img.shields.io/docker/image-size/containinger/igor-bot)
 
 Advanced Discord bot to automate new Member on-boarding.
 
