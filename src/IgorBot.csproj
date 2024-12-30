@@ -34,7 +34,7 @@
     <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="8.0.1" />
     <PackageReference Include="Microsoft.Extensions.Logging" Version="8.0.1" />
     <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.21.0" />
-    <PackageReference Include="MongoDB.Entities" Version="23.2.0" />
+    <PackageReference Include="MongoDB.Entities" Version="24.1.0" />
     <PackageReference Include="Nefarius.DSharpPlus.Interactivity.Extensions.Hosting" Version="5.3.1-nightly.2" />
     <PackageReference Include="Nefarius.DSharpPlus.SlashCommands.Extensions.Hosting" Version="5.3.1-nightly.2" />
     <PackageReference Include="PropertyChanged.Fody" Version="4.1.0">
