@@ -45,7 +45,7 @@ outlined below:
 - Add a "Full Member" role and copy its ID to the `MemberRoleId` config value
     - This is the role that promoted/unlocked members will get assigned when approved by a moderator
 - Create a new category "Newbies" and copy its ID to the `ApplicationCategoryId` config value
-- (Optional) Add one or more moderator role IDs to `ApplicationModeratorRoleIds` to give those power to kick, ban or
+- (Optional) Add one or more moderator role IDs to `ApplicationModeratorRoleIds` to give them the power to kick, ban or
   approve new members
 - Add a **private** channel for bot status messages and copy its ID to `StrangerStatusChannelId` config value
 - Add a **public** channel for the welcome messages and copy its ID to `MemberWelcomeMessageChannelId` config value
