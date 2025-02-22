@@ -55,7 +55,7 @@ internal partial class ApplicationWorkflow
             {
                 try
                 {
-                    DiscordChannel discordChannel = await e.Guild.GetChannelAsync(newbieChannel.ChannelId);
+                    DiscordChannel discordChannel = e.Guild.GetChannel(newbieChannel.ChannelId);
 
                     _logger.LogInformation("Removing channel {Channel}", discordChannel);
 

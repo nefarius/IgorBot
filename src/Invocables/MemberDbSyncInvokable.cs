@@ -38,7 +38,9 @@ internal class MemberDbSyncInvokable : IInvocable
 
             _logger.LogDebug("Processing members of {Guild}", guild);
 
-            await foreach (DiscordMember member in guild.GetAllMembersAsync())
+            IReadOnlyCollection<DiscordMember> members = await guild.GetAllMembersAsync();
+
+            foreach (DiscordMember member in members)
             {
                 if (member.IsBot)
                 {
@@ -60,7 +62,7 @@ internal class MemberDbSyncInvokable : IInvocable
                     Member = member.ToString(),
                     Mention = member.Mention
                 };
-                
+
                 await guildMember.SaveAsync();
 
                 _logger.LogInformation("{Member} added to DB", member);

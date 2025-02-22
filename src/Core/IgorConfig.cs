@@ -1,7 +1,6 @@
 ﻿using System.Diagnostics.CodeAnalysis;
 
 using DSharpPlus;
-using DSharpPlus.Entities;
 
 namespace IgorBot.Core;
 
@@ -115,9 +114,9 @@ public sealed class Question
 public sealed class SubmissionActionButton
 {
     /// <summary>
-    ///     The <see cref="DiscordButtonStyle" />.
+    ///     The <see cref="ButtonStyle" />.
     /// </summary>
-    public DiscordButtonStyle Style { get; set; }
+    public ButtonStyle Style { get; set; }
 
     /// <summary>
     ///     The visible button label.

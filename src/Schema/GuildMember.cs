@@ -29,12 +29,12 @@ internal sealed partial class GuildMember : IEntity, INotifyPropertyChanged
             List<DiscordButtonComponent> components = new()
             {
                 new DiscordButtonComponent(
-                    DiscordButtonStyle.Secondary,
+                    ButtonStyle.Secondary,
                     $"strangers|{ID}|{StrangerCommandKick}",
                     "Kick"
                 ),
                 new DiscordButtonComponent(
-                    DiscordButtonStyle.Danger,
+                    ButtonStyle.Danger,
                     $"strangers|{ID}|{StrangerCommandBan}",
                     "Ban"
                 )
