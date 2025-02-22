@@ -94,7 +94,7 @@ internal partial class ApplicationWorkflow
                 return;
             }
 
-            await ProcessStrangerAssignment(e, guildConfig, member);
+            await ProcessStrangerAssignment(e.Guild, guildConfig, member);
         });
     }
 
@@ -102,16 +102,16 @@ internal partial class ApplicationWorkflow
     ///     Tasks required when a member got the Stranger role assigned.
     /// </summary>
     private async Task ProcessStrangerAssignment(
-        GuildMemberUpdateEventArgs e,
+        DiscordGuild guild,
         GuildConfig guildConfig,
         GuildMember member
     )
     {
-        GuildProperties guildRuntime = await DB.Find<GuildProperties>().OneAsync(e.Guild.Id.ToString());
+        GuildProperties guildRuntime = await DB.Find<GuildProperties>().OneAsync(guild.Id.ToString());
 
         if (guildRuntime is null)
         {
-            guildRuntime = new GuildProperties { GuildId = e.Guild.Id };
+            guildRuntime = new GuildProperties { GuildId = guild.Id };
             await guildRuntime.SaveAsync();
         }
 

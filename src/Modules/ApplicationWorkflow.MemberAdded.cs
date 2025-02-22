@@ -1,6 +1,8 @@
 ﻿using DSharpPlus;
+using DSharpPlus.Entities;
 using DSharpPlus.EventArgs;
 
+using IgorBot.Core;
 using IgorBot.Schema;
 using IgorBot.Util;
 
@@ -50,5 +52,15 @@ internal partial class ApplicationWorkflow
         await guildMember.SaveAsync();
 
         _logger.LogInformation("{Member} updated in DB", e.Member);
+        
+        GuildConfig guildConfig = _config.CurrentValue.Guilds[e.Guild.Id.ToString()];
+        DiscordRole strangerRole = e.Guild.GetRole(guildConfig.StrangerRoleId);
+
+        if (e.Member.Roles.Contains(strangerRole))
+        {
+            _logger.LogInformation("{Member} has stranger role, submitting workflow", e.Member);
+            
+            await ProcessStrangerAssignment(e.Guild, guildConfig, guildMember);
+        }
     }
 }
