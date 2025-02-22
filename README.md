@@ -22,7 +22,7 @@ It's recommended to use Docker and docker-compose to bring up the bot and its co
 - Copy `docker/docker-compose.example.yml` as `docker-compose.yml` to a directory of your choice and add your bot token
   in there
 - Copy `docker/appsettings.Production.example.json` as `appsettings.Production.json` into the same directory as the
-  compose file
+  compose-file
 - Run `docker-compose pull` to fetch the container images
 - Run `docker-compose up -d igor-bot-app igor-bot-db` to bring the bot and database services online
     - Optionally you can simply run `docker-compose up -d` which will also start the MongoDB web UI, which you might not
