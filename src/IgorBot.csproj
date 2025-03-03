@@ -39,7 +39,7 @@
     <PackageReference Include="PropertyChanged.Fody" Version="4.1.0">
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="Rebus" Version="8.7.1" />
+    <PackageReference Include="Rebus" Version="8.8.0" />
     <PackageReference Include="Rebus.ServiceProvider" Version="10.3.0" />
     <PackageReference Include="Serilog.Extensions.Logging" Version="9.0.0" />
     <PackageReference Include="Serilog.Settings.Configuration" Version="9.0.0" />
