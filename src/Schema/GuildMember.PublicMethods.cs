@@ -27,7 +27,6 @@ internal sealed partial class GuildMember
     /// <summary>
     ///     Deletes the application widget form the database.
     /// </summary>
-    /// <returns></returns>
     public async Task DeleteApplication()
     {
         if (Application is null)
@@ -44,7 +43,6 @@ internal sealed partial class GuildMember
     /// <summary>
     ///     Deletes the newbie channel form the database.
     /// </summary>
-    /// <returns></returns>
     public async Task DeleteChannel()
     {
         if (Channel is null)
