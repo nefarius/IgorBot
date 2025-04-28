@@ -35,7 +35,7 @@
     <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.21.2" />
     <PackageReference Include="MongoDB.Entities" Version="24.1.1" />
     <PackageReference Include="Nefarius.DSharpPlus.Interactivity.Extensions.Hosting" Version="6.2.0-pre001" />
-    <PackageReference Include="Nefarius.DSharpPlus.SlashCommands.Extensions.Hosting" Version="6.2.0-pre001" />
+    <PackageReference Include="Nefarius.DSharpPlus.SlashCommands.Extensions.Hosting" Version="6.2.0" />
     <PackageReference Include="PropertyChanged.Fody" Version="4.1.0">
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
