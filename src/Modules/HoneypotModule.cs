@@ -61,7 +61,7 @@ internal sealed class HoneypotModule(IOptionsMonitor<IgorConfig> config, ILogger
         }
         catch (NotFoundException)
         {
-            logger.LogWarning("{Author} is not a member of {Guild}", args.Author, args.Guild);
+            logger.LogDebug("{Author} is not a member of {Guild}", args.Author, args.Guild);
         }
         catch (Exception ex)
         {
