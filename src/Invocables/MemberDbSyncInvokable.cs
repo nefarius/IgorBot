@@ -24,9 +24,9 @@ internal class MemberDbSyncInvokable(
     {
         logger.LogInformation("Running members database synchronization");
 
-        foreach (GuildConfig config1 in config.CurrentValue.Guilds.Select(gc => gc.Value))
+        foreach (GuildConfig guildConfig in config.CurrentValue.Guilds.Select(gc => gc.Value))
         {
-            DiscordGuild guild = discord.Client.Guilds[config1.GuildId];
+            DiscordGuild guild = discord.Client.Guilds[guildConfig.GuildId];
 
             logger.LogDebug("Processing members of {Guild}", guild);
 
