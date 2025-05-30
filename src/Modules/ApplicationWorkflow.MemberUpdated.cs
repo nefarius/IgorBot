@@ -24,7 +24,7 @@ internal partial class ApplicationWorkflow
             return;
         }
 
-        if (!_config.CurrentValue.Guilds.ContainsKey(e.Guild.Id.ToString()))
+        if (!config.CurrentValue.Guilds.ContainsKey(e.Guild.Id.ToString()))
         {
             return;
         }
@@ -34,11 +34,11 @@ internal partial class ApplicationWorkflow
 
         if (member is null)
         {
-            _logger.LogWarning("{Member} not found in DB", e.Member);
+            logger.LogWarning("{Member} not found in DB", e.Member);
             return;
         }
 
-        GuildConfig guildConfig = _config.CurrentValue.Guilds[e.Guild.Id.ToString()];
+        GuildConfig guildConfig = config.CurrentValue.Guilds[e.Guild.Id.ToString()];
 
         DiscordChannel strangerStatusChannel = e.Guild.GetChannel(guildConfig.StrangerStatusChannelId);
 
@@ -53,7 +53,7 @@ internal partial class ApplicationWorkflow
             if (e.RolesBefore.All(role => role.Id != guildConfig.MemberRoleId) &&
                 e.RolesAfter.Any(role => role.Id == guildConfig.MemberRoleId))
             {
-                _logger.LogInformation("Full member role set for {Member}", e.Member);
+                logger.LogInformation("Full member role set for {Member}", e.Member);
                 member.FullMemberAt = DateTime.UtcNow;
                 await member.SaveAsync();
                 return;
@@ -89,7 +89,7 @@ internal partial class ApplicationWorkflow
             // 
             if (e.RolesAfter.Count > 1 || e.RolesAfter.All(r => r != strangerRole))
             {
-                _logger.LogWarning("{Member} must have only {Role} assigned, has {Roles}",
+                logger.LogWarning("{Member} must have only {Role} assigned, has {Roles}",
                     e.Member, strangerRole, e.RolesAfter);
                 return;
             }
@@ -120,9 +120,9 @@ internal partial class ApplicationWorkflow
             GuildProperties = guildRuntime, GuildConfig = guildConfig, MemberEntryId = member.ID
         };
 
-        _logger.LogInformation("Submitting new member workflow message");
+        logger.LogInformation("Submitting new member workflow message");
 
-        await _messageBus.SendLocal(message);
+        await messageBus.SendLocal(message);
     }
 
     /// <summary>
@@ -134,7 +134,7 @@ internal partial class ApplicationWorkflow
         GuildMember member
     )
     {
-        _logger.LogInformation("Stranger role removed for {Member}", member);
+        logger.LogInformation("Stranger role removed for {Member}", member);
 
         member.StrangerRoleRemovedAt = DateTime.UtcNow;
         member.IsOnboardingInProgress = false;
@@ -149,7 +149,7 @@ internal partial class ApplicationWorkflow
 
             if (discordChannel is not null)
             {
-                _logger.LogInformation("Removing channel {Channel}", discordChannel);
+                logger.LogInformation("Removing channel {Channel}", discordChannel);
 
                 await discordChannel.DeleteAsync($"{e.Member} is no longer a stranger");
 
@@ -165,13 +165,13 @@ internal partial class ApplicationWorkflow
 
             try
             {
-                _logger.LogInformation("Removing application widget for {Member}", member);
+                logger.LogInformation("Removing application widget for {Member}", member);
 
                 await member.DeleteApplicationWidget(client);
             }
             catch (NotFoundException ex)
             {
-                _logger.LogError(ex, "Couldn't find status message");
+                logger.LogError(ex, "Couldn't find status message");
             }
         }
     }

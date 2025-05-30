@@ -14,29 +14,21 @@ using Nefarius.DSharpPlus.Extensions.Hosting;
 
 namespace IgorBot.Invocables;
 
-internal class MemberDbSyncInvokable : IInvocable
+internal class MemberDbSyncInvokable(
+    IOptionsMonitor<IgorConfig> config,
+    IDiscordClientService discord,
+    ILogger<MemberDbSyncInvokable> logger)
+    : IInvocable
 {
-    private readonly IOptionsMonitor<IgorConfig> _config;
-    private readonly IDiscordClientService _discord;
-    private readonly ILogger<MemberDbSyncInvokable> _logger;
-
-    public MemberDbSyncInvokable(IOptionsMonitor<IgorConfig> config, IDiscordClientService discord,
-        ILogger<MemberDbSyncInvokable> logger)
-    {
-        _config = config;
-        _discord = discord;
-        _logger = logger;
-    }
-
     public async Task Invoke()
     {
-        _logger.LogInformation("Running members database synchronization");
+        logger.LogInformation("Running members database synchronization");
 
-        foreach (GuildConfig config in _config.CurrentValue.Guilds.Select(gc => gc.Value))
+        foreach (GuildConfig config1 in config.CurrentValue.Guilds.Select(gc => gc.Value))
         {
-            DiscordGuild guild = _discord.Client.Guilds[config.GuildId];
+            DiscordGuild guild = discord.Client.Guilds[config1.GuildId];
 
-            _logger.LogDebug("Processing members of {Guild}", guild);
+            logger.LogDebug("Processing members of {Guild}", guild);
 
             IReadOnlyCollection<DiscordMember> members = await guild.GetAllMembersAsync();
 
@@ -65,10 +57,10 @@ internal class MemberDbSyncInvokable : IInvocable
 
                 await guildMember.SaveAsync();
 
-                _logger.LogInformation("{Member} added to DB", member);
+                logger.LogInformation("{Member} added to DB", member);
             }
         }
 
-        _logger.LogInformation("Members database synchronization done");
+        logger.LogInformation("Members database synchronization done");
     }
 }

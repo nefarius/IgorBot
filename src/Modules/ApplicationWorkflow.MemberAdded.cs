@@ -22,12 +22,12 @@ internal partial class ApplicationWorkflow
             return;
         }
 
-        if (!_config.CurrentValue.Guilds.ContainsKey(e.Guild.Id.ToString()))
+        if (!config.CurrentValue.Guilds.ContainsKey(e.Guild.Id.ToString()))
         {
             return;
         }
 
-        _logger.LogInformation("{Member} joined", e.Member);
+        logger.LogInformation("{Member} joined", e.Member);
 
         GuildMember guildMember = await DB.Find<GuildMember>().OneAsync(e.ToEntityId());
 
@@ -43,7 +43,7 @@ internal partial class ApplicationWorkflow
 
             await guildMember.SaveAsync();
 
-            _logger.LogInformation("{Member} added to DB", e.Member);
+            logger.LogInformation("{Member} added to DB", e.Member);
         }
 
         guildMember.JoinedAt = DateTime.Now;
@@ -51,14 +51,14 @@ internal partial class ApplicationWorkflow
 
         await guildMember.SaveAsync();
 
-        _logger.LogInformation("{Member} updated in DB", e.Member);
+        logger.LogInformation("{Member} updated in DB", e.Member);
         
-        GuildConfig guildConfig = _config.CurrentValue.Guilds[e.Guild.Id.ToString()];
+        GuildConfig guildConfig = config.CurrentValue.Guilds[e.Guild.Id.ToString()];
         DiscordRole strangerRole = e.Guild.GetRole(guildConfig.StrangerRoleId);
 
         if (e.Member.Roles.Contains(strangerRole))
         {
-            _logger.LogInformation("{Member} has stranger role, submitting workflow", e.Member);
+            logger.LogInformation("{Member} has stranger role, submitting workflow", e.Member);
             
             await ProcessStrangerAssignment(e.Guild, guildConfig, guildMember);
         }

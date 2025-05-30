@@ -51,7 +51,7 @@ internal class KickStaleInvokable(
 
             logger.LogDebug("Running stale members check for {Guild}", guild);
 
-            if (!staleMembers.Any())
+            if (staleMembers.Count == 0)
             {
                 logger.LogDebug("No stale members found");
             }

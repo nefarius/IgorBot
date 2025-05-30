@@ -22,24 +22,24 @@ internal partial class ApplicationWorkflow
             return;
         }
 
-        if (!_config.CurrentValue.Guilds.ContainsKey(e.Guild.Id.ToString()))
+        if (!config.CurrentValue.Guilds.ContainsKey(e.Guild.Id.ToString()))
         {
             return;
         }
 
-        _logger.LogInformation("{Member} left", e.Member);
+        logger.LogInformation("{Member} left", e.Member);
 
         GuildMember member = await DB.Find<GuildMember>().OneAsync(e.ToEntityId());
 
         if (member is null)
         {
-            _logger.LogWarning("{Member} not found in DB", e.Member);
+            logger.LogWarning("{Member} not found in DB", e.Member);
             return;
         }
 
         if (member.Channel is null)
         {
-            _logger.LogInformation("{Member} has no newbie channel", e.Member);
+            logger.LogInformation("{Member} has no newbie channel", e.Member);
             return;
         }
 
@@ -57,7 +57,7 @@ internal partial class ApplicationWorkflow
                 {
                     DiscordChannel discordChannel = e.Guild.GetChannel(newbieChannel.ChannelId);
 
-                    _logger.LogInformation("Removing channel {Channel}", discordChannel);
+                    logger.LogInformation("Removing channel {Channel}", discordChannel);
 
                     await discordChannel.DeleteAsync($"{e.Member} has been removed");
 
@@ -65,7 +65,7 @@ internal partial class ApplicationWorkflow
                 }
                 catch (ServerErrorException)
                 {
-                    _logger.LogWarning("Couldn't find temporary channel to delete");
+                    logger.LogWarning("Couldn't find temporary channel to delete");
                 }
             }
 
@@ -77,11 +77,11 @@ internal partial class ApplicationWorkflow
                 {
                     if (member.RemovedByModeration)
                     {
-                        _logger.LogWarning("{Member} left due to moderator action", e.Member);
+                        logger.LogWarning("{Member} left due to moderator action", e.Member);
                         return;
                     }
 
-                    _logger.LogInformation(
+                    logger.LogInformation(
                         member.AutoKickedAt.HasValue
                             ? "{Member} removed due to idle timeout"
                             : "{Member} left by themselves", e.Member);
@@ -92,7 +92,7 @@ internal partial class ApplicationWorkflow
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Failed to update status message");
+                    logger.LogError(ex, "Failed to update status message");
                 }
             }
         });

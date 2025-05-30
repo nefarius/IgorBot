@@ -1,4 +1,6 @@
-﻿using DSharpPlus;
+﻿using System.Diagnostics.CodeAnalysis;
+
+using DSharpPlus;
 using DSharpPlus.Entities;
 using DSharpPlus.EventArgs;
 using DSharpPlus.Exceptions;
@@ -20,23 +22,16 @@ namespace IgorBot.Modules;
 [DiscordGuildMemberUpdatedEventSubscriber]
 [DiscordGuildMemberRemovedEventSubscriber]
 [DiscordComponentInteractionCreatedEventSubscriber]
-internal partial class ApplicationWorkflow :
-    IDiscordGuildMemberAddedEventSubscriber,
-    IDiscordGuildMemberUpdatedEventSubscriber,
-    IDiscordGuildMemberRemovedEventSubscriber,
-    IDiscordComponentInteractionCreatedEventSubscriber
+internal partial class ApplicationWorkflow(
+    ILogger<ApplicationWorkflow> logger,
+    IOptionsMonitor<IgorConfig> config,
+    IBus messageBus)
+    :
+        IDiscordGuildMemberAddedEventSubscriber,
+        IDiscordGuildMemberUpdatedEventSubscriber,
+        IDiscordGuildMemberRemovedEventSubscriber,
+        IDiscordComponentInteractionCreatedEventSubscriber
 {
-    private readonly IOptionsMonitor<IgorConfig> _config;
-    private readonly ILogger<ApplicationWorkflow> _logger;
-    private readonly IBus _messageBus;
-
-    public ApplicationWorkflow(ILogger<ApplicationWorkflow> logger, IOptionsMonitor<IgorConfig> config, IBus messageBus)
-    {
-        _logger = logger;
-        _config = config;
-        _messageBus = messageBus;
-    }
-
     public async Task DiscordOnComponentInteractionCreated(DiscordClient sender,
         ComponentInteractionCreateEventArgs args)
     {
@@ -53,7 +48,7 @@ internal partial class ApplicationWorkflow :
         }
         catch (IndexOutOfRangeException ex)
         {
-            _logger.LogError(ex, "Failed to parse custom ID");
+            logger.LogError(ex, "Failed to parse custom ID");
 
             _ = Task.Run(async () => await args.Interaction.CreateResponseAsync(
                 InteractionResponseType.UpdateMessage,
@@ -62,9 +57,9 @@ internal partial class ApplicationWorkflow :
             return;
         }
 
-        GuildConfig guildConfig = _config.CurrentValue.Guilds[args.Guild.Id.ToString()];
+        GuildConfig guildConfig = config.CurrentValue.Guilds[args.Guild.Id.ToString()];
 
-        _logger.LogDebug("Got {Collection} - {Id} with action {Action}", category, dbId, action);
+        logger.LogDebug("Got {Collection} - {Id} with action {Action}", category, dbId, action);
 
         await args.Interaction.CreateResponseAsync(InteractionResponseType.DeferredMessageUpdate);
 
@@ -76,7 +71,7 @@ internal partial class ApplicationWorkflow :
                 {
                     case "strangers":
 
-                        _logger.LogDebug("Database ID: {Id}", dbId);
+                        logger.LogDebug("Database ID: {Id}", dbId);
 
                         GuildMember dbMember = (await DB.Find<GuildMember>()
                                 .ManyAsync(m => m.Eq(f => f.Application.ID, dbId)))
@@ -88,7 +83,7 @@ internal partial class ApplicationWorkflow :
 
                             if (dbMember is null)
                             {
-                                _logger.LogError("Guild member for this application not found in DB");
+                                logger.LogError("Guild member for this application not found in DB");
                                 await args.Interaction.EditOriginalResponseAsync(
                                     new DiscordWebhookBuilder().WithContent("Member entry not found in database!"));
                                 break;
@@ -99,7 +94,7 @@ internal partial class ApplicationWorkflow :
 
                         if (application is null)
                         {
-                            _logger.LogError("DB Entry with {Id} not found", dbId);
+                            logger.LogError("DB Entry with {Id} not found", dbId);
                             await args.Interaction.EditOriginalResponseAsync(
                                 new DiscordWebhookBuilder().WithContent("Application entry not found in database!"));
                             break;
@@ -157,7 +152,7 @@ internal partial class ApplicationWorkflow :
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Unhandled exception in interaction processing");
+                logger.LogError(ex, "Unhandled exception in interaction processing");
             }
         });
     }
@@ -170,7 +165,7 @@ internal partial class ApplicationWorkflow :
 
         await entry.SaveAsync();
 
-        _logger.LogInformation("{User} promoted {Member}",
+        logger.LogInformation("{User} promoted {Member}",
             args.User, member);
 
         DiscordRole strangerRole = args.Guild.GetRole(guildConfig.StrangerRoleId);
@@ -191,7 +186,7 @@ internal partial class ApplicationWorkflow :
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to deliver welcome message");
+            logger.LogError(ex, "Failed to deliver welcome message");
         }
     }
 
@@ -199,7 +194,7 @@ internal partial class ApplicationWorkflow :
         GuildMember entry,
         DiscordMember member)
     {
-        _logger.LogInformation("{User} banned {Member}",
+        logger.LogInformation("{User} banned {Member}",
             args.User, member);
 
         await member.BanAsync();
@@ -216,7 +211,7 @@ internal partial class ApplicationWorkflow :
         GuildMember entry,
         DiscordMember member)
     {
-        _logger.LogInformation("{User} kicked {Member}",
+        logger.LogInformation("{User} kicked {Member}",
             args.User, member);
 
         await member.RemoveAsync();
@@ -234,7 +229,7 @@ internal partial class ApplicationWorkflow :
         DiscordClient client,
         GuildMember entry)
     {
-        _logger.LogInformation("Disabling auto-kick for {Member}", entry);
+        logger.LogInformation("Disabling auto-kick for {Member}", entry);
 
         entry.Application!.IsAutoKickEnabled = false;
         await entry.Application.SaveAsync();
