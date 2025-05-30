@@ -26,10 +26,15 @@ internal sealed class HoneypotModule(IOptionsMonitor<IgorConfig> config, ILogger
     {
         try
         {
+            if (args.Author.IsBot)
+            {
+                return;
+            }
+
             DiscordMember member = await args.Guild.GetMemberAsync(args.Author.Id);
 
             // do not apply to privileged accounts
-            if (args.Author.IsBot || member.IsOwner)
+            if (member.IsOwner)
             {
                 return;
             }
