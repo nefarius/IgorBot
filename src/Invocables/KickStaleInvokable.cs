@@ -19,37 +19,26 @@ namespace IgorBot.Invocables;
 ///     Scheduled task to query for stale users and kick them.
 /// </summary>
 [SuppressMessage("ReSharper", "ClassNeverInstantiated.Global")]
-internal class KickStaleInvokable : IInvocable
+internal class KickStaleInvokable(
+    ILogger<KickStaleInvokable> logger,
+    IOptionsMonitor<IgorConfig> config,
+    IDiscordClientService discord)
+    : IInvocable
 {
-    private readonly IOptionsMonitor<IgorConfig> _config;
-    private readonly IDiscordClientService _discord;
-    private readonly ILogger<KickStaleInvokable> _logger;
-
-    public KickStaleInvokable(
-        ILogger<KickStaleInvokable> logger,
-        IOptionsMonitor<IgorConfig> config,
-        IDiscordClientService discord
-    )
-    {
-        _logger = logger;
-        _config = config;
-        _discord = discord;
-    }
-
     public async Task Invoke()
     {
-        _logger.LogDebug("Running stale kick timer");
+        logger.LogDebug("Running stale kick timer");
 
         // Enumerate guild configs with an active idle timespan set
-        foreach (GuildConfig config in _config.CurrentValue.Guilds
+        foreach (GuildConfig config1 in config.CurrentValue.Guilds
                      .Where(gc => gc.Value.IdleKickTimeSpan.HasValue)
                      .Select(gc => gc.Value))
         {
             // query for members of the current guild where the application lifetime has exceeded the allowed idle time
             List<GuildMember> staleMembers = await DB.Find<GuildMember>()
                 .ManyAsync(m =>
-                    m.Lt(f => f.Application.CreatedAt, DateTime.UtcNow.Add(-config.IdleKickTimeSpan!.Value)) &
-                    m.Eq(f => f.GuildId, config.GuildId) &
+                    m.Lt(f => f.Application.CreatedAt, DateTime.UtcNow.Add(-config1.IdleKickTimeSpan!.Value)) &
+                    m.Eq(f => f.GuildId, config1.GuildId) &
                     m.Eq(f => f.Application.IsAutoKickEnabled, true) &
                     m.Eq(f => f.Application.QuestionnaireSubmittedAt, null) &
                     m.Eq(f => f.PromotedAt, null) &
@@ -58,18 +47,18 @@ internal class KickStaleInvokable : IInvocable
                     m.Eq(f => f.AutoKickedAt, null)
                 );
 
-            DiscordGuild guild = _discord.Client.Guilds[config.GuildId];
+            DiscordGuild guild = discord.Client.Guilds[config1.GuildId];
 
-            _logger.LogDebug("Running stale members check for {Guild}", guild);
+            logger.LogDebug("Running stale members check for {Guild}", guild);
 
             if (!staleMembers.Any())
             {
-                _logger.LogDebug("No stale members found");
+                logger.LogDebug("No stale members found");
             }
 
             foreach (GuildMember guildMember in staleMembers)
             {
-                _logger.LogInformation("Processing stale member {MemberId}", guildMember.MemberId);
+                logger.LogInformation("Processing stale member {MemberId}", guildMember.MemberId);
 
                 try
                 {
@@ -82,16 +71,16 @@ internal class KickStaleInvokable : IInvocable
 
                         await member.RemoveAsync("Member removed due to idle timeout");
 
-                        _logger.LogWarning("Removed {@Member} due to idle timeout", guildMember);
+                        logger.LogWarning("Removed {@Member} due to idle timeout", guildMember);
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogError(ex, "Failed to auto-remove {@Member}", guildMember);
+                        logger.LogError(ex, "Failed to auto-remove {@Member}", guildMember);
                     }
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Failed to remove guild member");
+                    logger.LogError(ex, "Failed to remove guild member");
                 }
             }
         }

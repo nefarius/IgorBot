@@ -94,7 +94,7 @@ public sealed class OnBoardingApplicationCommands : ApplicationCommandModule
             return;
         }
 
-        if (!questionnaire.Questions.Any())
+        if (questionnaire.Questions.Count == 0)
         {
             DiscordEmoji emoji = DiscordEmoji.FromName(ctx.Client, ":no_entry:");
 
@@ -114,7 +114,7 @@ public sealed class OnBoardingApplicationCommands : ApplicationCommandModule
         try
         {
             //
-            // Conduct either in current channel or DMs
+            // Conduct either in the current channel or DMs
             // 
             interactionChannel =
                 questionnaire.ConductInPrivate
@@ -253,7 +253,7 @@ public sealed class OnBoardingApplicationCommands : ApplicationCommandModule
         }
 
         //
-        // Build submission message with Embed as primary content
+        // Build the submission message with Embed as primary content
         // 
         DiscordMessageBuilder submission = new DiscordMessageBuilder()
             .AddEmbed(submissionEmbed);
@@ -261,7 +261,7 @@ public sealed class OnBoardingApplicationCommands : ApplicationCommandModule
         //
         // If configured, add action buttons
         // 
-        if (questionnaire.ActionButtons.Any())
+        if (questionnaire.ActionButtons.Count != 0)
         {
             // TODO: currently not used, remove or finish implementation
             submission.AddComponents(questionnaire.ActionButtons.Select(b =>
@@ -295,7 +295,7 @@ public sealed class OnBoardingApplicationCommands : ApplicationCommandModule
         try
         {
             //
-            // All prepared, send submission message
+            // All prepared, send the submission message
             // 
             await submissionChannel.SendMessageAsync(submission);
         }
