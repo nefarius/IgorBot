@@ -21,35 +21,27 @@ internal sealed class NewMemberMessage
 
     public GuildConfig GuildConfig { get; init; }
 
-    public string MemberEntiryId { get; init; }
+    public string MemberEntryId { get; init; }
 }
 
 /// <summary>
 ///     Handles new stranger appeared workflow.
 /// </summary>
 [SuppressMessage("ReSharper", "ClassNeverInstantiated.Global")]
-internal sealed class NewMemberHandler : IHandleMessages<NewMemberMessage>
+internal sealed class NewMemberHandler(IDiscordClientService clientService, ILogger<NewMemberHandler> logger)
+    : IHandleMessages<NewMemberMessage>
 {
-    private readonly IDiscordClientService _clientService;
-    private readonly ILogger<NewMemberHandler> _logger;
-
-    public NewMemberHandler(IDiscordClientService clientService, ILogger<NewMemberHandler> logger)
-    {
-        _clientService = clientService;
-        _logger = logger;
-    }
-
     public async Task Handle(NewMemberMessage message)
     {
-        _logger.LogInformation("Processing new member workflow");
+        logger.LogInformation("Processing new member workflow");
 
-        GuildMember dbMember = await DB.Find<GuildMember>().OneAsync(message.MemberEntiryId);
+        GuildMember dbMember = await DB.Find<GuildMember>().OneAsync(message.MemberEntryId);
 
-        _logger.LogDebug("Got member from DB: {@Member}", dbMember);
+        logger.LogDebug("Got member from DB: {@Member}", dbMember);
 
         if (dbMember.Channel is not null || dbMember.IsOnboardingInProgress)
         {
-            _logger.LogWarning("Member {Member} already has an active newbie channel, aborting", dbMember);
+            logger.LogWarning("Member {Member} already has an active newbie channel, aborting", dbMember);
             return;
         }
 
@@ -59,7 +51,7 @@ internal sealed class NewMemberHandler : IHandleMessages<NewMemberMessage>
         try
         {
             GuildProperties guildProperties = message.GuildProperties;
-            DiscordClient client = _clientService.Client;
+            DiscordClient client = clientService.Client;
             GuildConfig guildConfig = message.GuildConfig;
 
             DiscordGuild guild = client.Guilds[guildConfig.GuildId];
@@ -68,12 +60,12 @@ internal sealed class NewMemberHandler : IHandleMessages<NewMemberMessage>
 
             DiscordChannel parentCategory = guild.GetChannel(guildConfig.ApplicationCategoryId);
 
-            _logger.LogInformation("Application category: {Category}", parentCategory);
+            logger.LogInformation("Application category: {Category}", parentCategory);
 
             string applicationChannelName =
                 string.Format(guildConfig.ApplicationChannelNameFormat, guildProperties.ApplicationChannels);
 
-            _logger.LogDebug("Building overwrites");
+            logger.LogDebug("Building overwrites");
 
             List<DiscordOverwriteBuilder> overwrites = new();
 
@@ -102,7 +94,7 @@ internal sealed class NewMemberHandler : IHandleMessages<NewMemberMessage>
                 }
                 catch (ServerErrorException)
                 {
-                    _logger.LogWarning("Role with ID {Id} wasn't found in the Discord universe, skipping",
+                    logger.LogWarning("Role with ID {Id} wasn't found in the Discord universe, skipping",
                         moderatorRoleId);
                 }
             }
@@ -121,13 +113,13 @@ internal sealed class NewMemberHandler : IHandleMessages<NewMemberMessage>
 
             overwrites.Add(memberOverwrite);
 
-            _logger.LogDebug("Created {Count} overwrites", overwrites.Count);
+            logger.LogDebug("Created {Count} overwrites", overwrites.Count);
 
             DiscordChannel channel;
 
             try
             {
-                _logger.LogDebug("Attempting to create channel {Channel}", applicationChannelName);
+                logger.LogDebug("Attempting to create channel {Channel}", applicationChannelName);
 
                 //
                 // Create new text channel private to the member and staff
@@ -139,7 +131,7 @@ internal sealed class NewMemberHandler : IHandleMessages<NewMemberMessage>
                     overwrites: overwrites
                 );
 
-                _logger.LogInformation("Created {Channel}", channel);
+                logger.LogInformation("Created {Channel}", channel);
 
                 //
                 // Channel created successfully, increment and save counter
@@ -154,7 +146,7 @@ internal sealed class NewMemberHandler : IHandleMessages<NewMemberMessage>
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Channel creation failed");
+                logger.LogError(ex, "Channel creation failed");
                 return;
             }
 
@@ -169,7 +161,7 @@ internal sealed class NewMemberHandler : IHandleMessages<NewMemberMessage>
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Sending welcome message failed");
+                logger.LogError(ex, "Sending welcome message failed");
             }
 
             try
@@ -178,7 +170,7 @@ internal sealed class NewMemberHandler : IHandleMessages<NewMemberMessage>
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Creating status message failed");
+                logger.LogError(ex, "Creating status message failed");
             }
         }
         finally

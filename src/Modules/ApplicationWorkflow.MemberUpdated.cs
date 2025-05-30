@@ -117,7 +117,7 @@ internal partial class ApplicationWorkflow
 
         NewMemberMessage message = new()
         {
-            GuildProperties = guildRuntime, GuildConfig = guildConfig, MemberEntiryId = member.ID
+            GuildProperties = guildRuntime, GuildConfig = guildConfig, MemberEntryId = member.ID
         };
 
         _logger.LogInformation("Submitting new member workflow message");
