@@ -42,11 +42,20 @@ internal class MemberDbSyncInvokable(
                 string id = member.ToEntityId();
                 GuildMember guildMember = await DB.Find<GuildMember>().OneAsync(id);
 
+                // already exists
                 if (guildMember is not null)
                 {
+                    // newbie channel object exists in DB but no longer in guild
+                    if (guildMember.Channel is not null && !guild.Channels.ContainsKey(guildMember.Channel.ChannelId))
+                    {
+                        logger.LogInformation("Removing orphaned channel entity {Channel}", guildMember.Channel);
+                        await guildMember.DeleteChannel();
+                    }
+
                     continue;
                 }
 
+                // add missing
                 guildMember = new GuildMember
                 {
                     GuildId = member.Guild.Id,
