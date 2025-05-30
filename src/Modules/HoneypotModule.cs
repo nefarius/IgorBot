@@ -59,6 +59,13 @@ internal sealed class HoneypotModule(IOptionsMonitor<IgorConfig> config, ILogger
                 return;
             }
 
+            // member is on the exclusion list and protected
+            if (member.Roles.Any(r => guildConfig.HoneypotExclusionRoleIds.Contains(r.Id)))
+            {
+                logger.LogWarning("Member {Member} posted in honeypot channel but has excluded role", member);
+                return;
+            }
+
             // yeet!
             logger.LogInformation("Banning {Member} due to messaging in honeypot channel", member);
             await member.BanAsync(1, "User fell into honeypot trap");
