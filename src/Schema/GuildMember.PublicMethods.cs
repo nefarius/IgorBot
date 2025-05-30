@@ -9,7 +9,7 @@ namespace IgorBot.Schema;
 internal sealed partial class GuildMember
 {
     /// <summary>
-    ///     Resets certain properties to defaults. Call when a member (re-)joined.
+    ///     Resets certain properties to their defaults. Call when a member (re-)joined.
     /// </summary>
     public void Reset()
     {
