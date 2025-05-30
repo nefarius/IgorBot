@@ -87,6 +87,11 @@ internal sealed class GuildConfig
     ///     Timespan after which stale strangers get auto-kicked, if enabled.
     /// </summary>
     public TimeSpan? IdleKickTimeSpan { get; set; }
+
+    /// <summary>
+    ///     Optional channel ID for the spambot honeypot feature.
+    /// </summary>
+    public ulong? HoneypotChannelId { get; set; }
 }
 
 /// <summary>
