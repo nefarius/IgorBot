@@ -153,7 +153,7 @@ internal sealed class NewMemberHandler(IDiscordClientService clientService, ILog
             try
             {
                 //
-                // Get users attention by adding welcome message
+                // Get users attention by adding the welcome message
                 // 
 
                 await channel.SendMessageAsync(new DiscordMessageBuilder()
