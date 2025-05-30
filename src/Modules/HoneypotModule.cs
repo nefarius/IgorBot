@@ -1,6 +1,7 @@
 ﻿using DSharpPlus;
 using DSharpPlus.Entities;
 using DSharpPlus.EventArgs;
+using DSharpPlus.Exceptions;
 
 using IgorBot.Core;
 
@@ -57,6 +58,10 @@ internal sealed class HoneypotModule(IOptionsMonitor<IgorConfig> config, ILogger
             logger.LogInformation("Banning {Member} due to messaging in honeypot channel", member);
             await member.BanAsync(1, "User fell into honeypot trap");
             logger.LogInformation("{Member} banned", member);
+        }
+        catch (NotFoundException)
+        {
+            logger.LogWarning("{Author} is not a member of {Guild}", args.Author, args.Guild);
         }
         catch (Exception ex)
         {
