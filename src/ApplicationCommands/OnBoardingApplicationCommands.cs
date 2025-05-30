@@ -67,7 +67,7 @@ public sealed class OnBoardingApplicationCommands : ApplicationCommandModule
             return;
         }
 
-        dbMember.Application.IsAutoKickEnabled = false;
+        application.IsAutoKickEnabled = false;
         await dbMember.Application.SaveAsync();
         await dbMember.SaveAsync();
         await dbMember.UpdateApplicationWidget(ctx.Client);
