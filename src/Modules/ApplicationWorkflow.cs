@@ -1,12 +1,12 @@
-﻿using System.Diagnostics.CodeAnalysis;
-
-using DSharpPlus;
+﻿using DSharpPlus;
 using DSharpPlus.Entities;
 using DSharpPlus.EventArgs;
 using DSharpPlus.Exceptions;
 
 using IgorBot.Core;
 using IgorBot.Schema;
+
+using JetBrains.Annotations;
 
 using Microsoft.Extensions.Options;
 
@@ -22,6 +22,7 @@ namespace IgorBot.Modules;
 [DiscordGuildMemberUpdatedEventSubscriber]
 [DiscordGuildMemberRemovedEventSubscriber]
 [DiscordComponentInteractionCreatedEventSubscriber]
+[UsedImplicitly]
 internal partial class ApplicationWorkflow(
     ILogger<ApplicationWorkflow> logger,
     IOptionsMonitor<IgorConfig> config,

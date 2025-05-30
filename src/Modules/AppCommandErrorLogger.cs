@@ -1,25 +1,21 @@
 ﻿using DSharpPlus.SlashCommands;
 using DSharpPlus.SlashCommands.EventArgs;
 
+using JetBrains.Annotations;
+
 using Nefarius.DSharpPlus.SlashCommands.Extensions.Hosting.Attributes;
 using Nefarius.DSharpPlus.SlashCommands.Extensions.Hosting.Events;
 
 namespace IgorBot.Modules;
 
 [DiscordSlashCommandsEventsSubscriber]
-internal class AppCommandErrorLogger : IDiscordSlashCommandsEventsSubscriber
+[UsedImplicitly]
+internal class AppCommandErrorLogger(ILogger<AppCommandErrorLogger> logger) : IDiscordSlashCommandsEventsSubscriber
 {
-    private readonly ILogger<AppCommandErrorLogger> _logger;
-
-    public AppCommandErrorLogger(ILogger<AppCommandErrorLogger> logger)
-    {
-        _logger = logger;
-    }
-
     public Task SlashCommandsOnContextMenuErrored(SlashCommandsExtension sender,
         ContextMenuErrorEventArgs args)
     {
-        _logger.LogError(args.Exception, "Context menu error");
+        logger.LogError(args.Exception, "Context menu error");
 
         return Task.CompletedTask;
     }
@@ -33,7 +29,7 @@ internal class AppCommandErrorLogger : IDiscordSlashCommandsEventsSubscriber
     public Task SlashCommandsOnSlashCommandErrored(SlashCommandsExtension sender,
         SlashCommandErrorEventArgs args)
     {
-        _logger.LogError(args.Exception, "Application command error");
+        logger.LogError(args.Exception, "Application command error");
 
         return Task.CompletedTask;
     }

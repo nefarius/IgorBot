@@ -1,23 +1,19 @@
 ﻿using DSharpPlus;
 using DSharpPlus.EventArgs;
 
+using JetBrains.Annotations;
+
 using Nefarius.DSharpPlus.Extensions.Hosting.Events;
 
 namespace IgorBot.Modules;
 
 [DiscordGuildAvailableEventSubscriber]
-internal class IgorCoreModule : IDiscordGuildAvailableEventSubscriber
+[UsedImplicitly]
+internal class IgorCoreModule(ILogger<IgorCoreModule> logger) : IDiscordGuildAvailableEventSubscriber
 {
-    private readonly ILogger<IgorCoreModule> _logger;
-
-    public IgorCoreModule(ILogger<IgorCoreModule> logger)
-    {
-        _logger = logger;
-    }
-
     public Task DiscordOnGuildAvailable(DiscordClient sender, GuildCreateEventArgs args)
     {
-        _logger.LogInformation("{Guild} online", args.Guild);
+        logger.LogInformation("{Guild} online", args.Guild);
 
         return Task.CompletedTask;
     }

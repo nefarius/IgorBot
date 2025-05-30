@@ -74,6 +74,7 @@ host.Services.UseScheduler(scheduler =>
 );
 
 host.Run();
+return;
 
 
 void ConfigureDiscord(IServiceCollection serviceCollection, IgorConfig igorConfig)
