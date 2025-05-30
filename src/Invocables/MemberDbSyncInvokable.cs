@@ -32,13 +32,8 @@ internal class MemberDbSyncInvokable(
 
             IReadOnlyCollection<DiscordMember> members = await guild.GetAllMembersAsync();
 
-            foreach (DiscordMember member in members)
+            foreach (DiscordMember member in members.Where(m => !m.IsBot))
             {
-                if (member.IsBot)
-                {
-                    continue;
-                }
-
                 string id = member.ToEntityId();
                 GuildMember guildMember = await DB.Find<GuildMember>().OneAsync(id);
 
