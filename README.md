@@ -8,9 +8,11 @@
 
 Advanced Discord bot to automate new Member on-boarding.
 
-## About
+## Motivation
 
-Work in progress, use with care 🔥
+TBD
+
+## Disclaimer
 
 I am using it successfully for a couple of years on my community servers now, however especially configuration
 simplification has missing features. You have been warned.
