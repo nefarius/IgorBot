@@ -36,22 +36,3 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-
-  # MongoDB Web Admin UI (optional)
-  igor-bot-db-ui:
-    image: ugleiton/mongo-gui:latest
-    container_name: igor-bot-db-ui
-    restart: unless-stopped
-    depends_on:
-      - igor-bot-db
-    environment:
-      - TZ=Europe/Vienna
-      - MONGO_URL=mongodb://igor-bot-db:27017
-    ports:
-      - 127.0.0.1:8081:4321
-    labels:
-      - traefik.enable=false
-    logging:
-      options:
-        max-size: "10m"
-        max-file: "3"
