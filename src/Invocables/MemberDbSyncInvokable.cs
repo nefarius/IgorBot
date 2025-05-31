@@ -14,6 +14,9 @@ using Nefarius.DSharpPlus.Extensions.Hosting;
 
 namespace IgorBot.Invocables;
 
+/// <summary>
+///     Scheduled job to synchronize the database to the Discord universe objects.
+/// </summary>
 internal class MemberDbSyncInvokable(
     IOptionsMonitor<IgorConfig> config,
     IDiscordClientService discord,
