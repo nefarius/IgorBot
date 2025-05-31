@@ -12,7 +12,7 @@ Advanced Discord bot to automate new Member on-boarding.
 
 Work in progress, use with care 🔥
 
-I am using it successfully for a couple years on my community servers now, however especially configuration
+I am using it successfully for a couple of years on my community servers now, however especially configuration
 simplification has missing features. You have been warned.
 
 ## Setup
@@ -30,13 +30,11 @@ It's recommended to use Docker and docker-compose to bring up the bot and its co
 
 ## Configuration
 
-To be done...
-
-### Discord server preparations
-
 As of the time of writing, the bot doesn't have any server setup commands, so some elbow grease is required to get it up
 and running 💪 No worries though, I've got you covered! Adjust your `appsettings.Production.json` with the values
-outlined below:
+outlined below.
+
+### Discord server preparations
 
 - Create a new Guild entry in the config file with your server's ID as the key name
 - Set the `GuildId` config value to the same ID
@@ -55,7 +53,7 @@ To be done...
 ## How to build
 
 ```bash
-docker build --platform linux/amd64 -t containinger/igor-bot . ; docker push containinger/igor-bot
+docker build --platform linux/amd64 --push -t containinger/igor-bot .
 ```
 
 ## 3rd party credits
