@@ -231,7 +231,10 @@ public sealed class OnBoardingApplicationCommands : ApplicationCommandModule
         DiscordEmbedBuilder submissionEmbed = new()
         {
             Title = "Questionnaire submission",
-            Description = $"Questionnaire: {Formatter.Bold(questionnaire.Name)}, Author: {ctx.Member.Mention}",
+            Description =
+                $"Questionnaire: {Formatter.Bold(questionnaire.Name)}, " +
+                $"Author: {ctx.Member} ({ctx.Member.Mention}), " + 
+                $"Status panel: {application.MessageMentionUrl}",
             Timestamp = DateTimeOffset.UtcNow,
             Footer = new DiscordEmbedBuilder.EmbedFooter
             {

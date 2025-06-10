@@ -19,17 +19,22 @@ internal sealed class StrangerApplicationEmbed : IEntity
     /// <summary>
     ///     Snowflake ID of the Guild.
     /// </summary>
-    public ulong GuildId { get; init; }
+    public required ulong GuildId { get; init; }
 
     /// <summary>
     ///     Snowflake ID of the channel the status message widget is in.
     /// </summary>
-    public ulong ChannelId { get; init; }
+    public required ulong ChannelId { get; init; }
 
     /// <summary>
     ///     Snowflake ID of status message widget.
     /// </summary>
-    public ulong MessageId { get; init; }
+    public required ulong MessageId { get; init; }
+
+    /// <summary>
+    ///     Mention URL to the message with the application embed.
+    /// </summary>
+    public Uri MessageMentionUrl => new($"https://discord.com/channels/{GuildId}/{ChannelId}/{MessageId}");
 
     /// <summary>
     ///     Creation timestamp.
@@ -77,20 +82,23 @@ internal sealed class StrangerApplicationEmbed : IEntity
         }
     }
 
-    [SuppressMessage("ReSharper", "InconsistentNaming")]
-    public string GenerateNewID()
-    {
-        return $"{GuildId}-{ChannelId}-{MessageId}";
-    }
-
-    public bool HasDefaultID() => string.IsNullOrEmpty(ID);
-
     [BsonId]
     [SuppressMessage("ReSharper", "InconsistentNaming")]
     public string ID { get; set; }
 
+    public bool HasDefaultID()
+    {
+        return string.IsNullOrEmpty(ID);
+    }
+
     object IEntity.GenerateNewID()
     {
         return GenerateNewID();
+    }
+
+    [SuppressMessage("ReSharper", "InconsistentNaming")]
+    public string GenerateNewID()
+    {
+        return $"{GuildId}-{ChannelId}-{MessageId}";
     }
 }
