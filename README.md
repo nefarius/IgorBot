@@ -19,7 +19,7 @@ simplification has missing features. You have been warned.
 
 ## Prerequisites
 
-You **must** have at least one other bot (Carl, ME6, ...) in use that assigns the "Stranger" role to new members, since most servers already have some sort of moderation bot, I did not include this feature into Igor on purpose. Alternatively you can assign the "Stranger" role to new members manually to trigger onboarding, but where's the fun in that 😁
+You **must** have at least one other bot (Carl, ME6, ...) in use that assigns the "Lurker" role to new members, since most servers already have some sort of moderation bot, I did not include this feature into Igor on purpose. Alternatively you can assign the "Lurker" role to new members manually to trigger onboarding, but where's the fun in that 😁
 
 ## Setup
 
