@@ -30,6 +30,12 @@ internal class OrphanEmbedReconciliationInvokable(
     /// </summary>
     private static readonly TimeSpan OrphanGracePeriod = TimeSpan.FromMinutes(2);
 
+    /// <summary>
+    ///     Minimum delay between Discord API calls to avoid hitting per-channel rate limits
+    ///     (Discord allows ~5 requests per 5 seconds per channel for message operations).
+    /// </summary>
+    private static readonly TimeSpan DiscordApiThrottleDelay = TimeSpan.FromSeconds(1.2);
+
     public async Task Invoke()
     {
         logger.LogInformation("Running orphan application embed reconciliation");
@@ -90,12 +96,22 @@ internal class OrphanEmbedReconciliationInvokable(
                 m.Eq(f => f.GuildId, guild.Id) &
                 m.Ne(f => f.Application, null));
 
+        bool isFirstApiCall = true;
+
         foreach (GuildMember guildMember in membersWithApplication)
         {
             if (guildMember.Application is null)
             {
                 continue;
             }
+
+            // Throttle Discord API calls to avoid per-channel rate limits (~5 req/5 sec)
+            if (!isFirstApiCall)
+            {
+                await Task.Delay(DiscordApiThrottleDelay);
+            }
+
+            isFirstApiCall = false;
 
             try
             {
