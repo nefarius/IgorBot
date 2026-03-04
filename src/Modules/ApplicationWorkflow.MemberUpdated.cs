@@ -36,22 +36,6 @@ internal partial class ApplicationWorkflow
             return;
         }
 
-        if (guildConfig.StrangerStatusChannelId == 0)
-        {
-            logger.LogDebug("Guild {GuildId} has no stranger status channel configured, skipping member update handling",
-                e.Guild.Id);
-            return;
-        }
-
-        DiscordChannel strangerStatusChannel = e.Guild.GetChannel(guildConfig.StrangerStatusChannelId);
-
-        if (strangerStatusChannel is null)
-        {
-            logger.LogWarning("Stranger status channel not found for guild {GuildId}, skipping member update handling",
-                e.Guild.Id);
-            return;
-        }
-
         _ = Task.Run(async () =>
         {
             // Full member role added
@@ -101,6 +85,20 @@ internal partial class ApplicationWorkflow
 
             if (!guildConfig.EnableOnboardingWorkflow)
             {
+                return;
+            }
+
+            if (guildConfig.StrangerStatusChannelId == 0)
+            {
+                logger.LogDebug("Guild {GuildId} has no stranger status channel configured, skipping ProcessStrangerAssignment",
+                    e.Guild.Id);
+                return;
+            }
+
+            if (e.Guild.GetChannel(guildConfig.StrangerStatusChannelId) is null)
+            {
+                logger.LogWarning("Stranger status channel not found for guild {GuildId}, skipping ProcessStrangerAssignment",
+                    e.Guild.Id);
                 return;
             }
 

@@ -123,6 +123,7 @@ public sealed class ConfigCommands(IGuildConfigService guildConfigService) : App
         {
             config = existing;
             config.HoneypotChannelId = honeypotChannel.Id;
+            config.EnableOnboardingWorkflow = false;
             if (honeypotExclusionRole is not null && !config.HoneypotExclusionRoleIds.Contains(honeypotExclusionRole.Id))
             {
                 config.HoneypotExclusionRoleIds.Add(honeypotExclusionRole.Id);
