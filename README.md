@@ -19,10 +19,10 @@ simplification has missing features. You have been warned.
 
 ## Prerequisites
 
-You **must** have at least one other bot (Carl, ME6, ...) in use that assigns the "Lurker" role to new members, since
-most servers already have some sort of moderation bot, I did not include this feature into Igor on purpose.
-Alternatively you can assign the "Lurker" role to new members manually to trigger onboarding, but where's the fun in
-that 😁
+- **Option A**: Enable `AutoAssignStrangerRoleOnJoin` in your guild config so Igor assigns the "Lurker" role to new
+  members automatically. The bot needs the Manage Roles permission and its role must be above the Lurker role.
+- **Option B**: Use another bot (Carl, ME6, ...) that assigns the "Lurker" role to new members.
+- **Option C**: Assign the "Lurker" role to new members manually to trigger onboarding.
 
 ## Setup
 
@@ -47,6 +47,9 @@ outlined below.
 - Set the `GuildId` config value to the same ID
 - Add a "Lurker" role and copy its ID to the `StrangerRoleId` config value
     - This is the role new members should get assigned to get identified. More on that later on.
+- (Optional) Set `AutoAssignStrangerRoleOnJoin` to `true` to have Igor assign the Lurker role when members join. When
+  enabled, no 2nd bot is required. The bot needs **Manage Roles** and its role must be above the Lurker role in the
+  server's role hierarchy. Enable the **Guild Members** privileged intent in the [Discord Developer Portal](https://discord.com/developers/applications) for your bot.
 - Add a "Full Member" role and copy its ID to the `MemberRoleId` config value
     - This is the role that promoted/unlocked members will get assigned when approved by a moderator
 - Create a new category "Newbies" and copy its ID to the `ApplicationCategoryId` config value

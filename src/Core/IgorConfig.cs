@@ -1,4 +1,4 @@
-﻿using System.Diagnostics.CodeAnalysis;
+using System.Diagnostics.CodeAnalysis;
 
 using DSharpPlus;
 
@@ -97,6 +97,11 @@ internal sealed class GuildConfig
     ///     Role members immune to <see cref="HoneypotChannelId" /> actions.
     /// </summary>
     public List<ulong> HoneypotExclusionRoleIds { get; set; } = new();
+
+    /// <summary>
+    ///     If true, automatically assign the Stranger role when a member joins. When enabled, a 2nd bot is not required.
+    /// </summary>
+    public bool AutoAssignStrangerRoleOnJoin { get; set; } = false;
 }
 
 /// <summary>

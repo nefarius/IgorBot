@@ -80,7 +80,9 @@ void ConfigureDiscord(IServiceCollection serviceCollection, IgorConfig igorConfi
     {
         discordConfiguration.Token = igorConfig.Discord.Token;
         discordConfiguration.MinimumLogLevel = LogLevel.Debug;
-        discordConfiguration.Intents = DiscordIntents.GuildMessages |
+        discordConfiguration.Intents = DiscordIntents.Guilds |
+                                       DiscordIntents.GuildMembers |
+                                       DiscordIntents.GuildMessages |
                                        DiscordIntents.DirectMessages |
                                        DiscordIntents.MessageContents;
     });

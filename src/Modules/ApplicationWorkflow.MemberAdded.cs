@@ -1,4 +1,4 @@
-﻿using DSharpPlus;
+using DSharpPlus;
 using DSharpPlus.Entities;
 using DSharpPlus.EventArgs;
 
@@ -53,6 +53,13 @@ internal partial class ApplicationWorkflow
 
         GuildConfig guildConfig = config.CurrentValue.Guilds[e.Guild.Id.ToString()];
         DiscordRole strangerRole = e.Guild.GetRole(guildConfig.StrangerRoleId);
+
+        if (guildConfig.AutoAssignStrangerRoleOnJoin && !e.Member.Roles.Contains(strangerRole))
+        {
+            logger.LogInformation("{Member} auto-assigning stranger role", e.Member);
+            await e.Member.GrantRoleAsync(strangerRole);
+            return;
+        }
 
         if (e.Member.Roles.Contains(strangerRole))
         {
