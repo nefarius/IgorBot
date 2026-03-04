@@ -43,7 +43,9 @@ public sealed class ConfigCommands(IGuildConfigService guildConfigService) : App
         [Option("honeypot_channel", "Channel that bans users who post in it (optional)")]
         DiscordChannel honeypotChannel = null,
         [Option("moderator_role", "Role that can see and interact with newbie channels (optional)")]
-        DiscordRole moderatorRole = null
+        DiscordRole moderatorRole = null,
+        [Option("enable_onboarding_workflow", "Run onboarding workflow when member gets stranger role")]
+        bool enableOnboardingWorkflow = true
     )
     {
         await ctx.DeferAsync();
@@ -60,6 +62,7 @@ public sealed class ConfigCommands(IGuildConfigService guildConfigService) : App
             NewbieWelcomeTemplate = newbieWelcomeTemplate,
             MemberWelcomeTemplate = memberWelcomeTemplate,
             AutoAssignStrangerRoleOnJoin = autoAssignStrangerRole,
+            EnableOnboardingWorkflow = enableOnboardingWorkflow,
             ApplicationModeratorRoleIds = []
         };
 
@@ -102,6 +105,61 @@ public sealed class ConfigCommands(IGuildConfigService guildConfigService) : App
         await ctx.EditResponseAsync(new DiscordWebhookBuilder().AddEmbed(embed));
     }
 
+    [SlashCommand("setup-honeypot", "Honeypot-only setup for servers that do not need onboarding.")]
+    public async Task SetupHoneypot(
+        InteractionContext ctx,
+        [Option("honeypot_channel", "Channel that bans users who post in it")]
+        DiscordChannel honeypotChannel,
+        [Option("honeypot_exclusion_role", "Role exempt from honeypot ban (optional)")]
+        DiscordRole honeypotExclusionRole = null
+    )
+    {
+        await ctx.DeferAsync();
+
+        GuildConfig? existing = await guildConfigService.GetAsync(ctx.Guild.Id);
+        GuildConfig config;
+
+        if (existing is not null)
+        {
+            config = existing;
+            config.HoneypotChannelId = honeypotChannel.Id;
+            config.EnableOnboardingWorkflow = false;
+            if (honeypotExclusionRole is not null && !config.HoneypotExclusionRoleIds.Contains(honeypotExclusionRole.Id))
+            {
+                config.HoneypotExclusionRoleIds.Add(honeypotExclusionRole.Id);
+            }
+        }
+        else
+        {
+            config = new GuildConfig
+            {
+                GuildId = ctx.Guild.Id,
+                HoneypotChannelId = honeypotChannel.Id,
+                EnableOnboardingWorkflow = false
+            };
+            if (honeypotExclusionRole is not null)
+            {
+                config.HoneypotExclusionRoleIds.Add(honeypotExclusionRole.Id);
+            }
+        }
+
+        await guildConfigService.SaveAsync(config);
+
+        DiscordEmbedBuilder embed = new()
+        {
+            Title = "Honeypot configured",
+            Description = "Users who post in the honeypot channel will be banned. Configured exclusion roles are exempt.",
+            Color = new DiscordColor(0x00FF00)
+        };
+        embed.AddField("Honeypot channel", honeypotChannel.Mention, true);
+        if (honeypotExclusionRole is not null)
+        {
+            embed.AddField("Exclusion role", honeypotExclusionRole.Mention, true);
+        }
+
+        await ctx.EditResponseAsync(new DiscordWebhookBuilder().AddEmbed(embed));
+    }
+
     [SlashCommand("view", "View current configuration for this server.")]
     public async Task View(InteractionContext ctx)
     {
@@ -121,16 +179,17 @@ public sealed class ConfigCommands(IGuildConfigService guildConfigService) : App
         }
 
         DiscordEmbedBuilder embed = new() { Title = "Server configuration", Color = new DiscordColor(0x3498DB) };
-        embed.AddField("Stranger role", $"<@&{config.StrangerRoleId}>", true);
-        embed.AddField("Member role", $"<@&{config.MemberRoleId}>", true);
-        embed.AddField("Application category", $"<#{config.ApplicationCategoryId}>", true);
-        embed.AddField("Stranger status channel", $"<#{config.StrangerStatusChannelId}>", true);
-        embed.AddField("Member welcome channel", $"<#{config.MemberWelcomeMessageChannelId}>", true);
+        embed.AddField("Stranger role", config.StrangerRoleId != 0 ? $"<@&{config.StrangerRoleId}>" : "Not set", true);
+        embed.AddField("Member role", config.MemberRoleId != 0 ? $"<@&{config.MemberRoleId}>" : "Not set", true);
+        embed.AddField("Application category", config.ApplicationCategoryId != 0 ? $"<#{config.ApplicationCategoryId}>" : "Not set", true);
+        embed.AddField("Stranger status channel", config.StrangerStatusChannelId != 0 ? $"<#{config.StrangerStatusChannelId}>" : "Not set", true);
+        embed.AddField("Member welcome channel", config.MemberWelcomeMessageChannelId != 0 ? $"<#{config.MemberWelcomeMessageChannelId}>" : "Not set", true);
         embed.AddField("Channel format", config.ApplicationChannelNameFormat ?? "newbie-{0:D4}", true);
         embed.AddField("Auto-assign stranger role", config.AutoAssignStrangerRoleOnJoin ? "Yes" : "No", true);
         embed.AddField("Idle kick", config.IdleKickTimeSpan?.ToString() ?? "Disabled", true);
         embed.AddField("Honeypot", config.HoneypotChannelId.HasValue ? $"<#{config.HoneypotChannelId}>" : "Not set",
             true);
+        embed.AddField("Onboarding workflow", config.EnableOnboardingWorkflow ? "Enabled" : "Disabled", true);
 
         await ctx.EditResponseAsync(new DiscordWebhookBuilder().AddEmbed(embed));
     }
@@ -153,7 +212,7 @@ public sealed class ConfigCommands(IGuildConfigService guildConfigService) : App
             await ctx.EditResponseAsync(new DiscordWebhookBuilder().AddEmbed(new DiscordEmbedBuilder
             {
                 Title = "Not configured",
-                Description = "Run `/config setup` first to create initial configuration.",
+                Description = "Run `/config setup` or `/config setup-honeypot` first to create initial configuration.",
                 Color = new DiscordColor(0xFF0000)
             }));
             return;
@@ -270,6 +329,33 @@ public sealed class ConfigCommands(IGuildConfigService guildConfigService) : App
                 if (validationError is null && !config.ApplicationModeratorRoleIds.Contains(modRoleId))
                 {
                     config.ApplicationModeratorRoleIds.Add(modRoleId);
+                }
+
+                break;
+            case ConfigOption.EnableOnboardingWorkflow:
+                if (!bool.TryParse(value, out bool enableWorkflow))
+                {
+                    validationError = "Value must be 'true' or 'false'.";
+                }
+                else
+                {
+                    config.EnableOnboardingWorkflow = enableWorkflow;
+                }
+
+                break;
+            case ConfigOption.HoneypotExclusionRole:
+                validationError = ValidateRole(ctx.Guild, parsedId, out ulong exclusionRoleId);
+                if (validationError is null && !config.HoneypotExclusionRoleIds.Contains(exclusionRoleId))
+                {
+                    config.HoneypotExclusionRoleIds.Add(exclusionRoleId);
+                }
+
+                break;
+            case ConfigOption.HoneypotExclusionRoleRemove:
+                validationError = ValidateRole(ctx.Guild, parsedId, out ulong removeExclusionRoleId);
+                if (validationError is null)
+                {
+                    config.HoneypotExclusionRoleIds.Remove(removeExclusionRoleId);
                 }
 
                 break;
@@ -453,5 +539,14 @@ public enum ConfigOption
 
     [ChoiceName("Honeypot channel")] HoneypotChannel,
 
-    [ChoiceName("Moderator role (add)")] ModeratorRole
+    [ChoiceName("Moderator role (add)")] ModeratorRole,
+
+    [ChoiceName("Enable onboarding workflow")]
+    EnableOnboardingWorkflow,
+
+    [ChoiceName("Honeypot exclusion role (add)")]
+    HoneypotExclusionRole,
+
+    [ChoiceName("Honeypot exclusion role (remove)")]
+    HoneypotExclusionRoleRemove
 }

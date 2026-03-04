@@ -87,6 +87,11 @@ public class GuildConfigEntity : IEntity
     /// </summary>
     public bool AutoAssignStrangerRoleOnJoin { get; set; }
 
+    /// <summary>
+    ///     If true, run the onboarding workflow when a member gets the stranger role. Null when absent (treated as true).
+    /// </summary>
+    public bool? EnableOnboardingWorkflow { get; set; }
+
     [SuppressMessage("ReSharper", "InconsistentNaming")]
     [BsonId]
     [SuppressMessage("ReSharper", "UnusedMember.Global")]
@@ -128,7 +133,8 @@ public class GuildConfigEntity : IEntity
             IdleKickTimeSpan = IdleKickTimeSpan,
             HoneypotChannelId = HoneypotChannelId,
             HoneypotExclusionRoleIds = new List<ulong>(HoneypotExclusionRoleIds),
-            AutoAssignStrangerRoleOnJoin = AutoAssignStrangerRoleOnJoin
+            AutoAssignStrangerRoleOnJoin = AutoAssignStrangerRoleOnJoin,
+            EnableOnboardingWorkflow = EnableOnboardingWorkflow ?? true
         };
         result.Questionnaires = new Dictionary<string, Questionnaire>(Questionnaires);
         return result;
@@ -155,7 +161,8 @@ public class GuildConfigEntity : IEntity
             IdleKickTimeSpan = config.IdleKickTimeSpan,
             HoneypotChannelId = config.HoneypotChannelId,
             HoneypotExclusionRoleIds = new List<ulong>(config.HoneypotExclusionRoleIds),
-            AutoAssignStrangerRoleOnJoin = config.AutoAssignStrangerRoleOnJoin
+            AutoAssignStrangerRoleOnJoin = config.AutoAssignStrangerRoleOnJoin,
+            EnableOnboardingWorkflow = config.EnableOnboardingWorkflow
         };
     }
 }

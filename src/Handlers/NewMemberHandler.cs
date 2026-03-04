@@ -52,11 +52,32 @@ internal sealed class NewMemberHandler(
             DiscordClient client = clientService.Client;
             GuildConfig guildConfig = message.GuildConfig;
 
+            if (guildConfig.StrangerStatusChannelId == 0 || guildConfig.ApplicationCategoryId == 0)
+            {
+                logger.LogWarning("Guild {GuildId} has invalid onboarding config (missing StrangerStatusChannelId or ApplicationCategoryId), skipping",
+                    guildConfig.GuildId);
+                return;
+            }
+
+            if (string.IsNullOrEmpty(guildConfig.ApplicationChannelNameFormat) ||
+                string.IsNullOrEmpty(guildConfig.NewbieWelcomeTemplate))
+            {
+                logger.LogWarning("Guild {GuildId} has invalid onboarding config (missing channel format or welcome template), skipping",
+                    guildConfig.GuildId);
+                return;
+            }
+
             DiscordGuild guild = client.Guilds[guildConfig.GuildId];
             DiscordMember guildMember = await guild.GetMemberAsync(dbMember.MemberId);
             DiscordChannel strangerStatusChannel = guild.GetChannel(guildConfig.StrangerStatusChannelId);
-
             DiscordChannel parentCategory = guild.GetChannel(guildConfig.ApplicationCategoryId);
+
+            if (strangerStatusChannel is null || parentCategory is null)
+            {
+                logger.LogWarning("Guild {GuildId} stranger status channel or application category not found, skipping",
+                    guildConfig.GuildId);
+                return;
+            }
 
             logger.LogInformation("Application category: {Category}", parentCategory);
 
