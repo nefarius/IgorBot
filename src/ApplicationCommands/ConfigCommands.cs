@@ -148,58 +148,104 @@ public sealed class ConfigCommands(IGuildConfigService guildConfigService) : App
         }
 
         ulong? parsedId = ParseSnowflake(value);
+        string validationError = null;
 
         switch (option)
         {
-            case ConfigOption.StrangerRole when parsedId.HasValue:
-                config.StrangerRoleId = parsedId.Value;
+            case ConfigOption.StrangerRole:
+                validationError = ValidateRole(ctx.Guild, parsedId, out ulong strangerRoleId);
+                if (validationError is null)
+                    config.StrangerRoleId = strangerRoleId;
                 break;
-            case ConfigOption.MemberRole when parsedId.HasValue:
-                config.MemberRoleId = parsedId.Value;
+            case ConfigOption.MemberRole:
+                validationError = ValidateRole(ctx.Guild, parsedId, out ulong memberRoleId);
+                if (validationError is null)
+                    config.MemberRoleId = memberRoleId;
                 break;
-            case ConfigOption.ApplicationCategory when parsedId.HasValue:
-                config.ApplicationCategoryId = parsedId.Value;
+            case ConfigOption.ApplicationCategory:
+                validationError = ValidateCategoryChannel(ctx.Guild, parsedId, out ulong categoryId);
+                if (validationError is null)
+                    config.ApplicationCategoryId = categoryId;
                 break;
-            case ConfigOption.StrangerStatusChannel when parsedId.HasValue:
-                config.StrangerStatusChannelId = parsedId.Value;
-                break;
-            case ConfigOption.MemberWelcomeChannel when parsedId.HasValue:
-                config.MemberWelcomeMessageChannelId = parsedId.Value;
+            case ConfigOption.StrangerStatusChannel:
+            case ConfigOption.MemberWelcomeChannel:
+                validationError = ValidateTextChannel(ctx.Guild, parsedId, out ulong channelId);
+                if (validationError is null)
+                {
+                    if (option == ConfigOption.StrangerStatusChannel)
+                        config.StrangerStatusChannelId = channelId;
+                    else
+                        config.MemberWelcomeMessageChannelId = channelId;
+                }
                 break;
             case ConfigOption.ApplicationChannelFormat:
-                config.ApplicationChannelNameFormat = value;
+                validationError = ValidateApplicationChannelFormat(value);
+                if (validationError is null)
+                    config.ApplicationChannelNameFormat = value;
                 break;
             case ConfigOption.NewbieWelcomeTemplate:
-                config.NewbieWelcomeTemplate = value;
+                validationError = ValidateMentionTemplate(value);
+                if (validationError is null)
+                    config.NewbieWelcomeTemplate = value;
                 break;
             case ConfigOption.MemberWelcomeTemplate:
-                config.MemberWelcomeTemplate = value;
+                validationError = ValidateMentionTemplate(value);
+                if (validationError is null)
+                    config.MemberWelcomeTemplate = value;
                 break;
             case ConfigOption.AutoAssignStrangerRole:
-                config.AutoAssignStrangerRoleOnJoin = bool.TryParse(value, out bool b) && b;
+                if (!bool.TryParse(value, out bool b))
+                {
+                    validationError = "Value must be 'true' or 'false'.";
+                }
+                else
+                {
+                    config.AutoAssignStrangerRoleOnJoin = b;
+                }
                 break;
             case ConfigOption.IdleKickMinutes:
-                config.IdleKickTimeSpan = long.TryParse(value, out long m) && m > 0
-                    ? TimeSpan.FromMinutes(m)
-                    : null;
+                if (!long.TryParse(value, out long m) || m <= 0)
+                {
+                    validationError = "Value must be a positive number (minutes). Use 0 or omit to disable idle kick.";
+                }
+                else
+                {
+                    config.IdleKickTimeSpan = TimeSpan.FromMinutes(m);
+                }
                 break;
             case ConfigOption.HoneypotChannel:
-                config.HoneypotChannelId = parsedId;
-                break;
-            case ConfigOption.ModeratorRole when parsedId.HasValue:
-                if (!config.ApplicationModeratorRoleIds.Contains(parsedId.Value))
+                if (!parsedId.HasValue)
                 {
-                    config.ApplicationModeratorRoleIds.Add(parsedId.Value);
+                    config.HoneypotChannelId = null;
+                }
+                else
+                {
+                    validationError = ValidateTextChannel(ctx.Guild, parsedId, out ulong honeypotId);
+                    if (validationError is null)
+                        config.HoneypotChannelId = honeypotId;
+                }
+                break;
+            case ConfigOption.ModeratorRole:
+                validationError = ValidateRole(ctx.Guild, parsedId, out ulong modRoleId);
+                if (validationError is null && !config.ApplicationModeratorRoleIds.Contains(modRoleId))
+                {
+                    config.ApplicationModeratorRoleIds.Add(modRoleId);
                 }
                 break;
             default:
-                await ctx.EditResponseAsync(new DiscordWebhookBuilder().AddEmbed(new DiscordEmbedBuilder
-                {
-                    Title = "Invalid value",
-                    Description = $"Could not parse value for {option}. Use a role or channel mention, or appropriate text.",
-                    Color = new DiscordColor(0xFF0000)
-                }));
-                return;
+                validationError = $"Could not parse value for {option}. Use a role or channel mention, or appropriate text.";
+                break;
+        }
+
+        if (validationError is not null)
+        {
+            await ctx.EditResponseAsync(new DiscordWebhookBuilder().AddEmbed(new DiscordEmbedBuilder
+            {
+                Title = "Invalid value",
+                Description = validationError,
+                Color = new DiscordColor(0xFF0000)
+            }));
+            return;
         }
 
         await guildConfigService.SaveAsync(config);
@@ -210,6 +256,89 @@ public sealed class ConfigCommands(IGuildConfigService guildConfigService) : App
             Description = $"Set {option} successfully.",
             Color = new DiscordColor(0x00FF00)
         }));
+    }
+
+    private static string ValidateRole(DiscordGuild guild, ulong? parsedId, out ulong roleId)
+    {
+        roleId = 0;
+        if (!parsedId.HasValue)
+            return "Provide a role mention (e.g. <@&role_id>).";
+        try
+        {
+            DiscordRole role = guild.GetRole(parsedId.Value);
+            if (role is null)
+                return "Role not found in this server.";
+            roleId = role.Id;
+            return null;
+        }
+        catch
+        {
+            return "Role not found in this server.";
+        }
+    }
+
+    private static string ValidateCategoryChannel(DiscordGuild guild, ulong? parsedId, out ulong channelId)
+    {
+        channelId = 0;
+        if (!parsedId.HasValue)
+            return "Provide a category channel mention (e.g. <#channel_id>).";
+        try
+        {
+            DiscordChannel channel = guild.GetChannel(parsedId.Value);
+            if (channel is null || channel.Type != ChannelType.Category)
+                return "Category channel not found or not a category.";
+            channelId = channel.Id;
+            return null;
+        }
+        catch
+        {
+            return "Category channel not found in this server.";
+        }
+    }
+
+    private static string ValidateTextChannel(DiscordGuild guild, ulong? parsedId, out ulong channelId)
+    {
+        channelId = 0;
+        if (!parsedId.HasValue)
+            return "Provide a channel mention (e.g. <#channel_id>).";
+        try
+        {
+            DiscordChannel channel = guild.GetChannel(parsedId.Value);
+            if (channel is null)
+                return "Channel not found in this server.";
+            channelId = channel.Id;
+            return null;
+        }
+        catch
+        {
+            return "Channel not found in this server.";
+        }
+    }
+
+    private static string ValidateApplicationChannelFormat(string value)
+    {
+        try
+        {
+            _ = string.Format(value, 1);
+            return null;
+        }
+        catch (FormatException ex)
+        {
+            return $"Invalid format string: {ex.Message}. Use {{0}} for the channel number (e.g. newbie-{{0:D4}}).";
+        }
+    }
+
+    private static string ValidateMentionTemplate(string value)
+    {
+        try
+        {
+            _ = string.Format(value, "@user");
+            return null;
+        }
+        catch (FormatException ex)
+        {
+            return $"Invalid template: {ex.Message}. Use {{0}} for the member mention.";
+        }
     }
 
     private static ulong? ParseSnowflake(string value)

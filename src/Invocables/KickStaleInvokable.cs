@@ -34,6 +34,12 @@ internal class KickStaleInvokable(
         // Enumerate guild configs with an active idle timespan set
         foreach (GuildConfig config1 in allConfigs.Where(gc => gc.IdleKickTimeSpan.HasValue))
         {
+            if (!discord.Client.Guilds.TryGetValue(config1.GuildId, out DiscordGuild guild))
+            {
+                logger.LogWarning("Guild {GuildId} not present in client, skipping stale kick", config1.GuildId);
+                continue;
+            }
+
             // query for members of the current guild where the application lifetime has exceeded the allowed idle time
             List<GuildMember> staleMembers = await db.Find<GuildMember>()
                 .ManyAsync(m =>
@@ -46,8 +52,6 @@ internal class KickStaleInvokable(
                     m.Eq(f => f.FullMemberAt, null) &
                     m.Eq(f => f.AutoKickedAt, null)
                 );
-
-            DiscordGuild guild = discord.Client.Guilds[config1.GuildId];
 
             logger.LogDebug("Running stale members check for {Guild}", guild);
 

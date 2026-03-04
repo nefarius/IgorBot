@@ -66,11 +66,6 @@ public sealed class OnBoardingApplicationCommands(DB db, IGuildConfigService gui
             return;
         }
 
-        application.IsAutoKickEnabled = false;
-        await db.SaveAsync(dbMember.Application);
-        await db.SaveAsync(dbMember);
-        await dbMember.UpdateApplicationWidget(ctx.Client);
-
         #endregion
 
         #region Questionaire logic
@@ -165,6 +160,14 @@ public sealed class OnBoardingApplicationCommands(DB db, IGuildConfigService gui
             }));
             return;
         }
+
+        //
+        // All validation passed; persist IsAutoKickEnabled and update widget
+        //
+        application.IsAutoKickEnabled = false;
+        await db.SaveAsync(dbMember.Application);
+        await db.SaveAsync(dbMember);
+        await dbMember.UpdateApplicationWidget(ctx.Client);
 
         //
         // Notify user that action is happening in DMs

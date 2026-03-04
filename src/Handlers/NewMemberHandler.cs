@@ -131,16 +131,43 @@ internal sealed class NewMemberHandler(
 
                 logger.LogInformation("Created {Channel}", channel);
 
-                //
-                // Channel created successfully, increment and save counter
-                // 
-                guildProperties.ApplicationChannels++;
-                await db.SaveAsync(guildProperties);
+                try
+                {
+                    //
+                    // Channel created successfully, increment and save counter
+                    // 
+                    guildProperties.ApplicationChannels++;
+                    await db.SaveAsync(guildProperties);
 
-                //
-                // Store member to channel association
-                // 
-                await dbMember.CreateNewbieChannel(db, guild, channel);
+                    //
+                    // Store member to channel association
+                    // 
+                    await dbMember.CreateNewbieChannel(db, guild, channel);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Failed to persist channel creation, rolling back");
+                    try
+                    {
+                        await channel.DeleteAsync();
+                    }
+                    catch (Exception deleteEx)
+                    {
+                        logger.LogError(deleteEx, "Failed to delete orphan channel {ChannelId}", channel.Id);
+                    }
+
+                    guildProperties.ApplicationChannels--;
+                    try
+                    {
+                        await db.SaveAsync(guildProperties);
+                    }
+                    catch (Exception rollbackEx)
+                    {
+                        logger.LogError(rollbackEx, "Failed to roll back ApplicationChannels counter");
+                    }
+
+                    return;
+                }
             }
             catch (Exception ex)
             {

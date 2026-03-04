@@ -32,7 +32,11 @@ internal class MemberDbSyncInvokable(
             IReadOnlyList<GuildConfig> guildConfigs = await guildConfigService.GetAllAsync();
             foreach (GuildConfig guildConfig in guildConfigs)
             {
-                DiscordGuild guild = discord.Client.Guilds[guildConfig.GuildId];
+                if (!discord.Client.Guilds.TryGetValue(guildConfig.GuildId, out DiscordGuild guild))
+                {
+                    logger.LogWarning("Guild {GuildId} not present in client, skipping sync", guildConfig.GuildId);
+                    continue;
+                }
 
                 logger.LogDebug("Processing members of {Guild}", guild);
 

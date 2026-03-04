@@ -78,10 +78,16 @@ public sealed class GuildConfig
     /// </summary>
     public ulong MemberWelcomeMessageChannelId { get; set; }
 
+    private Dictionary<string, Questionnaire> _questionnaires = new();
+
     /// <summary>
     ///     List of questionnaires the bot offers.
     /// </summary>
-    public Dictionary<string, Questionnaire> Questionnaires { get; set; } = new();
+    public Dictionary<string, Questionnaire> Questionnaires
+    {
+        get => _questionnaires;
+        set => _questionnaires = value ?? throw new ArgumentNullException(nameof(value));
+    }
 
     /// <summary>
     ///     Timespan after which stale strangers get auto-kicked, if enabled.

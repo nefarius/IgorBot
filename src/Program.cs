@@ -36,7 +36,11 @@ IHostBuilder builder = Host.CreateDefaultBuilder(args)
         services.AddSingleton(db);
         GuildConfigMigration.Run(hostContext.Configuration, db);
 
-        services.AddSingleton<IGuildConfigService, GuildConfigService>();
+        services.AddSingleton<GuildConfigService>();
+        services.AddSingleton<IGuildConfigService>(sp =>
+            new CachedGuildConfigService(
+                sp.GetRequiredService<GuildConfigService>(),
+                sp.GetRequiredService<ILogger<CachedGuildConfigService>>()));
 
         // Onboarding queue for serialized new member processing (bounded to apply backpressure)
         Channel<NewMemberMessage> onboardingChannel = Channel.CreateBounded<NewMemberMessage>(

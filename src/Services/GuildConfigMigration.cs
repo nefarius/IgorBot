@@ -34,27 +34,37 @@ internal static class GuildConfigMigration
                 continue;
             }
 
-            if (guildConfig.GuildId == 0 && ulong.TryParse(guildIdStr, out ulong parsedId))
+            ulong normalizedId = guildConfig.GuildId != 0
+                ? guildConfig.GuildId
+                : ulong.TryParse(guildIdStr, out ulong parsedId) ? parsedId : 0;
+
+            if (normalizedId == 0)
             {
-                guildConfig.GuildId = parsedId;
+                continue;
             }
 
+            if (guildConfig.GuildId == 0)
+            {
+                guildConfig.GuildId = normalizedId;
+            }
+
+            string normalizedIdStr = normalizedId.ToString();
             GuildConfigEntity? existing = db.Find<GuildConfigEntity>()
-                .OneAsync(guildIdStr)
+                .OneAsync(normalizedIdStr)
                 .GetAwaiter()
                 .GetResult();
 
             if (existing is not null)
             {
-                Log.Debug("Guild {GuildId} already in MongoDB, skipping migration", guildIdStr);
+                Log.Debug("Guild {GuildId} already in MongoDB, skipping migration", normalizedIdStr);
                 continue;
             }
 
             GuildConfigEntity entity = GuildConfigEntity.FromGuildConfig(guildConfig);
-            entity.ID = guildIdStr;
+            entity.ID = normalizedIdStr;
             db.SaveAsync(entity).GetAwaiter().GetResult();
 
-            Log.Information("Migrated guild {GuildId} from appsettings to MongoDB", guildIdStr);
+            Log.Information("Migrated guild {GuildId} from appsettings to MongoDB", normalizedIdStr);
         }
     }
 }
