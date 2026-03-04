@@ -212,23 +212,33 @@ internal sealed class NewMemberHandler(
     {
         try
         {
-            await channel.DeleteAsync();
-        }
-        catch (Exception deleteEx)
-        {
-            logger.LogError(deleteEx, "Failed to delete orphan channel {ChannelId} during rollback", channel.Id);
-        }
+            try
+            {
+                await channel.DeleteAsync();
+            }
+            catch (Exception deleteEx)
+            {
+                logger.LogError(deleteEx, "Failed to delete orphan channel {ChannelId} during rollback", channel.Id);
+            }
 
-        await dbMember.DeleteChannel(db);
-
-        guildProperties.ApplicationChannels--;
-        try
-        {
-            await db.SaveAsync(guildProperties);
+            await dbMember.DeleteChannel(db);
         }
-        catch (Exception rollbackEx)
+        catch (Exception ex)
         {
-            logger.LogError(rollbackEx, "Failed to roll back ApplicationChannels counter");
+            logger.LogError(ex, "Failed to delete channel during rollback");
+            throw;
+        }
+        finally
+        {
+            guildProperties.ApplicationChannels--;
+            try
+            {
+                await db.SaveAsync(guildProperties);
+            }
+            catch (Exception rollbackEx)
+            {
+                logger.LogError(rollbackEx, "Failed to roll back ApplicationChannels counter");
+            }
         }
     }
 }

@@ -3,6 +3,7 @@ using System.Diagnostics.CodeAnalysis;
 using Coravel.Invocable;
 
 using DSharpPlus.Entities;
+using DSharpPlus.Exceptions;
 
 using IgorBot.Core;
 using IgorBot.Schema;
@@ -72,6 +73,12 @@ internal class KickStaleInvokable(
 
                     logger.LogWarning("Removed {@Member} due to idle timeout", guildMember);
 
+                    guildMember.AutoKickedAt = DateTime.UtcNow;
+                    await db.SaveAsync(guildMember);
+                }
+                catch (NotFoundException)
+                {
+                    logger.LogWarning("Member {MemberId} already left the guild, marking as auto-kicked", guildMember.MemberId);
                     guildMember.AutoKickedAt = DateTime.UtcNow;
                     await db.SaveAsync(guildMember);
                 }

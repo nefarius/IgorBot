@@ -29,6 +29,14 @@ internal sealed class OnboardingQueueProcessor(
                     await handler.ProcessAsync(message);
                     break;
                 }
+                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (TaskCanceledException) when (stoppingToken.IsCancellationRequested)
+                {
+                    throw;
+                }
                 catch (Exception ex)
                 {
                     attempt++;

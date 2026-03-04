@@ -24,6 +24,11 @@ internal class OrphanEmbedReconciliationInvokable(
     ILogger<OrphanEmbedReconciliationInvokable> logger)
     : IInvocable
 {
+    /// <summary>
+    ///     Grace period for newly-created embeds before treating as orphan (CreateApplicationWidget writes embed and GuildMember separately).
+    /// </summary>
+    private static readonly TimeSpan OrphanGracePeriod = TimeSpan.FromMinutes(2);
+
     public async Task Invoke()
     {
         logger.LogInformation("Running orphan application embed reconciliation");
@@ -58,6 +63,13 @@ internal class OrphanEmbedReconciliationInvokable(
 
         foreach (StrangerApplicationEmbed embed in embeds)
         {
+            if (DateTime.UtcNow - embed.CreatedAt < OrphanGracePeriod)
+            {
+                logger.LogDebug("Skipping embed {EmbedId} within grace period (created {CreatedAt})",
+                    embed.ID, embed.CreatedAt);
+                continue;
+            }
+
             List<GuildMember> referencingMembers = await db.Find<GuildMember>()
                 .ManyAsync(m => m.Eq(f => f.Application.ID, embed.ID));
 
@@ -86,7 +98,16 @@ internal class OrphanEmbedReconciliationInvokable(
 
             try
             {
-                DiscordChannel channel = guild.GetChannel(guildMember.Application.ChannelId);
+                DiscordChannel? channel = guild.GetChannel(guildMember.Application.ChannelId);
+                if (channel is null)
+                {
+                    logger.LogInformation(
+                        "Application widget channel no longer exists for {MemberId}, removing orphaned embed",
+                        guildMember.MemberId);
+                    await guildMember.DeleteApplication(db);
+                    continue;
+                }
+
                 await channel.GetMessageAsync(guildMember.Application.MessageId);
             }
             catch (NotFoundException)
