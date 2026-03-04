@@ -38,8 +38,9 @@ IHostBuilder builder = Host.CreateDefaultBuilder(args)
 
         services.AddSingleton<IGuildConfigService, GuildConfigService>();
 
-        // Onboarding queue for serialized new member processing
-        Channel<NewMemberMessage> onboardingChannel = Channel.CreateUnbounded<NewMemberMessage>();
+        // Onboarding queue for serialized new member processing (bounded to apply backpressure)
+        Channel<NewMemberMessage> onboardingChannel = Channel.CreateBounded<NewMemberMessage>(
+            new BoundedChannelOptions(1000) { FullMode = BoundedChannelFullMode.Wait });
         services.AddSingleton(onboardingChannel);
         services.AddSingleton(onboardingChannel.Reader);
         services.AddSingleton(onboardingChannel.Writer);
@@ -81,6 +82,7 @@ void ConfigureDiscord(IServiceCollection serviceCollection, IgorConfig igorConfi
     {
         discordConfiguration.Token = igorConfig.Discord.Token;
         discordConfiguration.MinimumLogLevel = LogLevel.Debug;
+        // GuildMembers is a privileged intent: enable "Server Members Intent" in Discord Developer Portal
         discordConfiguration.Intents = DiscordIntents.Guilds |
                                        DiscordIntents.GuildMembers |
                                        DiscordIntents.GuildMessages |

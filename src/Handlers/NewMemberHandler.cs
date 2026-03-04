@@ -28,6 +28,13 @@ internal sealed class NewMemberHandler(
 
         GuildMember dbMember = await db.Find<GuildMember>().OneAsync(message.MemberEntryId);
 
+        if (dbMember is null)
+        {
+            logger.LogWarning("GuildMember {MemberEntryId} not found in DB, skipping stale queue entry",
+                message.MemberEntryId);
+            return;
+        }
+
         logger.LogDebug("Got member from DB: {@Member}", dbMember);
 
         if (dbMember.Channel is not null || dbMember.IsOnboardingInProgress)

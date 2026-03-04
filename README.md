@@ -21,7 +21,7 @@ simplification has missing features. You have been warned.
 
 - **Option A**: Enable `AutoAssignStrangerRoleOnJoin` in your guild config so Igor assigns the "Lurker" role to new
   members automatically. The bot needs the Manage Roles permission and its role must be above the Lurker role.
-- **Option B**: Use another bot (Carl, ME6, ...) that assigns the "Lurker" role to new members.
+- **Option B**: Use another bot (Carl, MEE6, ...) that assigns the "Lurker" role to new members.
 - **Option C**: Assign the "Lurker" role to new members manually to trigger onboarding.
 
 ## Setup
