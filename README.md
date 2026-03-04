@@ -64,8 +64,9 @@ Use `/config view` to inspect the current configuration and `/config set` to upd
 
 ### Optional: Initial config via appsettings
 
-If `Bot.Guilds` is present in `appsettings.json` or `appsettings.Production.json`, guild configs are migrated once to
-MongoDB on startup. Afterwards all config lives in MongoDB. You can still add new guilds via `/config setup` in Discord.
+If `Bot:Guilds` is present in `appsettings.json` or `appsettings.Production.json`, guild configs are migrated once to
+MongoDB on startup. (.NET uses colon-separated key paths for nested config, e.g., `Bot:Guilds` in appsettings.) Afterwards
+all config lives in MongoDB. You can still add new guilds via `/config setup` in Discord.
 
 ### Discord server preparations
 
