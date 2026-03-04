@@ -1,4 +1,4 @@
-﻿using System.Diagnostics.CodeAnalysis;
+using System.Diagnostics.CodeAnalysis;
 
 using DSharpPlus;
 using DSharpPlus.Entities;
@@ -10,9 +10,8 @@ using DSharpPlus.SlashCommands.Attributes;
 
 using IgorBot.Core;
 using IgorBot.Schema;
+using IgorBot.Services;
 using IgorBot.Util;
-
-using Microsoft.Extensions.Options;
 
 using MongoDB.Entities;
 
@@ -21,7 +20,7 @@ namespace IgorBot.ApplicationCommands;
 [SlashCommandGroup("apply", "Apply for server membership.")]
 [SuppressMessage("ReSharper", "UnusedMember.Global")]
 [SuppressMessage("ReSharper", "ClassNeverInstantiated.Global")]
-public sealed class OnBoardingApplicationCommands(DB db) : ApplicationCommandModule
+public sealed class OnBoardingApplicationCommands(DB db, IGuildConfigService guildConfigService) : ApplicationCommandModule
 {
     [SlashRequirePermissions(Permissions.SendMessages)]
     [SlashCommand("member", "Apply for regular membership.")]
@@ -76,10 +75,29 @@ public sealed class OnBoardingApplicationCommands(DB db) : ApplicationCommandMod
 
         #region Questionaire logic
 
-        IOptionsMonitor<IgorConfig> config = ctx.Services.GetRequiredService<IOptionsMonitor<IgorConfig>>();
         DiscordGuild guild = ctx.Guild;
-        GuildConfig guildConfig = config.CurrentValue.Guilds[guild.Id.ToString()];
-        Questionnaire questionnaire = guildConfig.Questionnaires["Member"];
+        GuildConfig guildConfig = await guildConfigService.GetAsync(guild.Id);
+        if (guildConfig == null)
+        {
+            await ctx.EditResponseAsync(new DiscordWebhookBuilder().AddEmbed(new DiscordEmbedBuilder
+            {
+                Title = "Server not configured",
+                Description = "This server is not configured yet. An administrator can run `/config setup` to get started.",
+                Color = new DiscordColor(0xFFAA00)
+            }));
+            return;
+        }
+
+        if (!guildConfig.Questionnaires.TryGetValue("Member", out Questionnaire questionnaire) || questionnaire == null)
+        {
+            await ctx.EditResponseAsync(new DiscordWebhookBuilder().AddEmbed(new DiscordEmbedBuilder
+            {
+                Title = "Questionnaire not configured",
+                Description = "The Member questionnaire is not set up. Ask an administrator to configure it.",
+                Color = new DiscordColor(0xFF0000)
+            }));
+            return;
+        }
         DiscordMember member = (DiscordMember)ctx.User;
 
         if (member.Roles.All(r => r.Id != guildConfig.StrangerRoleId))

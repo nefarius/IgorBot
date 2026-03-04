@@ -20,7 +20,8 @@ internal partial class ApplicationWorkflow
             return;
         }
 
-        if (!config.CurrentValue.Guilds.ContainsKey(e.Guild.Id.ToString()))
+        GuildConfig guildConfig = await guildConfigService.GetAsync(e.Guild.Id);
+        if (guildConfig == null)
         {
             return;
         }
@@ -50,8 +51,6 @@ internal partial class ApplicationWorkflow
         await db.SaveAsync(guildMember);
 
         logger.LogInformation("{Member} updated in DB", e.Member);
-
-        GuildConfig guildConfig = config.CurrentValue.Guilds[e.Guild.Id.ToString()];
         DiscordRole strangerRole = e.Guild.GetRole(guildConfig.StrangerRoleId);
 
         if (guildConfig.AutoAssignStrangerRoleOnJoin && !e.Member.Roles.Contains(strangerRole))

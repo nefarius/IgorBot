@@ -25,13 +25,6 @@ IHostBuilder builder = Host.CreateDefaultBuilder(args)
     .ConfigureServices((hostContext, services) =>
     {
         IConfigurationSection section = hostContext.Configuration.GetSection("Bot");
-        IgorConfig config = section.Get<IgorConfig>();
-
-        if (!config.Guilds.Any())
-        {
-            throw new InvalidOperationException("No Guilds found in configuration!");
-        }
-
         services.Configure<IgorConfig>(section);
 
         string connectionString = hostContext.Configuration.GetConnectionString("MongoDB");
@@ -41,6 +34,9 @@ IHostBuilder builder = Host.CreateDefaultBuilder(args)
             .GetResult();
 
         services.AddSingleton(db);
+        GuildConfigMigration.Run(hostContext.Configuration, db);
+
+        services.AddSingleton<IGuildConfigService, GuildConfigService>();
 
         // Onboarding queue for serialized new member processing
         Channel<NewMemberMessage> onboardingChannel = Channel.CreateUnbounded<NewMemberMessage>();
@@ -55,6 +51,11 @@ IHostBuilder builder = Host.CreateDefaultBuilder(args)
 
         ConfigureScheduler(services);
 
+        IgorConfig config = section.Get<IgorConfig>();
+        if (config?.Discord?.Token == null)
+        {
+            throw new InvalidOperationException("Bot:Discord:Token is required in configuration.");
+        }
         ConfigureDiscord(services, config);
 
         services.AddHostedService<StartupTasks>();
@@ -98,6 +99,7 @@ void ConfigureDiscord(IServiceCollection serviceCollection, IgorConfig igorConfi
     serviceCollection.AddDiscordSlashCommands(extension: extension =>
     {
         extension.RegisterCommands<OnBoardingApplicationCommands>();
+        extension.RegisterCommands<ConfigCommands>();
     });
 
     serviceCollection.AddDiscordHostedService();

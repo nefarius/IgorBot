@@ -26,7 +26,7 @@ internal sealed class DiscordConfig
 [SuppressMessage("ReSharper", "ClassNeverInstantiated.Global")]
 [SuppressMessage("ReSharper", "UnusedMember.Global")]
 [SuppressMessage("ReSharper", "UnusedAutoPropertyAccessor.Global")]
-internal sealed class GuildConfig
+public sealed class GuildConfig
 {
     /// <summary>
     ///     Stranger role snowflake ID.
@@ -81,7 +81,7 @@ internal sealed class GuildConfig
     /// <summary>
     ///     List of questionnaires the bot offers.
     /// </summary>
-    public Dictionary<string, Questionnaire> Questionnaires { get; } = new();
+    public Dictionary<string, Questionnaire> Questionnaires { get; set; } = new();
 
     /// <summary>
     ///     Timespan after which stale strangers get auto-kicked, if enabled.

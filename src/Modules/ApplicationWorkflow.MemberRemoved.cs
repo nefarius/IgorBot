@@ -1,4 +1,4 @@
-﻿using DSharpPlus;
+using DSharpPlus;
 using DSharpPlus.Entities;
 using DSharpPlus.EventArgs;
 using DSharpPlus.Exceptions;
@@ -20,7 +20,7 @@ internal partial class ApplicationWorkflow
             return;
         }
 
-        if (!config.CurrentValue.Guilds.ContainsKey(e.Guild.Id.ToString()))
+        if (await guildConfigService.GetAsync(e.Guild.Id) == null)
         {
             return;
         }

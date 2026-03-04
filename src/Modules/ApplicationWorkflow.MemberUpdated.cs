@@ -21,7 +21,8 @@ internal partial class ApplicationWorkflow
             return;
         }
 
-        if (!config.CurrentValue.Guilds.ContainsKey(e.Guild.Id.ToString()))
+        GuildConfig guildConfig = await guildConfigService.GetAsync(e.Guild.Id);
+        if (guildConfig == null)
         {
             return;
         }
@@ -34,8 +35,6 @@ internal partial class ApplicationWorkflow
             logger.LogWarning("{Member} not found in DB", e.Member);
             return;
         }
-
-        GuildConfig guildConfig = config.CurrentValue.Guilds[e.Guild.Id.ToString()];
 
         DiscordChannel strangerStatusChannel = e.Guild.GetChannel(guildConfig.StrangerStatusChannelId);
 

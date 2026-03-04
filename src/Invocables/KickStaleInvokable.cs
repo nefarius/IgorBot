@@ -6,8 +6,7 @@ using DSharpPlus.Entities;
 
 using IgorBot.Core;
 using IgorBot.Schema;
-
-using Microsoft.Extensions.Options;
+using IgorBot.Services;
 
 using MongoDB.Entities;
 
@@ -22,7 +21,7 @@ namespace IgorBot.Invocables;
 internal class KickStaleInvokable(
     DB db,
     ILogger<KickStaleInvokable> logger,
-    IOptionsMonitor<IgorConfig> config,
+    IGuildConfigService guildConfigService,
     IDiscordClientService discord)
     : IInvocable
 {
@@ -30,10 +29,10 @@ internal class KickStaleInvokable(
     {
         logger.LogDebug("Running stale kick timer");
 
+        IReadOnlyList<GuildConfig> allConfigs = await guildConfigService.GetAllAsync();
+
         // Enumerate guild configs with an active idle timespan set
-        foreach (GuildConfig config1 in config.CurrentValue.Guilds
-                     .Where(gc => gc.Value.IdleKickTimeSpan.HasValue)
-                     .Select(gc => gc.Value))
+        foreach (GuildConfig config1 in allConfigs.Where(gc => gc.IdleKickTimeSpan.HasValue))
         {
             // query for members of the current guild where the application lifetime has exceeded the allowed idle time
             List<GuildMember> staleMembers = await db.Find<GuildMember>()

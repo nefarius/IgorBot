@@ -4,9 +4,8 @@ using DSharpPlus.Entities;
 
 using IgorBot.Core;
 using IgorBot.Schema;
+using IgorBot.Services;
 using IgorBot.Util;
-
-using Microsoft.Extensions.Options;
 
 using MongoDB.Entities;
 
@@ -19,7 +18,7 @@ namespace IgorBot.Invocables;
 /// </summary>
 internal class MemberDbSyncInvokable(
     DB db,
-    IOptionsMonitor<IgorConfig> config,
+    IGuildConfigService guildConfigService,
     IDiscordClientService discord,
     ILogger<MemberDbSyncInvokable> logger)
     : IInvocable
@@ -30,7 +29,8 @@ internal class MemberDbSyncInvokable(
 
         try
         {
-            foreach (GuildConfig guildConfig in config.CurrentValue.Guilds.Select(gc => gc.Value))
+            IReadOnlyList<GuildConfig> guildConfigs = await guildConfigService.GetAllAsync();
+            foreach (GuildConfig guildConfig in guildConfigs)
             {
                 DiscordGuild guild = discord.Client.Guilds[guildConfig.GuildId];
 

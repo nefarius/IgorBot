@@ -1,13 +1,12 @@
-﻿using DSharpPlus;
+using DSharpPlus;
 using DSharpPlus.Entities;
 using DSharpPlus.EventArgs;
 using DSharpPlus.Exceptions;
 
 using IgorBot.Core;
+using IgorBot.Services;
 
 using JetBrains.Annotations;
-
-using Microsoft.Extensions.Options;
 
 using Nefarius.DSharpPlus.Extensions.Hosting.Events;
 
@@ -19,7 +18,7 @@ namespace IgorBot.Modules;
 /// </summary>
 [DiscordMessageCreatedEventSubscriber]
 [UsedImplicitly]
-internal sealed class HoneypotModule(IOptionsMonitor<IgorConfig> config, ILogger<HoneypotModule> logger)
+internal sealed class HoneypotModule(IGuildConfigService guildConfigService, ILogger<HoneypotModule> logger)
     : IDiscordMessageCreatedEventSubscriber
 {
     public async Task DiscordOnMessageCreated(DiscordClient sender, MessageCreateEventArgs args)
@@ -39,13 +38,11 @@ internal sealed class HoneypotModule(IOptionsMonitor<IgorConfig> config, ILogger
                 return;
             }
 
-            // config missing for this guild
-            if (!config.CurrentValue.Guilds.ContainsKey(args.Guild.Id.ToString()))
+            GuildConfig guildConfig = await guildConfigService.GetAsync(args.Guild.Id);
+            if (guildConfig == null)
             {
                 return;
             }
-
-            GuildConfig guildConfig = config.CurrentValue.Guilds[args.Guild.Id.ToString()];
 
             // feature not configured
             if (!guildConfig.HoneypotChannelId.HasValue)

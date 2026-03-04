@@ -9,8 +9,6 @@ using IgorBot.Services;
 
 using JetBrains.Annotations;
 
-using Microsoft.Extensions.Options;
-
 using MongoDB.Entities;
 
 using Nefarius.DSharpPlus.Extensions.Hosting.Events;
@@ -25,7 +23,7 @@ namespace IgorBot.Modules;
 internal partial class ApplicationWorkflow(
     DB db,
     ILogger<ApplicationWorkflow> logger,
-    IOptionsMonitor<IgorConfig> config,
+    IGuildConfigService guildConfigService,
     IOnboardingQueue onboardingQueue)
     :
         IDiscordGuildMemberAddedEventSubscriber,
@@ -58,7 +56,12 @@ internal partial class ApplicationWorkflow(
             return;
         }
 
-        GuildConfig guildConfig = config.CurrentValue.Guilds[args.Guild.Id.ToString()];
+        GuildConfig guildConfig = await guildConfigService.GetAsync(args.Guild.Id);
+        if (guildConfig == null)
+        {
+            logger.LogWarning("Guild {GuildId} not configured, ignoring component interaction", args.Guild.Id);
+            return;
+        }
 
         logger.LogDebug("Got {Collection} - {Id} with action {Action}", category, dbId, action);
 
