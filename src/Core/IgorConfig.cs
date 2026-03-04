@@ -1,4 +1,4 @@
-﻿using System.Diagnostics.CodeAnalysis;
+using System.Diagnostics.CodeAnalysis;
 
 using DSharpPlus;
 
@@ -26,7 +26,7 @@ internal sealed class DiscordConfig
 [SuppressMessage("ReSharper", "ClassNeverInstantiated.Global")]
 [SuppressMessage("ReSharper", "UnusedMember.Global")]
 [SuppressMessage("ReSharper", "UnusedAutoPropertyAccessor.Global")]
-internal sealed class GuildConfig
+public sealed class GuildConfig
 {
     /// <summary>
     ///     Stranger role snowflake ID.
@@ -78,10 +78,16 @@ internal sealed class GuildConfig
     /// </summary>
     public ulong MemberWelcomeMessageChannelId { get; set; }
 
+    private Dictionary<string, Questionnaire> _questionnaires = new();
+
     /// <summary>
     ///     List of questionnaires the bot offers.
     /// </summary>
-    public Dictionary<string, Questionnaire> Questionnaires { get; } = new();
+    public Dictionary<string, Questionnaire> Questionnaires
+    {
+        get => _questionnaires;
+        set => _questionnaires = value ?? throw new ArgumentNullException(nameof(value));
+    }
 
     /// <summary>
     ///     Timespan after which stale strangers get auto-kicked, if enabled.
@@ -92,11 +98,16 @@ internal sealed class GuildConfig
     ///     Optional channel ID for the spambot honeypot feature.
     /// </summary>
     public ulong? HoneypotChannelId { get; set; }
-    
+
     /// <summary>
-    ///     Role members immune to <see cref="HoneypotChannelId"/> actions.
+    ///     Role members immune to <see cref="HoneypotChannelId" /> actions.
     /// </summary>
     public List<ulong> HoneypotExclusionRoleIds { get; set; } = new();
+
+    /// <summary>
+    ///     If true, automatically assign the Stranger role when a member joins. When enabled, a 2nd bot is not required.
+    /// </summary>
+    public bool AutoAssignStrangerRoleOnJoin { get; set; } = false;
 }
 
 /// <summary>

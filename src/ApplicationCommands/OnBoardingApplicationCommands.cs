@@ -1,4 +1,4 @@
-﻿using System.Diagnostics.CodeAnalysis;
+using System.Diagnostics.CodeAnalysis;
 
 using DSharpPlus;
 using DSharpPlus.Entities;
@@ -10,9 +10,8 @@ using DSharpPlus.SlashCommands.Attributes;
 
 using IgorBot.Core;
 using IgorBot.Schema;
+using IgorBot.Services;
 using IgorBot.Util;
-
-using Microsoft.Extensions.Options;
 
 using MongoDB.Entities;
 
@@ -21,7 +20,7 @@ namespace IgorBot.ApplicationCommands;
 [SlashCommandGroup("apply", "Apply for server membership.")]
 [SuppressMessage("ReSharper", "UnusedMember.Global")]
 [SuppressMessage("ReSharper", "ClassNeverInstantiated.Global")]
-public sealed class OnBoardingApplicationCommands : ApplicationCommandModule
+public sealed class OnBoardingApplicationCommands(DB db, IGuildConfigService guildConfigService) : ApplicationCommandModule
 {
     [SlashRequirePermissions(Permissions.SendMessages)]
     [SlashCommand("member", "Apply for regular membership.")]
@@ -37,7 +36,7 @@ public sealed class OnBoardingApplicationCommands : ApplicationCommandModule
 
         await ctx.DeferAsync();
 
-        GuildMember dbMember = await DB.Find<GuildMember>().OneAsync(ctx.ToEntityId());
+        GuildMember dbMember = await db.Find<GuildMember>().OneAsync(ctx.ToEntityId());
 
         if (dbMember is null)
         {
@@ -67,19 +66,33 @@ public sealed class OnBoardingApplicationCommands : ApplicationCommandModule
             return;
         }
 
-        application.IsAutoKickEnabled = false;
-        await dbMember.Application.SaveAsync();
-        await dbMember.SaveAsync();
-        await dbMember.UpdateApplicationWidget(ctx.Client);
-
         #endregion
 
         #region Questionaire logic
 
-        IOptionsMonitor<IgorConfig> config = ctx.Services.GetRequiredService<IOptionsMonitor<IgorConfig>>();
         DiscordGuild guild = ctx.Guild;
-        GuildConfig guildConfig = config.CurrentValue.Guilds[guild.Id.ToString()];
-        Questionnaire questionnaire = guildConfig.Questionnaires["Member"];
+        GuildConfig guildConfig = await guildConfigService.GetAsync(guild.Id);
+        if (guildConfig == null)
+        {
+            await ctx.EditResponseAsync(new DiscordWebhookBuilder().AddEmbed(new DiscordEmbedBuilder
+            {
+                Title = "Server not configured",
+                Description = "This server is not configured yet. An administrator can run `/config setup` to get started.",
+                Color = new DiscordColor(0xFFAA00)
+            }));
+            return;
+        }
+
+        if (!guildConfig.Questionnaires.TryGetValue("Member", out Questionnaire questionnaire) || questionnaire == null)
+        {
+            await ctx.EditResponseAsync(new DiscordWebhookBuilder().AddEmbed(new DiscordEmbedBuilder
+            {
+                Title = "Questionnaire not configured",
+                Description = "The Member questionnaire is not set up. Ask an administrator to configure it.",
+                Color = new DiscordColor(0xFF0000)
+            }));
+            return;
+        }
         DiscordMember member = (DiscordMember)ctx.User;
 
         if (member.Roles.All(r => r.Id != guildConfig.StrangerRoleId))
@@ -147,6 +160,14 @@ public sealed class OnBoardingApplicationCommands : ApplicationCommandModule
             }));
             return;
         }
+
+        //
+        // All validation passed; persist IsAutoKickEnabled and update widget
+        //
+        application.IsAutoKickEnabled = false;
+        await db.SaveAsync(dbMember.Application);
+        await db.SaveAsync(dbMember);
+        await dbMember.UpdateApplicationWidget(ctx.Client);
 
         //
         // Notify user that action is happening in DMs
@@ -233,7 +254,7 @@ public sealed class OnBoardingApplicationCommands : ApplicationCommandModule
             Title = "Questionnaire submission",
             Description =
                 $"Questionnaire: {Formatter.Bold(questionnaire.Name)}, " +
-                $"Author: {ctx.Member} ({ctx.Member.Mention}), " + 
+                $"Author: {ctx.Member} ({ctx.Member.Mention}), " +
                 $"Status panel: {application.MessageMentionUrl}",
             Timestamp = DateTimeOffset.UtcNow,
             Footer = new DiscordEmbedBuilder.EmbedFooter

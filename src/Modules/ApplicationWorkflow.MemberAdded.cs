@@ -1,12 +1,10 @@
-﻿using DSharpPlus;
+using DSharpPlus;
 using DSharpPlus.Entities;
 using DSharpPlus.EventArgs;
 
 using IgorBot.Core;
 using IgorBot.Schema;
 using IgorBot.Util;
-
-using MongoDB.Entities;
 
 namespace IgorBot.Modules;
 
@@ -22,26 +20,27 @@ internal partial class ApplicationWorkflow
             return;
         }
 
-        if (!config.CurrentValue.Guilds.ContainsKey(e.Guild.Id.ToString()))
+        GuildConfig guildConfig = await guildConfigService.GetAsync(e.Guild.Id);
+        if (guildConfig == null)
         {
             return;
         }
 
         logger.LogInformation("{Member} joined", e.Member);
 
-        GuildMember guildMember = await DB.Find<GuildMember>().OneAsync(e.ToEntityId());
+        GuildMember guildMember = await db.Find<GuildMember>().OneAsync(e.ToEntityId());
 
         if (guildMember is null)
         {
             guildMember = new GuildMember
             {
-                GuildId = e.Guild.Id, 
+                GuildId = e.Guild.Id,
                 MemberId = e.Member.Id,
                 Member = e.Member.ToString(),
                 Mention = e.Member.Mention
             };
 
-            await guildMember.SaveAsync();
+            await db.SaveAsync(guildMember);
 
             logger.LogInformation("{Member} added to DB", e.Member);
         }
@@ -49,17 +48,22 @@ internal partial class ApplicationWorkflow
         guildMember.JoinedAt = DateTime.Now;
         guildMember.Reset();
 
-        await guildMember.SaveAsync();
+        await db.SaveAsync(guildMember);
 
         logger.LogInformation("{Member} updated in DB", e.Member);
-        
-        GuildConfig guildConfig = config.CurrentValue.Guilds[e.Guild.Id.ToString()];
         DiscordRole strangerRole = e.Guild.GetRole(guildConfig.StrangerRoleId);
+
+        if (guildConfig.AutoAssignStrangerRoleOnJoin && !e.Member.Roles.Contains(strangerRole))
+        {
+            logger.LogInformation("{Member} auto-assigning stranger role", e.Member);
+            await e.Member.GrantRoleAsync(strangerRole);
+            return;
+        }
 
         if (e.Member.Roles.Contains(strangerRole))
         {
             logger.LogInformation("{Member} has stranger role, submitting workflow", e.Member);
-            
+
             await ProcessStrangerAssignment(e.Guild, guildConfig, guildMember);
         }
     }

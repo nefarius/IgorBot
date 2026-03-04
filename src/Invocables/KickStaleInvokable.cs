@@ -1,4 +1,4 @@
-﻿using System.Diagnostics.CodeAnalysis;
+using System.Diagnostics.CodeAnalysis;
 
 using Coravel.Invocable;
 
@@ -6,8 +6,7 @@ using DSharpPlus.Entities;
 
 using IgorBot.Core;
 using IgorBot.Schema;
-
-using Microsoft.Extensions.Options;
+using IgorBot.Services;
 
 using MongoDB.Entities;
 
@@ -20,8 +19,9 @@ namespace IgorBot.Invocables;
 /// </summary>
 [SuppressMessage("ReSharper", "ClassNeverInstantiated.Global")]
 internal class KickStaleInvokable(
+    DB db,
     ILogger<KickStaleInvokable> logger,
-    IOptionsMonitor<IgorConfig> config,
+    IGuildConfigService guildConfigService,
     IDiscordClientService discord)
     : IInvocable
 {
@@ -29,25 +29,29 @@ internal class KickStaleInvokable(
     {
         logger.LogDebug("Running stale kick timer");
 
+        IReadOnlyList<GuildConfig> allConfigs = await guildConfigService.GetAllAsync();
+
         // Enumerate guild configs with an active idle timespan set
-        foreach (GuildConfig config1 in config.CurrentValue.Guilds
-                     .Where(gc => gc.Value.IdleKickTimeSpan.HasValue)
-                     .Select(gc => gc.Value))
+        foreach (GuildConfig config1 in allConfigs.Where(gc => gc.IdleKickTimeSpan.HasValue))
         {
+            if (!discord.Client.Guilds.TryGetValue(config1.GuildId, out DiscordGuild guild))
+            {
+                logger.LogWarning("Guild {GuildId} not present in client, skipping stale kick", config1.GuildId);
+                continue;
+            }
+
             // query for members of the current guild where the application lifetime has exceeded the allowed idle time
-            List<GuildMember> staleMembers = await DB.Find<GuildMember>()
+            List<GuildMember> staleMembers = await db.Find<GuildMember>()
                 .ManyAsync(m =>
                     m.Lt(f => f.Application.CreatedAt, DateTime.UtcNow.Add(-config1.IdleKickTimeSpan!.Value)) &
                     m.Eq(f => f.GuildId, config1.GuildId) &
                     m.Eq(f => f.Application.IsAutoKickEnabled, true) &
                     m.Eq(f => f.Application.QuestionnaireSubmittedAt, null) &
                     m.Eq(f => f.PromotedAt, null) &
-                    m.Eq(f => f.StrangerRoleRemovedAt, null) & 
+                    m.Eq(f => f.StrangerRoleRemovedAt, null) &
                     m.Eq(f => f.FullMemberAt, null) &
                     m.Eq(f => f.AutoKickedAt, null)
                 );
-
-            DiscordGuild guild = discord.Client.Guilds[config1.GuildId];
 
             logger.LogDebug("Running stale members check for {Guild}", guild);
 
@@ -63,7 +67,7 @@ internal class KickStaleInvokable(
                 try
                 {
                     guildMember.AutoKickedAt = DateTime.UtcNow;
-                    await guildMember.SaveAsync();
+                    await db.SaveAsync(guildMember);
 
                     try
                     {

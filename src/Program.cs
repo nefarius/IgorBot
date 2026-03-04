@@ -1,3 +1,5 @@
+using System.Threading.Channels;
+
 using Coravel;
 
 using DSharpPlus;
@@ -16,10 +18,6 @@ using Nefarius.DSharpPlus.Extensions.Hosting;
 using Nefarius.DSharpPlus.Interactivity.Extensions.Hosting;
 using Nefarius.DSharpPlus.SlashCommands.Extensions.Hosting;
 
-using Rebus.Config;
-using Rebus.Routing.TypeBased;
-using Rebus.Transport.InMem;
-
 using Serilog;
 using Serilog.Core;
 
@@ -27,37 +25,42 @@ IHostBuilder builder = Host.CreateDefaultBuilder(args)
     .ConfigureServices((hostContext, services) =>
     {
         IConfigurationSection section = hostContext.Configuration.GetSection("Bot");
-        IgorConfig config = section.Get<IgorConfig>();
-
-        if (!config.Guilds.Any())
-        {
-            throw new InvalidOperationException("No Guilds found in configuration!");
-        }
-
         services.Configure<IgorConfig>(section);
 
         string connectionString = hostContext.Configuration.GetConnectionString("MongoDB");
 
-        DB.InitAsync("IgorBot", MongoClientSettings.FromConnectionString(connectionString))
+        DB db = DB.InitAsync("IgorBot", MongoClientSettings.FromConnectionString(connectionString))
             .GetAwaiter()
             .GetResult();
 
-        // Register handlers 
-        services.AutoRegisterHandlersFromAssemblyOf<NewMemberHandler>();
+        services.AddSingleton(db);
+        GuildConfigMigration.Run(hostContext.Configuration, db);
 
-        // Configure and register Rebus
-        services.AddRebus(configure => configure
-            .Options(o => {
-                o.SetNumberOfWorkers(1);
-                o.SetMaxParallelism(1);
-            })
-            .Transport(t => t.UseInMemoryTransport(new InMemNetwork(), "NewMembers"))
-            .Routing(r => r.TypeBased().MapAssemblyOf<NewMemberMessage>("NewMembers")));
+        services.AddSingleton<GuildConfigService>();
+        services.AddSingleton<IGuildConfigService>(sp =>
+            new CachedGuildConfigService(
+                sp.GetRequiredService<GuildConfigService>(),
+                sp.GetRequiredService<ILogger<CachedGuildConfigService>>()));
+
+        // Onboarding queue for serialized new member processing (bounded to apply backpressure)
+        Channel<NewMemberMessage> onboardingChannel = Channel.CreateBounded<NewMemberMessage>(
+            new BoundedChannelOptions(1000) { FullMode = BoundedChannelFullMode.Wait });
+        services.AddSingleton(onboardingChannel);
+        services.AddSingleton(onboardingChannel.Reader);
+        services.AddSingleton(onboardingChannel.Writer);
+        services.AddSingleton<IOnboardingQueue, OnboardingQueue>();
+        services.AddSingleton<NewMemberHandler>();
+        services.AddHostedService<OnboardingQueueProcessor>();
 
         ConfigureLogging(hostContext, services);
 
         ConfigureScheduler(services);
 
+        IgorConfig config = section.Get<IgorConfig>();
+        if (config?.Discord?.Token == null)
+        {
+            throw new InvalidOperationException("Bot:Discord:Token is required in configuration.");
+        }
         ConfigureDiscord(services, config);
 
         services.AddHostedService<StartupTasks>();
@@ -83,7 +86,10 @@ void ConfigureDiscord(IServiceCollection serviceCollection, IgorConfig igorConfi
     {
         discordConfiguration.Token = igorConfig.Discord.Token;
         discordConfiguration.MinimumLogLevel = LogLevel.Debug;
-        discordConfiguration.Intents = DiscordIntents.GuildMessages |
+        // GuildMembers is a privileged intent: enable "Server Members Intent" in Discord Developer Portal
+        discordConfiguration.Intents = DiscordIntents.Guilds |
+                                       DiscordIntents.GuildMembers |
+                                       DiscordIntents.GuildMessages |
                                        DiscordIntents.DirectMessages |
                                        DiscordIntents.MessageContents;
     });
@@ -99,6 +105,7 @@ void ConfigureDiscord(IServiceCollection serviceCollection, IgorConfig igorConfi
     serviceCollection.AddDiscordSlashCommands(extension: extension =>
     {
         extension.RegisterCommands<OnBoardingApplicationCommands>();
+        extension.RegisterCommands<ConfigCommands>();
     });
 
     serviceCollection.AddDiscordHostedService();

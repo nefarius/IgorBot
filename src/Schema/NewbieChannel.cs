@@ -13,7 +13,7 @@ namespace IgorBot.Schema;
 internal sealed class NewbieChannel : IEntity
 {
     /// <summary>
-    ///      Snowflake ID of the Guild.
+    ///     Snowflake ID of the Guild.
     /// </summary>
     public ulong GuildId { get; init; }
 
@@ -37,6 +37,15 @@ internal sealed class NewbieChannel : IEntity
     /// </summary>
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
+    [SuppressMessage("ReSharper", "InconsistentNaming")]
+    [BsonId]
+    public string ID { get; set; }
+
+    object IEntity.GenerateNewID()
+    {
+        return GenerateNewID();
+    }
+
     public override string ToString()
     {
         return $"Channel {ChannelName} ({ChannelId})";
@@ -48,14 +57,8 @@ internal sealed class NewbieChannel : IEntity
         return $"{GuildId}-{ChannelId}";
     }
 
-    public bool HasDefaultID() => string.IsNullOrEmpty(ID);
-
-    [SuppressMessage("ReSharper", "InconsistentNaming")]
-    [BsonId]
-    public string ID { get; set; }
-
-    object IEntity.GenerateNewID()
+    public bool HasDefaultID()
     {
-        return GenerateNewID();
+        return string.IsNullOrEmpty(ID);
     }
 }

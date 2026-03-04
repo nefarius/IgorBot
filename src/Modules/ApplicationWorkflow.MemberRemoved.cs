@@ -1,12 +1,10 @@
-﻿using DSharpPlus;
+using DSharpPlus;
 using DSharpPlus.Entities;
 using DSharpPlus.EventArgs;
 using DSharpPlus.Exceptions;
 
 using IgorBot.Schema;
 using IgorBot.Util;
-
-using MongoDB.Entities;
 
 namespace IgorBot.Modules;
 
@@ -22,14 +20,14 @@ internal partial class ApplicationWorkflow
             return;
         }
 
-        if (!config.CurrentValue.Guilds.ContainsKey(e.Guild.Id.ToString()))
+        if (await guildConfigService.GetAsync(e.Guild.Id) == null)
         {
             return;
         }
 
         logger.LogInformation("{Member} left", e.Member);
 
-        GuildMember member = await DB.Find<GuildMember>().OneAsync(e.ToEntityId());
+        GuildMember member = await db.Find<GuildMember>().OneAsync(e.ToEntityId());
 
         if (member is null)
         {
@@ -46,7 +44,7 @@ internal partial class ApplicationWorkflow
         _ = Task.Run(async () =>
         {
             member.LeftAt = DateTime.UtcNow;
-            await member.SaveAsync();
+            await db.SaveAsync(member);
 
             // Remove newbie channel
             NewbieChannel newbieChannel = member.Channel;
@@ -61,7 +59,7 @@ internal partial class ApplicationWorkflow
 
                     await discordChannel.DeleteAsync($"{e.Member} has been removed");
 
-                    await member.DeleteChannel();
+                    await member.DeleteChannel(db);
                 }
                 catch (ServerErrorException)
                 {
@@ -86,9 +84,9 @@ internal partial class ApplicationWorkflow
                             ? "{Member} removed due to idle timeout"
                             : "{Member} left by themselves", e.Member);
 
-                    await member.DeleteApplicationWidget(sender);
+                    await member.DeleteApplicationWidget(db, sender);
 
-                    await member.DeleteApplication();
+                    await member.DeleteApplication(db);
                 }
                 catch (Exception ex)
                 {

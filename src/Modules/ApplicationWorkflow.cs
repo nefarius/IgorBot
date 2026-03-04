@@ -1,20 +1,17 @@
-﻿using DSharpPlus;
+using DSharpPlus;
 using DSharpPlus.Entities;
 using DSharpPlus.EventArgs;
 using DSharpPlus.Exceptions;
 
 using IgorBot.Core;
 using IgorBot.Schema;
+using IgorBot.Services;
 
 using JetBrains.Annotations;
-
-using Microsoft.Extensions.Options;
 
 using MongoDB.Entities;
 
 using Nefarius.DSharpPlus.Extensions.Hosting.Events;
-
-using Rebus.Bus;
 
 namespace IgorBot.Modules;
 
@@ -24,9 +21,10 @@ namespace IgorBot.Modules;
 [DiscordComponentInteractionCreatedEventSubscriber]
 [UsedImplicitly]
 internal partial class ApplicationWorkflow(
+    DB db,
     ILogger<ApplicationWorkflow> logger,
-    IOptionsMonitor<IgorConfig> config,
-    IBus messageBus)
+    IGuildConfigService guildConfigService,
+    IOnboardingQueue onboardingQueue)
     :
         IDiscordGuildMemberAddedEventSubscriber,
         IDiscordGuildMemberUpdatedEventSubscriber,
@@ -58,7 +56,12 @@ internal partial class ApplicationWorkflow(
             return;
         }
 
-        GuildConfig guildConfig = config.CurrentValue.Guilds[args.Guild.Id.ToString()];
+        GuildConfig guildConfig = await guildConfigService.GetAsync(args.Guild.Id);
+        if (guildConfig == null)
+        {
+            logger.LogWarning("Guild {GuildId} not configured, ignoring component interaction", args.Guild.Id);
+            return;
+        }
 
         logger.LogDebug("Got {Collection} - {Id} with action {Action}", category, dbId, action);
 
@@ -74,13 +77,13 @@ internal partial class ApplicationWorkflow(
 
                         logger.LogDebug("Database ID: {Id}", dbId);
 
-                        GuildMember dbMember = (await DB.Find<GuildMember>()
+                        GuildMember dbMember = (await db.Find<GuildMember>()
                                 .ManyAsync(m => m.Eq(f => f.Application.ID, dbId)))
                             .FirstOrDefault();
 
                         if (dbMember is null)
                         {
-                            dbMember = (await DB.Find<GuildMember>().OneAsync(dbId));
+                            dbMember = await db.Find<GuildMember>().OneAsync(dbId);
 
                             if (dbMember is null)
                             {
@@ -164,7 +167,7 @@ internal partial class ApplicationWorkflow(
     {
         entry.PromotedAt = DateTime.UtcNow;
 
-        await entry.SaveAsync();
+        await db.SaveAsync(entry);
 
         logger.LogInformation("{User} promoted {Member}",
             args.User, member);
@@ -203,7 +206,7 @@ internal partial class ApplicationWorkflow(
         entry.RemovedByModeration = true;
         entry.BannedAt = DateTime.UtcNow;
 
-        await entry.SaveAsync();
+        await db.SaveAsync(entry);
 
         await entry.RespondToInteraction(args, client);
     }
@@ -220,7 +223,7 @@ internal partial class ApplicationWorkflow(
         entry.RemovedByModeration = true;
         entry.KickedAt = DateTime.UtcNow;
 
-        await entry.SaveAsync();
+        await db.SaveAsync(entry);
 
         await entry.RespondToInteraction(args, client);
     }
@@ -233,9 +236,9 @@ internal partial class ApplicationWorkflow(
         logger.LogInformation("Disabling auto-kick for {Member}", entry);
 
         entry.Application!.IsAutoKickEnabled = false;
-        await entry.Application.SaveAsync();
+        await db.SaveAsync(entry.Application);
 
-        await entry.SaveAsync();
+        await db.SaveAsync(entry);
 
         await entry.RespondToInteraction(args, client);
     }

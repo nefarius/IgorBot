@@ -1,4 +1,4 @@
-﻿using System.Diagnostics.CodeAnalysis;
+using System.Diagnostics.CodeAnalysis;
 
 using DSharpPlus;
 using DSharpPlus.Entities;
@@ -11,31 +11,29 @@ using MongoDB.Entities;
 
 using Nefarius.DSharpPlus.Extensions.Hosting;
 
-using Rebus.Handlers;
-
 namespace IgorBot.Handlers;
-
-internal sealed class NewMemberMessage
-{
-    public GuildProperties GuildProperties { get; init; }
-
-    public GuildConfig GuildConfig { get; init; }
-
-    public string MemberEntryId { get; init; }
-}
 
 /// <summary>
 ///     Handles new stranger appeared workflow.
 /// </summary>
 [SuppressMessage("ReSharper", "ClassNeverInstantiated.Global")]
-internal sealed class NewMemberHandler(IDiscordClientService clientService, ILogger<NewMemberHandler> logger)
-    : IHandleMessages<NewMemberMessage>
+internal sealed class NewMemberHandler(
+    DB db,
+    IDiscordClientService clientService,
+    ILogger<NewMemberHandler> logger)
 {
-    public async Task Handle(NewMemberMessage message)
+    public async Task ProcessAsync(NewMemberMessage message)
     {
         logger.LogInformation("Processing new member workflow");
 
-        GuildMember dbMember = await DB.Find<GuildMember>().OneAsync(message.MemberEntryId);
+        GuildMember dbMember = await db.Find<GuildMember>().OneAsync(message.MemberEntryId);
+
+        if (dbMember is null)
+        {
+            logger.LogWarning("GuildMember {MemberEntryId} not found in DB, skipping stale queue entry",
+                message.MemberEntryId);
+            return;
+        }
 
         logger.LogDebug("Got member from DB: {@Member}", dbMember);
 
@@ -46,7 +44,7 @@ internal sealed class NewMemberHandler(IDiscordClientService clientService, ILog
         }
 
         dbMember.IsOnboardingInProgress = true;
-        await dbMember.SaveAsync();
+        await db.SaveAsync(dbMember);
 
         try
         {
@@ -133,16 +131,43 @@ internal sealed class NewMemberHandler(IDiscordClientService clientService, ILog
 
                 logger.LogInformation("Created {Channel}", channel);
 
-                //
-                // Channel created successfully, increment and save counter
-                // 
-                guildProperties.ApplicationChannels++;
-                await guildProperties.SaveAsync();
+                try
+                {
+                    //
+                    // Channel created successfully, increment and save counter
+                    // 
+                    guildProperties.ApplicationChannels++;
+                    await db.SaveAsync(guildProperties);
 
-                //
-                // Store member to channel association
-                // 
-                await dbMember.CreateNewbieChannel(guild, channel);
+                    //
+                    // Store member to channel association
+                    // 
+                    await dbMember.CreateNewbieChannel(db, guild, channel);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Failed to persist channel creation, rolling back");
+                    try
+                    {
+                        await channel.DeleteAsync();
+                    }
+                    catch (Exception deleteEx)
+                    {
+                        logger.LogError(deleteEx, "Failed to delete orphan channel {ChannelId}", channel.Id);
+                    }
+
+                    guildProperties.ApplicationChannels--;
+                    try
+                    {
+                        await db.SaveAsync(guildProperties);
+                    }
+                    catch (Exception rollbackEx)
+                    {
+                        logger.LogError(rollbackEx, "Failed to roll back ApplicationChannels counter");
+                    }
+
+                    return;
+                }
             }
             catch (Exception ex)
             {
@@ -166,7 +191,7 @@ internal sealed class NewMemberHandler(IDiscordClientService clientService, ILog
 
             try
             {
-                await dbMember.CreateApplicationWidget(client, guild, strangerStatusChannel);
+                await dbMember.CreateApplicationWidget(db, client, guild, strangerStatusChannel);
             }
             catch (Exception ex)
             {
@@ -176,7 +201,7 @@ internal sealed class NewMemberHandler(IDiscordClientService clientService, ILog
         finally
         {
             dbMember.IsOnboardingInProgress = false;
-            await dbMember.SaveAsync();
+            await db.SaveAsync(dbMember);
         }
     }
 }
