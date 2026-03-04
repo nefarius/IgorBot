@@ -10,7 +10,7 @@ Advanced Discord bot to automate new member onboarding.
 
 ## Motivation
 
-TBD
+Discord's built-in anti-spam and moderation tools at the time of creation were insufficient to protect against mass joins of accounts that sit idle—only to eventually post spam and scam links. An onboarding questionnaire is an effective way to separate humans from bots, and it helps identify new members who genuinely care about joining for a cause rather than those who simply found a link.
 
 ## Disclaimer
 
