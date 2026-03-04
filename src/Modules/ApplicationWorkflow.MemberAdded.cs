@@ -60,7 +60,7 @@ internal partial class ApplicationWorkflow
             return;
         }
 
-        if (e.Member.Roles.Contains(strangerRole))
+        if (e.Member.Roles.Contains(strangerRole) && guildConfig.EnableOnboardingWorkflow)
         {
             logger.LogInformation("{Member} has stranger role, submitting workflow", e.Member);
 

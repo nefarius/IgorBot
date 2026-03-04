@@ -81,8 +81,33 @@ you for:
 | `idle_kick_minutes`          | Minutes before kicking inactive strangers (`0` = disabled)     | `0`                             |
 | `honeypot_channel`           | (Optional) Channel that bans users who post in it              | —                               |
 | `moderator_role`             | (Optional) Role that can see and interact with newbie channels | —                               |
+| `enable_onboarding_workflow`  | Run onboarding workflow when member gets stranger role        | `true`                          |
 
-Use `/config view` to inspect the current configuration and `/config set` to update individual options.
+Use `/config view` to inspect the current configuration and `/config set` to update individual options. Available
+options include: stranger role, member role, application category, stranger status channel, member welcome channel,
+application channel format, templates, auto-assign stranger role, idle kick minutes, honeypot channel, moderator role,
+**enable onboarding workflow**, **honeypot exclusion role (add)**, and **honeypot exclusion role (remove)**.
+
+### Honeypot-only setup with `/config setup-honeypot`
+
+For servers that only need the honeypot feature (no onboarding workflow), run `/config setup-honeypot`:
+
+| Option                    | Description                            |
+|---------------------------|----------------------------------------|
+| `honeypot_channel`        | Channel that bans users who post in it |
+| `honeypot_exclusion_role` | (Optional) Role exempt from honeypot ban |
+
+This creates a minimal config. Add more exclusion roles later via `/config set` → **Honeypot exclusion role (add)** or remove them with **Honeypot exclusion role (remove)**.
+
+### Per-guild feature toggles
+
+Individual features can be enabled or disabled per guild:
+
+| Feature              | Toggle / Config                       | Notes                                     |
+|----------------------|---------------------------------------|-------------------------------------------|
+| Join role assignment | `auto_assign_stranger_role`           | Assigns stranger role on join             |
+| Onboarding workflow  | `enable_onboarding_workflow`          | When disabled: no channel/widget creation |
+| Honeypot             | `honeypot_channel` / `setup-honeypot` | Works standalone                           |
 
 ### Optional: Initial config via appsettings
 
@@ -105,8 +130,8 @@ all config lives in MongoDB. You can still add new guilds via `/config setup` in
   power to kick, ban or approve new members.
 - Add a **private** channel for bot status messages → `stranger_status_channel` / `StrangerStatusChannelId`.
 - Add a **public** channel for welcome messages → `member_welcome_channel` / `MemberWelcomeMessageChannelId`.
-- (Optional) Add a **honeypot** channel and set it as `honeypot_channel`—users who post in it are automatically banned (
-  useful for catching bots).
+- (Optional) Add a **honeypot** channel and set it as `honeypot_channel`—users who post in it are automatically banned
+  (useful for catching bots). For honeypot-only servers, use `/config setup-honeypot` instead of full setup.
 
 ## How to build
 

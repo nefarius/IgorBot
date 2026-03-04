@@ -1,4 +1,4 @@
-﻿using System.Diagnostics.CodeAnalysis;
+using System.Diagnostics.CodeAnalysis;
 
 using DSharpPlus;
 
@@ -108,6 +108,12 @@ public sealed class GuildConfig
     ///     If true, automatically assign the Stranger role when a member joins. When enabled, a 2nd bot is not required.
     /// </summary>
     public bool AutoAssignStrangerRoleOnJoin { get; set; } = false;
+
+    /// <summary>
+    ///     If true, run the onboarding workflow (channel creation, status widget, questionnaire) when a member gets the
+    ///     stranger role. When false, only role assignment happens if <see cref="AutoAssignStrangerRoleOnJoin" /> is set.
+    /// </summary>
+    public bool EnableOnboardingWorkflow { get; set; } = true;
 }
 
 /// <summary>

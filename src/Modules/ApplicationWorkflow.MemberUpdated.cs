@@ -1,4 +1,4 @@
-﻿using DSharpPlus;
+using DSharpPlus;
 using DSharpPlus.Entities;
 using DSharpPlus.EventArgs;
 using DSharpPlus.Exceptions;
@@ -36,11 +36,20 @@ internal partial class ApplicationWorkflow
             return;
         }
 
+        if (guildConfig.StrangerStatusChannelId == 0)
+        {
+            logger.LogDebug("Guild {GuildId} has no stranger status channel configured, skipping member update handling",
+                e.Guild.Id);
+            return;
+        }
+
         DiscordChannel strangerStatusChannel = e.Guild.GetChannel(guildConfig.StrangerStatusChannelId);
 
         if (strangerStatusChannel is null)
         {
-            throw new InvalidOperationException("Failed to get stranger status channel.");
+            logger.LogWarning("Stranger status channel not found for guild {GuildId}, skipping member update handling",
+                e.Guild.Id);
+            return;
         }
 
         _ = Task.Run(async () =>
@@ -87,6 +96,11 @@ internal partial class ApplicationWorkflow
             {
                 logger.LogWarning("{Member} must have only {Role} assigned, has {Roles}",
                     e.Member, strangerRole, e.RolesAfter);
+                return;
+            }
+
+            if (!guildConfig.EnableOnboardingWorkflow)
+            {
                 return;
             }
 
