@@ -29,6 +29,25 @@ simplification has missing features. You have been warned.
 
 ## Setup
 
+### Inviting the bot
+
+Use this invite URL with fine-grained permissions (no Administrator). Replace `YOUR_CLIENT_ID` with your bot's
+Application ID from the [Discord Developer Portal](https://discord.com/developers/applications):
+
+```
+https://discord.com/oauth2/authorize?client_id=YOUR_CLIENT_ID&permissions=268528662&scope=bot%20applications.commands
+```
+
+**Required permissions:** View Channel, Manage Channels, Manage Roles, Kick Members, Ban Members, Send Messages,
+Embed Links, Read Message History, Manage Messages.
+
+**Developer Portal intents** (Bot → Privileged Gateway Intents): enable **Server Members Intent** and
+**Message Content Intent**.
+
+**Role hierarchy:** Place the bot's role above both the stranger (Lurker) and member roles.
+
+### Running the bot
+
 It's recommended to use Docker and docker-compose to bring up the bot and its companion services.
 
 - Copy `docker/docker-compose.example.yml` as `docker-compose.yml` to a directory of your choice and add your bot token
