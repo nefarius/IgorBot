@@ -73,6 +73,10 @@ host.Services.UseScheduler(scheduler =>
         scheduler
             .Schedule<KickStaleInvokable>()
             .EveryMinute();
+
+        scheduler
+            .Schedule<OrphanEmbedReconciliationInvokable>()
+            .Hourly();
     }
 );
 
@@ -135,4 +139,5 @@ void ConfigureScheduler(IServiceCollection serviceCollection)
 
     serviceCollection.AddTransient<KickStaleInvokable>();
     serviceCollection.AddTransient<MemberDbSyncInvokable>();
+    serviceCollection.AddTransient<OrphanEmbedReconciliationInvokable>();
 }

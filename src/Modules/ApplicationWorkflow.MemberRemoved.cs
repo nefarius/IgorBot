@@ -93,6 +93,10 @@ internal partial class ApplicationWorkflow
                     logger.LogError(ex, "Failed to update status message");
                 }
             }
-        });
+        }).ContinueWith(t =>
+        {
+            if (t.IsFaulted && t.Exception is not null)
+                logger.LogError(t.Exception.GetBaseException(), "Unhandled exception in member-removed background task");
+        }, TaskContinuationOptions.OnlyOnFaulted);
     }
 }
