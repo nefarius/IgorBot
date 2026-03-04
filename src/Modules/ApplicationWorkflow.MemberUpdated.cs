@@ -1,4 +1,4 @@
-﻿using DSharpPlus;
+using DSharpPlus;
 using DSharpPlus.Entities;
 using DSharpPlus.EventArgs;
 using DSharpPlus.Exceptions;
@@ -30,7 +30,7 @@ internal partial class ApplicationWorkflow
         }
 
         // At this point we expect to have the user in the DB
-        GuildMember member = await DB.Find<GuildMember>().OneAsync(e.ToEntityId());
+        GuildMember member = await db.Find<GuildMember>().OneAsync(e.ToEntityId());
 
         if (member is null)
         {
@@ -55,7 +55,7 @@ internal partial class ApplicationWorkflow
             {
                 logger.LogInformation("Full member role set for {Member}", e.Member);
                 member.FullMemberAt = DateTime.UtcNow;
-                await member.SaveAsync();
+                await db.SaveAsync(member);
                 return;
             }
 
@@ -107,12 +107,12 @@ internal partial class ApplicationWorkflow
         GuildMember member
     )
     {
-        GuildProperties guildRuntime = await DB.Find<GuildProperties>().OneAsync(guild.Id.ToString());
+        GuildProperties guildRuntime = await db.Find<GuildProperties>().OneAsync(guild.Id.ToString());
 
         if (guildRuntime is null)
         {
             guildRuntime = new GuildProperties { GuildId = guild.Id };
-            await guildRuntime.SaveAsync();
+            await db.SaveAsync(guildRuntime);
         }
 
         NewMemberMessage message = new()
@@ -138,7 +138,7 @@ internal partial class ApplicationWorkflow
 
         member.StrangerRoleRemovedAt = DateTime.UtcNow;
         member.IsOnboardingInProgress = false;
-        await member.SaveAsync();
+        await db.SaveAsync(member);
 
         // Remove channel
         NewbieChannel newbieChannel = member.Channel;
@@ -153,7 +153,7 @@ internal partial class ApplicationWorkflow
 
                 await discordChannel.DeleteAsync($"{e.Member} is no longer a stranger");
 
-                await member.DeleteChannel();
+                await member.DeleteChannel(db);
             }
         }
 
@@ -167,7 +167,7 @@ internal partial class ApplicationWorkflow
             {
                 logger.LogInformation("Removing application widget for {Member}", member);
 
-                await member.DeleteApplicationWidget(client);
+                await member.DeleteApplicationWidget(db, client);
             }
             catch (NotFoundException ex)
             {

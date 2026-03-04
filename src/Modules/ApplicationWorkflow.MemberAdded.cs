@@ -1,4 +1,4 @@
-﻿using DSharpPlus;
+using DSharpPlus;
 using DSharpPlus.Entities;
 using DSharpPlus.EventArgs;
 
@@ -29,7 +29,7 @@ internal partial class ApplicationWorkflow
 
         logger.LogInformation("{Member} joined", e.Member);
 
-        GuildMember guildMember = await DB.Find<GuildMember>().OneAsync(e.ToEntityId());
+        GuildMember guildMember = await db.Find<GuildMember>().OneAsync(e.ToEntityId());
 
         if (guildMember is null)
         {
@@ -41,7 +41,7 @@ internal partial class ApplicationWorkflow
                 Mention = e.Member.Mention
             };
 
-            await guildMember.SaveAsync();
+            await db.SaveAsync(guildMember);
 
             logger.LogInformation("{Member} added to DB", e.Member);
         }
@@ -49,7 +49,7 @@ internal partial class ApplicationWorkflow
         guildMember.JoinedAt = DateTime.Now;
         guildMember.Reset();
 
-        await guildMember.SaveAsync();
+        await db.SaveAsync(guildMember);
 
         logger.LogInformation("{Member} updated in DB", e.Member);
         

@@ -1,4 +1,4 @@
-﻿using System.Diagnostics.CodeAnalysis;
+using System.Diagnostics.CodeAnalysis;
 
 using Coravel.Invocable;
 
@@ -20,6 +20,7 @@ namespace IgorBot.Invocables;
 /// </summary>
 [SuppressMessage("ReSharper", "ClassNeverInstantiated.Global")]
 internal class KickStaleInvokable(
+    DB db,
     ILogger<KickStaleInvokable> logger,
     IOptionsMonitor<IgorConfig> config,
     IDiscordClientService discord)
@@ -35,7 +36,7 @@ internal class KickStaleInvokable(
                      .Select(gc => gc.Value))
         {
             // query for members of the current guild where the application lifetime has exceeded the allowed idle time
-            List<GuildMember> staleMembers = await DB.Find<GuildMember>()
+            List<GuildMember> staleMembers = await db.Find<GuildMember>()
                 .ManyAsync(m =>
                     m.Lt(f => f.Application.CreatedAt, DateTime.UtcNow.Add(-config1.IdleKickTimeSpan!.Value)) &
                     m.Eq(f => f.GuildId, config1.GuildId) &
@@ -63,7 +64,7 @@ internal class KickStaleInvokable(
                 try
                 {
                     guildMember.AutoKickedAt = DateTime.UtcNow;
-                    await guildMember.SaveAsync();
+                    await db.SaveAsync(guildMember);
 
                     try
                     {

@@ -1,4 +1,4 @@
-﻿using System.Diagnostics.CodeAnalysis;
+using System.Diagnostics.CodeAnalysis;
 
 using DSharpPlus;
 using DSharpPlus.Entities;
@@ -28,14 +28,17 @@ internal sealed class NewMemberMessage
 ///     Handles new stranger appeared workflow.
 /// </summary>
 [SuppressMessage("ReSharper", "ClassNeverInstantiated.Global")]
-internal sealed class NewMemberHandler(IDiscordClientService clientService, ILogger<NewMemberHandler> logger)
+internal sealed class NewMemberHandler(
+    DB db,
+    IDiscordClientService clientService,
+    ILogger<NewMemberHandler> logger)
     : IHandleMessages<NewMemberMessage>
 {
     public async Task Handle(NewMemberMessage message)
     {
         logger.LogInformation("Processing new member workflow");
 
-        GuildMember dbMember = await DB.Find<GuildMember>().OneAsync(message.MemberEntryId);
+        GuildMember dbMember = await db.Find<GuildMember>().OneAsync(message.MemberEntryId);
 
         logger.LogDebug("Got member from DB: {@Member}", dbMember);
 
@@ -46,7 +49,7 @@ internal sealed class NewMemberHandler(IDiscordClientService clientService, ILog
         }
 
         dbMember.IsOnboardingInProgress = true;
-        await dbMember.SaveAsync();
+        await db.SaveAsync(dbMember);
 
         try
         {
@@ -137,12 +140,12 @@ internal sealed class NewMemberHandler(IDiscordClientService clientService, ILog
                 // Channel created successfully, increment and save counter
                 // 
                 guildProperties.ApplicationChannels++;
-                await guildProperties.SaveAsync();
+                await db.SaveAsync(guildProperties);
 
                 //
                 // Store member to channel association
                 // 
-                await dbMember.CreateNewbieChannel(guild, channel);
+                await dbMember.CreateNewbieChannel(db, guild, channel);
             }
             catch (Exception ex)
             {
@@ -166,7 +169,7 @@ internal sealed class NewMemberHandler(IDiscordClientService clientService, ILog
 
             try
             {
-                await dbMember.CreateApplicationWidget(client, guild, strangerStatusChannel);
+                await dbMember.CreateApplicationWidget(db, client, guild, strangerStatusChannel);
             }
             catch (Exception ex)
             {
@@ -176,7 +179,7 @@ internal sealed class NewMemberHandler(IDiscordClientService clientService, ILog
         finally
         {
             dbMember.IsOnboardingInProgress = false;
-            await dbMember.SaveAsync();
+            await db.SaveAsync(dbMember);
         }
     }
 }

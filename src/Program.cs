@@ -38,9 +38,11 @@ IHostBuilder builder = Host.CreateDefaultBuilder(args)
 
         string connectionString = hostContext.Configuration.GetConnectionString("MongoDB");
 
-        DB.InitAsync("IgorBot", MongoClientSettings.FromConnectionString(connectionString))
+        DB db = DB.InitAsync("IgorBot", MongoClientSettings.FromConnectionString(connectionString))
             .GetAwaiter()
             .GetResult();
+
+        services.AddSingleton(db);
 
         // Register handlers 
         services.AutoRegisterHandlersFromAssemblyOf<NewMemberHandler>();

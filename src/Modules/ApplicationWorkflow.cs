@@ -1,4 +1,4 @@
-﻿using DSharpPlus;
+using DSharpPlus;
 using DSharpPlus.Entities;
 using DSharpPlus.EventArgs;
 using DSharpPlus.Exceptions;
@@ -24,6 +24,7 @@ namespace IgorBot.Modules;
 [DiscordComponentInteractionCreatedEventSubscriber]
 [UsedImplicitly]
 internal partial class ApplicationWorkflow(
+    DB db,
     ILogger<ApplicationWorkflow> logger,
     IOptionsMonitor<IgorConfig> config,
     IBus messageBus)
@@ -74,13 +75,13 @@ internal partial class ApplicationWorkflow(
 
                         logger.LogDebug("Database ID: {Id}", dbId);
 
-                        GuildMember dbMember = (await DB.Find<GuildMember>()
+                        GuildMember dbMember = (await db.Find<GuildMember>()
                                 .ManyAsync(m => m.Eq(f => f.Application.ID, dbId)))
                             .FirstOrDefault();
 
                         if (dbMember is null)
                         {
-                            dbMember = (await DB.Find<GuildMember>().OneAsync(dbId));
+                            dbMember = (await db.Find<GuildMember>().OneAsync(dbId));
 
                             if (dbMember is null)
                             {
@@ -164,7 +165,7 @@ internal partial class ApplicationWorkflow(
     {
         entry.PromotedAt = DateTime.UtcNow;
 
-        await entry.SaveAsync();
+        await db.SaveAsync(entry);
 
         logger.LogInformation("{User} promoted {Member}",
             args.User, member);
@@ -203,7 +204,7 @@ internal partial class ApplicationWorkflow(
         entry.RemovedByModeration = true;
         entry.BannedAt = DateTime.UtcNow;
 
-        await entry.SaveAsync();
+        await db.SaveAsync(entry);
 
         await entry.RespondToInteraction(args, client);
     }
@@ -220,7 +221,7 @@ internal partial class ApplicationWorkflow(
         entry.RemovedByModeration = true;
         entry.KickedAt = DateTime.UtcNow;
 
-        await entry.SaveAsync();
+        await db.SaveAsync(entry);
 
         await entry.RespondToInteraction(args, client);
     }
@@ -233,9 +234,9 @@ internal partial class ApplicationWorkflow(
         logger.LogInformation("Disabling auto-kick for {Member}", entry);
 
         entry.Application!.IsAutoKickEnabled = false;
-        await entry.Application.SaveAsync();
+        await db.SaveAsync(entry.Application);
 
-        await entry.SaveAsync();
+        await db.SaveAsync(entry);
 
         await entry.RespondToInteraction(args, client);
     }

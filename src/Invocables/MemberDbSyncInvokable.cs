@@ -1,4 +1,4 @@
-﻿using Coravel.Invocable;
+using Coravel.Invocable;
 
 using DSharpPlus.Entities;
 
@@ -18,6 +18,7 @@ namespace IgorBot.Invocables;
 ///     Scheduled job to synchronize the database to the Discord universe objects.
 /// </summary>
 internal class MemberDbSyncInvokable(
+    DB db,
     IOptionsMonitor<IgorConfig> config,
     IDiscordClientService discord,
     ILogger<MemberDbSyncInvokable> logger)
@@ -40,7 +41,7 @@ internal class MemberDbSyncInvokable(
                 foreach (DiscordMember member in members.Where(m => !m.IsBot))
                 {
                     string id = member.ToEntityId();
-                    GuildMember guildMember = await DB.Find<GuildMember>().OneAsync(id);
+                    GuildMember guildMember = await db.Find<GuildMember>().OneAsync(id);
 
                     // already exists
                     if (guildMember is not null)
@@ -50,7 +51,7 @@ internal class MemberDbSyncInvokable(
                             !guild.Channels.ContainsKey(guildMember.Channel.ChannelId))
                         {
                             logger.LogInformation("Removing orphaned channel entity {Channel}", guildMember.Channel);
-                            await guildMember.DeleteChannel();
+                            await guildMember.DeleteChannel(db);
                         }
 
                         string currentMemberString = member.ToString();
@@ -60,7 +61,7 @@ internal class MemberDbSyncInvokable(
                             logger.LogInformation("Updating Member property from {Old} to {New} for entity {Member}",
                                 guildMember.Member, currentMemberString, guildMember);
                             guildMember.Member = currentMemberString;
-                            await guildMember.SaveAsync();
+                            await db.SaveAsync(guildMember);
                         }
 
                         continue;
@@ -75,7 +76,7 @@ internal class MemberDbSyncInvokable(
                         Mention = member.Mention
                     };
 
-                    await guildMember.SaveAsync();
+                    await db.SaveAsync(guildMember);
 
                     logger.LogInformation("{Member} added to DB", member);
                 }

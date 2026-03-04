@@ -1,4 +1,4 @@
-﻿using DSharpPlus;
+using DSharpPlus;
 using DSharpPlus.Entities;
 using DSharpPlus.EventArgs;
 
@@ -27,52 +27,53 @@ internal sealed partial class GuildMember
     /// <summary>
     ///     Deletes the application widget form the database.
     /// </summary>
-    public async Task DeleteApplication()
+    public async Task DeleteApplication(DB db)
     {
         if (Application is null)
         {
             return;
         }
 
-        await Application.DeleteAsync();
+        await db.DeleteAsync(Application);
 
         Application = null;
-        await this.SaveAsync();
+        await db.SaveAsync(this);
     }
 
     /// <summary>
     ///     Deletes the newbie channel form the database.
     /// </summary>
-    public async Task DeleteChannel()
+    public async Task DeleteChannel(DB db)
     {
         if (Channel is null)
         {
             return;
         }
 
-        await Channel.DeleteAsync();
+        await db.DeleteAsync(Channel);
         Channel = null;
-        await this.SaveAsync();
+        await db.SaveAsync(this);
     }
 
 
     /// <summary>
     ///     Create a newbie channel in the database.
     /// </summary>
-    public async Task CreateNewbieChannel(DiscordGuild guild, DiscordChannel channel)
+    public async Task CreateNewbieChannel(DB db, DiscordGuild guild, DiscordChannel channel)
     {
         NewbieChannel newbieChannel =
             new() { GuildId = guild.Id, ChannelId = channel.Id, ChannelName = channel.Name, Mention = channel.Mention };
-        await newbieChannel.SaveAsync();
+        await db.SaveAsync(newbieChannel);
 
         Channel = newbieChannel;
-        await this.SaveAsync();
+        await db.SaveAsync(this);
     }
 
     /// <summary>
     ///     Creates the Discord message widget and application a new application.
     /// </summary>
     public async Task CreateApplicationWidget(
+        DB db,
         DiscordClient client,
         DiscordGuild guild,
         DiscordChannel strangerStatusChannel
@@ -90,7 +91,7 @@ internal sealed partial class GuildMember
         };
 
         // generates entity ID
-        await application.SaveAsync();
+        await db.SaveAsync(application);
 
         DiscordMessageBuilder messageBuilder = new DiscordMessageBuilder().AddEmbed(initialEmbed);
 
@@ -109,7 +110,7 @@ internal sealed partial class GuildMember
 
         // Store in DB
         Application = application;
-        await this.SaveAsync();
+        await db.SaveAsync(this);
     }
 
     /// <summary>
@@ -162,12 +163,12 @@ internal sealed partial class GuildMember
     ///     Updates the application widget with the last status and removes the application association with this member from
     ///     the DB.
     /// </summary>
-    public async Task DeleteApplicationWidget(DiscordClient client)
+    public async Task DeleteApplicationWidget(DB db, DiscordClient client)
     {
         await UpdateApplicationWidget(client, true);
 
-        await Application.DeleteAsync();
+        await db.DeleteAsync(Application!);
         Application = null;
-        await this.SaveAsync();
+        await db.SaveAsync(this);
     }
 }

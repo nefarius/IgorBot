@@ -1,4 +1,4 @@
-﻿using System.Diagnostics.CodeAnalysis;
+using System.Diagnostics.CodeAnalysis;
 
 using DSharpPlus;
 using DSharpPlus.Entities;
@@ -21,7 +21,7 @@ namespace IgorBot.ApplicationCommands;
 [SlashCommandGroup("apply", "Apply for server membership.")]
 [SuppressMessage("ReSharper", "UnusedMember.Global")]
 [SuppressMessage("ReSharper", "ClassNeverInstantiated.Global")]
-public sealed class OnBoardingApplicationCommands : ApplicationCommandModule
+public sealed class OnBoardingApplicationCommands(DB db) : ApplicationCommandModule
 {
     [SlashRequirePermissions(Permissions.SendMessages)]
     [SlashCommand("member", "Apply for regular membership.")]
@@ -37,7 +37,7 @@ public sealed class OnBoardingApplicationCommands : ApplicationCommandModule
 
         await ctx.DeferAsync();
 
-        GuildMember dbMember = await DB.Find<GuildMember>().OneAsync(ctx.ToEntityId());
+        GuildMember dbMember = await db.Find<GuildMember>().OneAsync(ctx.ToEntityId());
 
         if (dbMember is null)
         {
@@ -68,8 +68,8 @@ public sealed class OnBoardingApplicationCommands : ApplicationCommandModule
         }
 
         application.IsAutoKickEnabled = false;
-        await dbMember.Application.SaveAsync();
-        await dbMember.SaveAsync();
+        await db.SaveAsync(dbMember.Application);
+        await db.SaveAsync(dbMember);
         await dbMember.UpdateApplicationWidget(ctx.Client);
 
         #endregion
