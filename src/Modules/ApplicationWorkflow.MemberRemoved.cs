@@ -1,4 +1,4 @@
-using DSharpPlus;
+﻿using DSharpPlus;
 using DSharpPlus.Entities;
 using DSharpPlus.EventArgs;
 using DSharpPlus.Exceptions;
@@ -96,7 +96,10 @@ internal partial class ApplicationWorkflow
         }).ContinueWith(t =>
         {
             if (t.IsFaulted && t.Exception is not null)
-                logger.LogError(t.Exception.GetBaseException(), "Unhandled exception in member-removed background task");
+            {
+                logger.LogError(t.Exception.GetBaseException(),
+                    "Unhandled exception in member-removed background task");
+            }
         }, TaskContinuationOptions.OnlyOnFaulted);
     }
 }

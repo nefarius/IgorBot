@@ -1,7 +1,8 @@
 using IgorBot.Core;
 using IgorBot.Schema;
-using Microsoft.Extensions.Configuration;
+
 using MongoDB.Entities;
+
 using Serilog;
 
 namespace IgorBot.Services;
@@ -36,7 +37,9 @@ internal static class GuildConfigMigration
 
             ulong normalizedId = guildConfig.GuildId != 0
                 ? guildConfig.GuildId
-                : ulong.TryParse(guildIdStr, out ulong parsedId) ? parsedId : 0;
+                : ulong.TryParse(guildIdStr, out ulong parsedId)
+                    ? parsedId
+                    : 0;
 
             if (normalizedId == 0)
             {

@@ -1,4 +1,4 @@
-using DSharpPlus;
+﻿using DSharpPlus;
 using DSharpPlus.Entities;
 using DSharpPlus.EventArgs;
 using DSharpPlus.Exceptions;
@@ -56,7 +56,10 @@ internal partial class ApplicationWorkflow(
                 .ContinueWith(t =>
                 {
                     if (t.IsFaulted && t.Exception is not null)
-                        logger.LogError(t.Exception.GetBaseException(), "Failed to send parse-error response to interaction");
+                    {
+                        logger.LogError(t.Exception.GetBaseException(),
+                            "Failed to send parse-error response to interaction");
+                    }
                 }, TaskContinuationOptions.OnlyOnFaulted);
             return;
         }
@@ -166,7 +169,10 @@ internal partial class ApplicationWorkflow(
         }).ContinueWith(t =>
         {
             if (t.IsFaulted && t.Exception is not null)
-                logger.LogError(t.Exception.GetBaseException(), "Unhandled exception in component interaction background task");
+            {
+                logger.LogError(t.Exception.GetBaseException(),
+                    "Unhandled exception in component interaction background task");
+            }
         }, TaskContinuationOptions.OnlyOnFaulted);
     }
 

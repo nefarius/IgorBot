@@ -1,6 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 
 using IgorBot.Core;
+
 using MongoDB.Bson.Serialization.Attributes;
 using MongoDB.Entities;
 

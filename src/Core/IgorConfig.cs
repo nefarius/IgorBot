@@ -1,4 +1,4 @@
-using System.Diagnostics.CodeAnalysis;
+﻿using System.Diagnostics.CodeAnalysis;
 
 using DSharpPlus;
 
@@ -28,6 +28,8 @@ internal sealed class DiscordConfig
 [SuppressMessage("ReSharper", "UnusedAutoPropertyAccessor.Global")]
 public sealed class GuildConfig
 {
+    private Dictionary<string, Questionnaire> _questionnaires = new();
+
     /// <summary>
     ///     Stranger role snowflake ID.
     /// </summary>
@@ -77,8 +79,6 @@ public sealed class GuildConfig
     ///     Channel snowflake ID where the welcome messages of promoted members should appear.
     /// </summary>
     public ulong MemberWelcomeMessageChannelId { get; set; }
-
-    private Dictionary<string, Questionnaire> _questionnaires = new();
 
     /// <summary>
     ///     List of questionnaires the bot offers.

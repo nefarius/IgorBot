@@ -61,6 +61,7 @@ IHostBuilder builder = Host.CreateDefaultBuilder(args)
         {
             throw new InvalidOperationException("Bot:Discord:Token is required in configuration.");
         }
+
         ConfigureDiscord(services, config);
 
         services.AddHostedService<StartupTasks>();

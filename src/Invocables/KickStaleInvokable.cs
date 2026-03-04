@@ -78,7 +78,8 @@ internal class KickStaleInvokable(
                 }
                 catch (NotFoundException)
                 {
-                    logger.LogWarning("Member {MemberId} already left the guild, marking as auto-kicked", guildMember.MemberId);
+                    logger.LogWarning("Member {MemberId} already left the guild, marking as auto-kicked",
+                        guildMember.MemberId);
                     guildMember.AutoKickedAt = DateTime.UtcNow;
                     await db.SaveAsync(guildMember);
                 }

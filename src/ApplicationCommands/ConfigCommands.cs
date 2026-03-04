@@ -19,18 +19,31 @@ public sealed class ConfigCommands(IGuildConfigService guildConfigService) : App
     [SlashCommand("setup", "Initial setup or overwrite configuration for this server.")]
     public async Task Setup(
         InteractionContext ctx,
-        [Option("stranger_role", "Role assigned to new members before they complete onboarding")] DiscordRole strangerRole,
-        [Option("member_role", "Role assigned when a member is promoted")] DiscordRole memberRole,
-        [Option("application_category", "Category where newbie channels are created")] DiscordChannel applicationCategory,
-        [Option("stranger_status_channel", "Channel where application status embeds appear")] DiscordChannel strangerStatusChannel,
-        [Option("member_welcome_channel", "Channel where welcome messages for promoted members appear")] DiscordChannel memberWelcomeChannel,
-        [Option("application_channel_format", "Format for newbie channel names, use {0} for number")] string applicationChannelFormat = "newbie-{0:D4}",
-        [Option("newbie_welcome_template", "Welcome message template, use {0} for member mention")] string newbieWelcomeTemplate = "Welcome, {0}! Before you can become a full member, we wanna know a bit about you. Please enter **/apply member** to start!",
-        [Option("member_welcome_template", "Welcome message for promoted members, use {0} for member mention")] string memberWelcomeTemplate = "Welcome {0}, enjoy your stay!",
-        [Option("auto_assign_stranger_role", "Automatically assign stranger role when member joins")] bool autoAssignStrangerRole = false,
-        [Option("idle_kick_minutes", "Minutes before kicking inactive strangers (0 or omit to disable)")] long idleKickMinutes = 0,
-        [Option("honeypot_channel", "Channel that bans users who post in it (optional)")] DiscordChannel honeypotChannel = null,
-        [Option("moderator_role", "Role that can see and interact with newbie channels (optional)")] DiscordRole moderatorRole = null
+        [Option("stranger_role", "Role assigned to new members before they complete onboarding")]
+        DiscordRole strangerRole,
+        [Option("member_role", "Role assigned when a member is promoted")]
+        DiscordRole memberRole,
+        [Option("application_category", "Category where newbie channels are created")]
+        DiscordChannel applicationCategory,
+        [Option("stranger_status_channel", "Channel where application status embeds appear")]
+        DiscordChannel strangerStatusChannel,
+        [Option("member_welcome_channel", "Channel where welcome messages for promoted members appear")]
+        DiscordChannel memberWelcomeChannel,
+        [Option("application_channel_format", "Format for newbie channel names, use {0} for number")]
+        string applicationChannelFormat = "newbie-{0:D4}",
+        [Option("newbie_welcome_template", "Welcome message template, use {0} for member mention")]
+        string newbieWelcomeTemplate =
+            "Welcome, {0}! Before you can become a full member, we wanna know a bit about you. Please enter **/apply member** to start!",
+        [Option("member_welcome_template", "Welcome message for promoted members, use {0} for member mention")]
+        string memberWelcomeTemplate = "Welcome {0}, enjoy your stay!",
+        [Option("auto_assign_stranger_role", "Automatically assign stranger role when member joins")]
+        bool autoAssignStrangerRole = false,
+        [Option("idle_kick_minutes", "Minutes before kicking inactive strangers (0 or omit to disable)")]
+        long idleKickMinutes = 0,
+        [Option("honeypot_channel", "Channel that bans users who post in it (optional)")]
+        DiscordChannel honeypotChannel = null,
+        [Option("moderator_role", "Role that can see and interact with newbie channels (optional)")]
+        DiscordRole moderatorRole = null
     )
     {
         await ctx.DeferAsync();
@@ -107,11 +120,7 @@ public sealed class ConfigCommands(IGuildConfigService guildConfigService) : App
             return;
         }
 
-        DiscordEmbedBuilder embed = new()
-        {
-            Title = "Server configuration",
-            Color = new DiscordColor(0x3498DB)
-        };
+        DiscordEmbedBuilder embed = new() { Title = "Server configuration", Color = new DiscordColor(0x3498DB) };
         embed.AddField("Stranger role", $"<@&{config.StrangerRoleId}>", true);
         embed.AddField("Member role", $"<@&{config.MemberRoleId}>", true);
         embed.AddField("Application category", $"<#{config.ApplicationCategoryId}>", true);
@@ -120,7 +129,8 @@ public sealed class ConfigCommands(IGuildConfigService guildConfigService) : App
         embed.AddField("Channel format", config.ApplicationChannelNameFormat ?? "newbie-{0:D4}", true);
         embed.AddField("Auto-assign stranger role", config.AutoAssignStrangerRoleOnJoin ? "Yes" : "No", true);
         embed.AddField("Idle kick", config.IdleKickTimeSpan?.ToString() ?? "Disabled", true);
-        embed.AddField("Honeypot", config.HoneypotChannelId.HasValue ? $"<#{config.HoneypotChannelId}>" : "Not set", true);
+        embed.AddField("Honeypot", config.HoneypotChannelId.HasValue ? $"<#{config.HoneypotChannelId}>" : "Not set",
+            true);
 
         await ctx.EditResponseAsync(new DiscordWebhookBuilder().AddEmbed(embed));
     }
@@ -128,8 +138,10 @@ public sealed class ConfigCommands(IGuildConfigService guildConfigService) : App
     [SlashCommand("set", "Update a single configuration option.")]
     public async Task Set(
         InteractionContext ctx,
-        [Option("option", "Which option to update")] ConfigOption option,
-        [Option("value", "New value (role/channel mention or text)")] string value
+        [Option("option", "Which option to update")]
+        ConfigOption option,
+        [Option("value", "New value (role/channel mention or text)")]
+        string value
     )
     {
         await ctx.DeferAsync(true);
@@ -155,17 +167,26 @@ public sealed class ConfigCommands(IGuildConfigService guildConfigService) : App
             case ConfigOption.StrangerRole:
                 validationError = ValidateRole(ctx.Guild, parsedId, out ulong strangerRoleId);
                 if (validationError is null)
+                {
                     config.StrangerRoleId = strangerRoleId;
+                }
+
                 break;
             case ConfigOption.MemberRole:
                 validationError = ValidateRole(ctx.Guild, parsedId, out ulong memberRoleId);
                 if (validationError is null)
+                {
                     config.MemberRoleId = memberRoleId;
+                }
+
                 break;
             case ConfigOption.ApplicationCategory:
                 validationError = ValidateCategoryChannel(ctx.Guild, parsedId, out ulong categoryId);
                 if (validationError is null)
+                {
                     config.ApplicationCategoryId = categoryId;
+                }
+
                 break;
             case ConfigOption.StrangerStatusChannel:
             case ConfigOption.MemberWelcomeChannel:
@@ -173,25 +194,39 @@ public sealed class ConfigCommands(IGuildConfigService guildConfigService) : App
                 if (validationError is null)
                 {
                     if (option == ConfigOption.StrangerStatusChannel)
+                    {
                         config.StrangerStatusChannelId = channelId;
+                    }
                     else
+                    {
                         config.MemberWelcomeMessageChannelId = channelId;
+                    }
                 }
+
                 break;
             case ConfigOption.ApplicationChannelFormat:
                 validationError = ValidateApplicationChannelFormat(value);
                 if (validationError is null)
+                {
                     config.ApplicationChannelNameFormat = value;
+                }
+
                 break;
             case ConfigOption.NewbieWelcomeTemplate:
                 validationError = ValidateMentionTemplate(value);
                 if (validationError is null)
+                {
                     config.NewbieWelcomeTemplate = value;
+                }
+
                 break;
             case ConfigOption.MemberWelcomeTemplate:
                 validationError = ValidateMentionTemplate(value);
                 if (validationError is null)
+                {
                     config.MemberWelcomeTemplate = value;
+                }
+
                 break;
             case ConfigOption.AutoAssignStrangerRole:
                 if (!bool.TryParse(value, out bool b))
@@ -202,6 +237,7 @@ public sealed class ConfigCommands(IGuildConfigService guildConfigService) : App
                 {
                     config.AutoAssignStrangerRoleOnJoin = b;
                 }
+
                 break;
             case ConfigOption.IdleKickMinutes:
                 if (!long.TryParse(value, out long m) || m <= 0)
@@ -212,6 +248,7 @@ public sealed class ConfigCommands(IGuildConfigService guildConfigService) : App
                 {
                     config.IdleKickTimeSpan = TimeSpan.FromMinutes(m);
                 }
+
                 break;
             case ConfigOption.HoneypotChannel:
                 if (!parsedId.HasValue)
@@ -222,8 +259,11 @@ public sealed class ConfigCommands(IGuildConfigService guildConfigService) : App
                 {
                     validationError = ValidateTextChannel(ctx.Guild, parsedId, out ulong honeypotId);
                     if (validationError is null)
+                    {
                         config.HoneypotChannelId = honeypotId;
+                    }
                 }
+
                 break;
             case ConfigOption.ModeratorRole:
                 validationError = ValidateRole(ctx.Guild, parsedId, out ulong modRoleId);
@@ -231,9 +271,11 @@ public sealed class ConfigCommands(IGuildConfigService guildConfigService) : App
                 {
                     config.ApplicationModeratorRoleIds.Add(modRoleId);
                 }
+
                 break;
             default:
-                validationError = $"Could not parse value for {option}. Use a role or channel mention, or appropriate text.";
+                validationError =
+                    $"Could not parse value for {option}. Use a role or channel mention, or appropriate text.";
                 break;
         }
 
@@ -241,9 +283,7 @@ public sealed class ConfigCommands(IGuildConfigService guildConfigService) : App
         {
             await ctx.EditResponseAsync(new DiscordWebhookBuilder().AddEmbed(new DiscordEmbedBuilder
             {
-                Title = "Invalid value",
-                Description = validationError,
-                Color = new DiscordColor(0xFF0000)
+                Title = "Invalid value", Description = validationError, Color = new DiscordColor(0xFF0000)
             }));
             return;
         }
@@ -252,9 +292,7 @@ public sealed class ConfigCommands(IGuildConfigService guildConfigService) : App
 
         await ctx.EditResponseAsync(new DiscordWebhookBuilder().AddEmbed(new DiscordEmbedBuilder
         {
-            Title = "Updated",
-            Description = $"Set {option} successfully.",
-            Color = new DiscordColor(0x00FF00)
+            Title = "Updated", Description = $"Set {option} successfully.", Color = new DiscordColor(0x00FF00)
         }));
     }
 
@@ -262,12 +300,18 @@ public sealed class ConfigCommands(IGuildConfigService guildConfigService) : App
     {
         roleId = 0;
         if (!parsedId.HasValue)
+        {
             return "Provide a role mention (e.g. <@&role_id>).";
+        }
+
         try
         {
             DiscordRole role = guild.GetRole(parsedId.Value);
             if (role is null)
+            {
                 return "Role not found in this server.";
+            }
+
             roleId = role.Id;
             return null;
         }
@@ -281,12 +325,18 @@ public sealed class ConfigCommands(IGuildConfigService guildConfigService) : App
     {
         channelId = 0;
         if (!parsedId.HasValue)
+        {
             return "Provide a category channel mention (e.g. <#channel_id>).";
+        }
+
         try
         {
             DiscordChannel channel = guild.GetChannel(parsedId.Value);
             if (channel is null || channel.Type != ChannelType.Category)
+            {
                 return "Category channel not found or not a category.";
+            }
+
             channelId = channel.Id;
             return null;
         }
@@ -300,12 +350,18 @@ public sealed class ConfigCommands(IGuildConfigService guildConfigService) : App
     {
         channelId = 0;
         if (!parsedId.HasValue)
+        {
             return "Provide a channel mention (e.g. <#channel_id>).";
+        }
+
         try
         {
             DiscordChannel channel = guild.GetChannel(parsedId.Value);
             if (channel is null)
+            {
                 return "Channel not found in this server.";
+            }
+
             channelId = channel.Id;
             return null;
         }
@@ -370,20 +426,16 @@ public sealed class ConfigCommands(IGuildConfigService guildConfigService) : App
 /// </summary>
 public enum ConfigOption
 {
-    [ChoiceName("Stranger role")]
-    StrangerRole,
+    [ChoiceName("Stranger role")] StrangerRole,
 
-    [ChoiceName("Member role")]
-    MemberRole,
+    [ChoiceName("Member role")] MemberRole,
 
-    [ChoiceName("Application category")]
-    ApplicationCategory,
+    [ChoiceName("Application category")] ApplicationCategory,
 
     [ChoiceName("Stranger status channel")]
     StrangerStatusChannel,
 
-    [ChoiceName("Member welcome channel")]
-    MemberWelcomeChannel,
+    [ChoiceName("Member welcome channel")] MemberWelcomeChannel,
 
     [ChoiceName("Application channel format")]
     ApplicationChannelFormat,
@@ -397,12 +449,9 @@ public enum ConfigOption
     [ChoiceName("Auto-assign stranger role")]
     AutoAssignStrangerRole,
 
-    [ChoiceName("Idle kick minutes")]
-    IdleKickMinutes,
+    [ChoiceName("Idle kick minutes")] IdleKickMinutes,
 
-    [ChoiceName("Honeypot channel")]
-    HoneypotChannel,
+    [ChoiceName("Honeypot channel")] HoneypotChannel,
 
-    [ChoiceName("Moderator role (add)")]
-    ModeratorRole
+    [ChoiceName("Moderator role (add)")] ModeratorRole
 }

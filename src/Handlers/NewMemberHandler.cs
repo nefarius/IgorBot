@@ -198,7 +198,6 @@ internal sealed class NewMemberHandler(
             {
                 logger.LogError(ex, "Creating status widget failed, rolling back channel creation");
                 await RollbackChannelCreationAsync(dbMember, channel, guildProperties);
-                return;
             }
         }
         finally
@@ -208,7 +207,8 @@ internal sealed class NewMemberHandler(
         }
     }
 
-    private async Task RollbackChannelCreationAsync(GuildMember dbMember, DiscordChannel channel, GuildProperties guildProperties)
+    private async Task RollbackChannelCreationAsync(GuildMember dbMember, DiscordChannel channel,
+        GuildProperties guildProperties)
     {
         try
         {

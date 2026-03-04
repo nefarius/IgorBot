@@ -25,7 +25,8 @@ internal class OrphanEmbedReconciliationInvokable(
     : IInvocable
 {
     /// <summary>
-    ///     Grace period for newly-created embeds before treating as orphan (CreateApplicationWidget writes embed and GuildMember separately).
+    ///     Grace period for newly-created embeds before treating as orphan (CreateApplicationWidget writes embed and
+    ///     GuildMember separately).
     /// </summary>
     private static readonly TimeSpan OrphanGracePeriod = TimeSpan.FromMinutes(2);
 

@@ -61,6 +61,9 @@ internal sealed class CachedGuildConfigService(IGuildConfigService inner, ILogge
 
         internal GuildConfig Config { get; }
 
-        internal bool IsExpired() => DateTime.UtcNow >= _expiresAt;
+        internal bool IsExpired()
+        {
+            return DateTime.UtcNow >= _expiresAt;
+        }
     }
 }

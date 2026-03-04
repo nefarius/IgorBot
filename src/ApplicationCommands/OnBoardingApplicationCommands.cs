@@ -1,4 +1,4 @@
-using System.Diagnostics.CodeAnalysis;
+﻿using System.Diagnostics.CodeAnalysis;
 
 using DSharpPlus;
 using DSharpPlus.Entities;
@@ -20,7 +20,8 @@ namespace IgorBot.ApplicationCommands;
 [SlashCommandGroup("apply", "Apply for server membership.")]
 [SuppressMessage("ReSharper", "UnusedMember.Global")]
 [SuppressMessage("ReSharper", "ClassNeverInstantiated.Global")]
-public sealed class OnBoardingApplicationCommands(DB db, IGuildConfigService guildConfigService) : ApplicationCommandModule
+public sealed class OnBoardingApplicationCommands(DB db, IGuildConfigService guildConfigService)
+    : ApplicationCommandModule
 {
     [SlashRequirePermissions(Permissions.SendMessages)]
     [SlashCommand("member", "Apply for regular membership.")]
@@ -77,7 +78,8 @@ public sealed class OnBoardingApplicationCommands(DB db, IGuildConfigService gui
             await ctx.EditResponseAsync(new DiscordWebhookBuilder().AddEmbed(new DiscordEmbedBuilder
             {
                 Title = "Server not configured",
-                Description = "This server is not configured yet. An administrator can run `/config setup` to get started.",
+                Description =
+                    "This server is not configured yet. An administrator can run `/config setup` to get started.",
                 Color = new DiscordColor(0xFFAA00)
             }));
             return;
@@ -93,6 +95,7 @@ public sealed class OnBoardingApplicationCommands(DB db, IGuildConfigService gui
             }));
             return;
         }
+
         DiscordMember member = (DiscordMember)ctx.User;
 
         if (member.Roles.All(r => r.Id != guildConfig.StrangerRoleId))
