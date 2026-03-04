@@ -6,7 +6,7 @@
 ![Docker Image Version (latest by date)](https://img.shields.io/docker/v/containinger/igor-bot)
 ![Docker Image Size (latest by date)](https://img.shields.io/docker/image-size/containinger/igor-bot)
 
-Advanced Discord bot to automate new Member on-boarding.
+Advanced Discord bot to automate new member onboarding.
 
 ## Motivation
 
@@ -31,32 +31,56 @@ It's recommended to use Docker and docker-compose to bring up the bot and its co
 - Copy `docker/docker-compose.example.yml` as `docker-compose.yml` to a directory of your choice and add your bot token
   in there
 - Copy `docker/appsettings.Production.example.json` as `appsettings.Production.json` into the same directory as the
-  compose-file
+  compose file
 - Run `docker-compose pull` to fetch the container images
 - Run `docker-compose up -d` to bring the bot and database services online
 
 ## Configuration
 
-As of the time of writing, the bot doesn't have any server setup commands, so some elbow grease is required to get it up
-and running 💪 No worries though, I've got you covered! Adjust your `appsettings.Production.json` with the values
-outlined below.
+Configuration is **runtime-configurable** via Discord slash commands—no restart required. Guild config lives in MongoDB
+and can be migrated from `appsettings` on first run (see below).
+
+### Quick start with `/config setup`
+
+After inviting the bot to your server, run `/config setup` in Discord ( Administrator permission required). This prompts
+you for:
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `stranger_role` | Role assigned to new members before they complete onboarding | — |
+| `member_role` | Role assigned when a member is promoted | — |
+| `application_category` | Category where newbie channels are created | — |
+| `stranger_status_channel` | Channel where application status embeds appear | — |
+| `member_welcome_channel` | Channel where welcome messages for promoted members appear | — |
+| `application_channel_format` | Format for newbie channel names (`{0}` = number) | `newbie-{0:D4}` |
+| `newbie_welcome_template` | Welcome message template (`{0}` = member mention) | *(standard onboarding prompt)* |
+| `member_welcome_template` | Welcome message for promoted members (`{0}` = member mention) | `Welcome {0}, enjoy your stay!` |
+| `auto_assign_stranger_role` | Automatically assign stranger role when member joins | `false` |
+| `idle_kick_minutes` | Minutes before kicking inactive strangers (`0` = disabled) | `0` |
+| `honeypot_channel` | (Optional) Channel that bans users who post in it | — |
+| `moderator_role` | (Optional) Role that can see and interact with newbie channels | — |
+
+Use `/config view` to inspect the current configuration and `/config set` to update individual options.
+
+### Optional: Initial config via appsettings
+
+If `Bot.Guilds` is present in `appsettings.json` or `appsettings.Production.json`, guild configs are migrated once to
+MongoDB on startup. Afterwards all config lives in MongoDB. You can still add new guilds via `/config setup` in Discord.
 
 ### Discord server preparations
 
-- Create a new Guild entry in the config file with your server's ID as the key name
-- Set the `GuildId` config value to the same ID
-- Add a "Lurker" role and copy its ID to the `StrangerRoleId` config value
-    - This is the role new members should get assigned to get identified. More on that later on.
-- (Optional) Set `AutoAssignStrangerRoleOnJoin` to `true` to have Igor assign the Lurker role when members join. When
-  enabled, no 2nd bot is required. The bot needs **Manage Roles** and its role must be above the Lurker role in the
-  server's role hierarchy. Enable the **Guild Members** privileged intent in the [Discord Developer Portal](https://discord.com/developers/applications) for your bot.
-- Add a "Full Member" role and copy its ID to the `MemberRoleId` config value
-    - This is the role that promoted/unlocked members will get assigned when approved by a moderator
-- Create a new category "Newbies" and copy its ID to the `ApplicationCategoryId` config value
-- (Optional) Add one or more moderator role IDs to `ApplicationModeratorRoleIds` to give them the power to kick, ban or
-  approve new members
-- Add a **private** channel for bot status messages and copy its ID to `StrangerStatusChannelId` config value
-- Add a **public** channel for the welcome messages and copy its ID to `MemberWelcomeMessageChannelId` config value
+- Add a "Lurker" role and set it as `stranger_role` (or `StrangerRoleId` if using appsettings)
+  - This is the role new members receive to be identified. More on that later.
+- If using Option A (auto-assign): Set `auto_assign_stranger_role` to `true`. The bot needs **Manage Roles** and its
+  role must be above the Lurker role in the server's role hierarchy. Enable the **Guild Members** privileged intent in
+  the [Discord Developer Portal](https://discord.com/developers/applications) for your bot.
+- Add a "Full Member" role and set it as `member_role` (or `MemberRoleId`)
+  - This is the role that promoted members receive when approved by a moderator
+- Create a category "Newbies" and set it as `application_category` (or `ApplicationCategoryId`)
+- (Optional) Add one or more moderator role IDs via `moderator_role` or `ApplicationModeratorRoleIds` to give them the
+  power to kick, ban or approve new members
+- Add a **private** channel for bot status messages → `stranger_status_channel` / `StrangerStatusChannelId`
+- Add a **public** channel for welcome messages → `member_welcome_channel` / `MemberWelcomeMessageChannelId`
 
 To be done...
 
