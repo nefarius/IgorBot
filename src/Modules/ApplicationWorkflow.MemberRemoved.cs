@@ -1,12 +1,10 @@
-using DSharpPlus;
+﻿using DSharpPlus;
 using DSharpPlus.Entities;
 using DSharpPlus.EventArgs;
 using DSharpPlus.Exceptions;
 
 using IgorBot.Schema;
 using IgorBot.Util;
-
-using MongoDB.Entities;
 
 namespace IgorBot.Modules;
 

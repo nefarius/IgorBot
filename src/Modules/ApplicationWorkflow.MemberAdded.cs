@@ -1,12 +1,10 @@
-using DSharpPlus;
+﻿using DSharpPlus;
 using DSharpPlus.Entities;
 using DSharpPlus.EventArgs;
 
 using IgorBot.Core;
 using IgorBot.Schema;
 using IgorBot.Util;
-
-using MongoDB.Entities;
 
 namespace IgorBot.Modules;
 
@@ -35,7 +33,7 @@ internal partial class ApplicationWorkflow
         {
             guildMember = new GuildMember
             {
-                GuildId = e.Guild.Id, 
+                GuildId = e.Guild.Id,
                 MemberId = e.Member.Id,
                 Member = e.Member.ToString(),
                 Mention = e.Member.Mention
@@ -52,14 +50,14 @@ internal partial class ApplicationWorkflow
         await db.SaveAsync(guildMember);
 
         logger.LogInformation("{Member} updated in DB", e.Member);
-        
+
         GuildConfig guildConfig = config.CurrentValue.Guilds[e.Guild.Id.ToString()];
         DiscordRole strangerRole = e.Guild.GetRole(guildConfig.StrangerRoleId);
 
         if (e.Member.Roles.Contains(strangerRole))
         {
             logger.LogInformation("{Member} has stranger role, submitting workflow", e.Member);
-            
+
             await ProcessStrangerAssignment(e.Guild, guildConfig, guildMember);
         }
     }

@@ -49,7 +49,8 @@ IHostBuilder builder = Host.CreateDefaultBuilder(args)
 
         // Configure and register Rebus
         services.AddRebus(configure => configure
-            .Options(o => {
+            .Options(o =>
+            {
                 o.SetNumberOfWorkers(1);
                 o.SetMaxParallelism(1);
             })

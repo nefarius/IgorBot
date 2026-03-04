@@ -1,4 +1,4 @@
-using System.Diagnostics.CodeAnalysis;
+﻿using System.Diagnostics.CodeAnalysis;
 
 using DSharpPlus;
 using DSharpPlus.Entities;
@@ -233,7 +233,7 @@ public sealed class OnBoardingApplicationCommands(DB db) : ApplicationCommandMod
             Title = "Questionnaire submission",
             Description =
                 $"Questionnaire: {Formatter.Bold(questionnaire.Name)}, " +
-                $"Author: {ctx.Member} ({ctx.Member.Mention}), " + 
+                $"Author: {ctx.Member} ({ctx.Member.Mention}), " +
                 $"Status panel: {application.MessageMentionUrl}",
             Timestamp = DateTimeOffset.UtcNow,
             Footer = new DiscordEmbedBuilder.EmbedFooter

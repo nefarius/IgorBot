@@ -1,7 +1,6 @@
 ﻿#nullable enable
-using System.Diagnostics.CodeAnalysis;
 
-using Microsoft.CodeAnalysis.CSharp.Syntax;
+using System.Diagnostics.CodeAnalysis;
 
 using MongoDB.Bson.Serialization.Attributes;
 

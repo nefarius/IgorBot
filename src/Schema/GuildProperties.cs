@@ -21,14 +21,6 @@ public class GuildProperties : IEntity
     public ulong ApplicationChannels { get; set; } = 1;
 
     [SuppressMessage("ReSharper", "InconsistentNaming")]
-    public string GenerateNewID()
-    {
-        return $"{GuildId}";
-    }
-
-    public bool HasDefaultID() => string.IsNullOrEmpty(ID);
-
-    [SuppressMessage("ReSharper", "InconsistentNaming")]
     [BsonId]
     [SuppressMessage("ReSharper", "UnusedMember.Global")]
     public string ID { get; set; }
@@ -36,5 +28,16 @@ public class GuildProperties : IEntity
     object IEntity.GenerateNewID()
     {
         return GenerateNewID();
+    }
+
+    [SuppressMessage("ReSharper", "InconsistentNaming")]
+    public string GenerateNewID()
+    {
+        return $"{GuildId}";
+    }
+
+    public bool HasDefaultID()
+    {
+        return string.IsNullOrEmpty(ID);
     }
 }

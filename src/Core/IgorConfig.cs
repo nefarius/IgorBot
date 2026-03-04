@@ -92,9 +92,9 @@ internal sealed class GuildConfig
     ///     Optional channel ID for the spambot honeypot feature.
     /// </summary>
     public ulong? HoneypotChannelId { get; set; }
-    
+
     /// <summary>
-    ///     Role members immune to <see cref="HoneypotChannelId"/> actions.
+    ///     Role members immune to <see cref="HoneypotChannelId" /> actions.
     /// </summary>
     public List<ulong> HoneypotExclusionRoleIds { get; set; } = new();
 }

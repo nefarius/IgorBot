@@ -1,4 +1,4 @@
-using DSharpPlus;
+﻿using DSharpPlus;
 using DSharpPlus.Entities;
 using DSharpPlus.EventArgs;
 using DSharpPlus.Exceptions;
@@ -81,7 +81,7 @@ internal partial class ApplicationWorkflow(
 
                         if (dbMember is null)
                         {
-                            dbMember = (await db.Find<GuildMember>().OneAsync(dbId));
+                            dbMember = await db.Find<GuildMember>().OneAsync(dbId);
 
                             if (dbMember is null)
                             {

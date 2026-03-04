@@ -86,14 +86,14 @@ internal sealed class StrangerApplicationEmbed : IEntity
     [SuppressMessage("ReSharper", "InconsistentNaming")]
     public string ID { get; set; }
 
-    public bool HasDefaultID()
-    {
-        return string.IsNullOrEmpty(ID);
-    }
-
     object IEntity.GenerateNewID()
     {
         return GenerateNewID();
+    }
+
+    public bool HasDefaultID()
+    {
+        return string.IsNullOrEmpty(ID);
     }
 
     [SuppressMessage("ReSharper", "InconsistentNaming")]

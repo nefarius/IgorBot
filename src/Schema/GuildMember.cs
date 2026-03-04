@@ -70,13 +70,21 @@ internal sealed partial class GuildMember : IEntity, INotifyPropertyChanged
         }
     }
 
+    object IEntity.GenerateNewID()
+    {
+        return GenerateNewID();
+    }
+
     [SuppressMessage("ReSharper", "InconsistentNaming")]
     public string GenerateNewID()
     {
         return $"{GuildId}-{MemberId}";
     }
 
-    public bool HasDefaultID() => string.IsNullOrEmpty(ID);
+    public bool HasDefaultID()
+    {
+        return string.IsNullOrEmpty(ID);
+    }
 
     /// <summary>
     ///     Builds an interaction response.
@@ -173,10 +181,5 @@ internal sealed partial class GuildMember : IEntity, INotifyPropertyChanged
     public override string ToString()
     {
         return string.IsNullOrEmpty(Member) ? ID : Member;
-    }
-
-    object IEntity.GenerateNewID()
-    {
-        return GenerateNewID();
     }
 }

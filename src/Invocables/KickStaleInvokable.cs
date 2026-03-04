@@ -43,7 +43,7 @@ internal class KickStaleInvokable(
                     m.Eq(f => f.Application.IsAutoKickEnabled, true) &
                     m.Eq(f => f.Application.QuestionnaireSubmittedAt, null) &
                     m.Eq(f => f.PromotedAt, null) &
-                    m.Eq(f => f.StrangerRoleRemovedAt, null) & 
+                    m.Eq(f => f.StrangerRoleRemovedAt, null) &
                     m.Eq(f => f.FullMemberAt, null) &
                     m.Eq(f => f.AutoKickedAt, null)
                 );

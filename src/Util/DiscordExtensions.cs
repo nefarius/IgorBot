@@ -25,7 +25,7 @@ internal static class DiscordExtensions
     {
         return $"{e.Guild.Id}-{e.Member.Id}";
     }
-    
+
     internal static string ToEntityId(this DiscordMember e)
     {
         return $"{e.Guild.Id}-{e.Id}";
