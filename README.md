@@ -70,20 +70,17 @@ all config lives in MongoDB. You can still add new guilds via `/config setup` in
 
 ### Discord server preparations
 
-- Add a "Lurker" role and set it as `stranger_role` (or `StrangerRoleId` if using appsettings)
-  - This is the role new members receive to be identified. More on that later.
+- Add a "Lurker" role and set it as `stranger_role` (or `StrangerRoleId` if using appsettings)—the role new members receive before completing onboarding.
 - If using Option A (auto-assign): Set `auto_assign_stranger_role` to `true`. The bot needs **Manage Roles** and its
   role must be above the Lurker role in the server's role hierarchy. Enable the **Guild Members** privileged intent in
   the [Discord Developer Portal](https://discord.com/developers/applications) for your bot.
-- Add a "Full Member" role and set it as `member_role` (or `MemberRoleId`)
-  - This is the role that promoted members receive when approved by a moderator
-- Create a category "Newbies" and set it as `application_category` (or `ApplicationCategoryId`)
+- Add a "Full Member" role and set it as `member_role` (or `MemberRoleId`)—the role promoted members receive when approved by a moderator.
+- Create a category (e.g. "Newbies") and set it as `application_category` (or `ApplicationCategoryId`).
 - (Optional) Add one or more moderator role IDs via `moderator_role` or `ApplicationModeratorRoleIds` to give them the
-  power to kick, ban or approve new members
-- Add a **private** channel for bot status messages → `stranger_status_channel` / `StrangerStatusChannelId`
-- Add a **public** channel for welcome messages → `member_welcome_channel` / `MemberWelcomeMessageChannelId`
-
-To be done...
+  power to kick, ban or approve new members.
+- Add a **private** channel for bot status messages → `stranger_status_channel` / `StrangerStatusChannelId`.
+- Add a **public** channel for welcome messages → `member_welcome_channel` / `MemberWelcomeMessageChannelId`.
+- (Optional) Add a **honeypot** channel and set it as `honeypot_channel`—users who post in it are automatically banned (useful for catching bots).
 
 ## How to build
 
