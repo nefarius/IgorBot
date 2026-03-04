@@ -179,14 +179,15 @@ internal sealed class NewMemberHandler(
             {
                 //
                 // Get users attention by adding the welcome message
-                // 
-
+                //
                 await channel.SendMessageAsync(new DiscordMessageBuilder()
                     .WithContent(string.Format(guildConfig.NewbieWelcomeTemplate, guildMember.Mention)));
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Sending welcome message failed");
+                logger.LogError(ex, "Sending welcome message failed, rolling back channel creation");
+                await RollbackChannelCreationAsync(dbMember, channel, guildProperties);
+                return;
             }
 
             try
@@ -195,13 +196,39 @@ internal sealed class NewMemberHandler(
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Creating status message failed");
+                logger.LogError(ex, "Creating status widget failed, rolling back channel creation");
+                await RollbackChannelCreationAsync(dbMember, channel, guildProperties);
+                return;
             }
         }
         finally
         {
             dbMember.IsOnboardingInProgress = false;
             await db.SaveAsync(dbMember);
+        }
+    }
+
+    private async Task RollbackChannelCreationAsync(GuildMember dbMember, DiscordChannel channel, GuildProperties guildProperties)
+    {
+        try
+        {
+            await channel.DeleteAsync();
+        }
+        catch (Exception deleteEx)
+        {
+            logger.LogError(deleteEx, "Failed to delete orphan channel {ChannelId} during rollback", channel.Id);
+        }
+
+        await dbMember.DeleteChannel(db);
+
+        guildProperties.ApplicationChannels--;
+        try
+        {
+            await db.SaveAsync(guildProperties);
+        }
+        catch (Exception rollbackEx)
+        {
+            logger.LogError(rollbackEx, "Failed to roll back ApplicationChannels counter");
         }
     }
 }

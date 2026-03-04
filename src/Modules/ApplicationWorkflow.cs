@@ -50,9 +50,14 @@ internal partial class ApplicationWorkflow(
             logger.LogError(ex, "Failed to parse custom ID");
 
             _ = Task.Run(async () => await args.Interaction.CreateResponseAsync(
-                InteractionResponseType.UpdateMessage,
-                new DiscordInteractionResponseBuilder(
-                    new DiscordMessageBuilder().WithContent($"Exception: {ex.Message}"))));
+                    InteractionResponseType.UpdateMessage,
+                    new DiscordInteractionResponseBuilder(
+                        new DiscordMessageBuilder().WithContent($"Exception: {ex.Message}"))))
+                .ContinueWith(t =>
+                {
+                    if (t.IsFaulted && t.Exception is not null)
+                        logger.LogError(t.Exception.GetBaseException(), "Failed to send parse-error response to interaction");
+                }, TaskContinuationOptions.OnlyOnFaulted);
             return;
         }
 
@@ -158,7 +163,11 @@ internal partial class ApplicationWorkflow(
             {
                 logger.LogError(ex, "Unhandled exception in interaction processing");
             }
-        });
+        }).ContinueWith(t =>
+        {
+            if (t.IsFaulted && t.Exception is not null)
+                logger.LogError(t.Exception.GetBaseException(), "Unhandled exception in component interaction background task");
+        }, TaskContinuationOptions.OnlyOnFaulted);
     }
 
     private async Task HandleStrangerPromote(ComponentInteractionCreateEventArgs args, DiscordClient client,

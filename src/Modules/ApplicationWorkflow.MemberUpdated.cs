@@ -91,7 +91,11 @@ internal partial class ApplicationWorkflow
             }
 
             await ProcessStrangerAssignment(e.Guild, guildConfig, member);
-        });
+        }).ContinueWith(t =>
+        {
+            if (t.IsFaulted && t.Exception is not null)
+                logger.LogError(t.Exception.GetBaseException(), "Unhandled exception in member-updated background task");
+        }, TaskContinuationOptions.OnlyOnFaulted);
     }
 
     /// <summary>

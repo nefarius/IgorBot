@@ -66,25 +66,18 @@ internal class KickStaleInvokable(
 
                 try
                 {
+                    DiscordMember member = await guild.GetMemberAsync(guildMember.MemberId);
+
+                    await member.RemoveAsync("Member removed due to idle timeout");
+
+                    logger.LogWarning("Removed {@Member} due to idle timeout", guildMember);
+
                     guildMember.AutoKickedAt = DateTime.UtcNow;
                     await db.SaveAsync(guildMember);
-
-                    try
-                    {
-                        DiscordMember member = await guild.GetMemberAsync(guildMember.MemberId);
-
-                        await member.RemoveAsync("Member removed due to idle timeout");
-
-                        logger.LogWarning("Removed {@Member} due to idle timeout", guildMember);
-                    }
-                    catch (Exception ex)
-                    {
-                        logger.LogError(ex, "Failed to auto-remove {@Member}", guildMember);
-                    }
                 }
                 catch (Exception ex)
                 {
-                    logger.LogError(ex, "Failed to remove guild member");
+                    logger.LogError(ex, "Failed to auto-remove {MemberId}", guildMember.MemberId);
                 }
             }
         }
