@@ -1,3 +1,5 @@
+using System.Threading.Channels;
+
 using Coravel;
 
 using DSharpPlus;
@@ -15,10 +17,6 @@ using MongoDB.Entities;
 using Nefarius.DSharpPlus.Extensions.Hosting;
 using Nefarius.DSharpPlus.Interactivity.Extensions.Hosting;
 using Nefarius.DSharpPlus.SlashCommands.Extensions.Hosting;
-
-using Rebus.Config;
-using Rebus.Routing.TypeBased;
-using Rebus.Transport.InMem;
 
 using Serilog;
 using Serilog.Core;
@@ -44,18 +42,14 @@ IHostBuilder builder = Host.CreateDefaultBuilder(args)
 
         services.AddSingleton(db);
 
-        // Register handlers 
-        services.AutoRegisterHandlersFromAssemblyOf<NewMemberHandler>();
-
-        // Configure and register Rebus
-        services.AddRebus(configure => configure
-            .Options(o =>
-            {
-                o.SetNumberOfWorkers(1);
-                o.SetMaxParallelism(1);
-            })
-            .Transport(t => t.UseInMemoryTransport(new InMemNetwork(), "NewMembers"))
-            .Routing(r => r.TypeBased().MapAssemblyOf<NewMemberMessage>("NewMembers")));
+        // Onboarding queue for serialized new member processing
+        Channel<NewMemberMessage> onboardingChannel = Channel.CreateUnbounded<NewMemberMessage>();
+        services.AddSingleton(onboardingChannel);
+        services.AddSingleton(onboardingChannel.Reader);
+        services.AddSingleton(onboardingChannel.Writer);
+        services.AddSingleton<IOnboardingQueue, OnboardingQueue>();
+        services.AddSingleton<NewMemberHandler>();
+        services.AddHostedService<OnboardingQueueProcessor>();
 
         ConfigureLogging(hostContext, services);
 

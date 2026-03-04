@@ -11,18 +11,7 @@ using MongoDB.Entities;
 
 using Nefarius.DSharpPlus.Extensions.Hosting;
 
-using Rebus.Handlers;
-
 namespace IgorBot.Handlers;
-
-internal sealed class NewMemberMessage
-{
-    public GuildProperties GuildProperties { get; init; }
-
-    public GuildConfig GuildConfig { get; init; }
-
-    public string MemberEntryId { get; init; }
-}
 
 /// <summary>
 ///     Handles new stranger appeared workflow.
@@ -32,9 +21,8 @@ internal sealed class NewMemberHandler(
     DB db,
     IDiscordClientService clientService,
     ILogger<NewMemberHandler> logger)
-    : IHandleMessages<NewMemberMessage>
 {
-    public async Task Handle(NewMemberMessage message)
+    public async Task ProcessAsync(NewMemberMessage message)
     {
         logger.LogInformation("Processing new member workflow");
 

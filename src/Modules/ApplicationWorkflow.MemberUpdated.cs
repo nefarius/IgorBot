@@ -1,10 +1,9 @@
-﻿using DSharpPlus;
+using DSharpPlus;
 using DSharpPlus.Entities;
 using DSharpPlus.EventArgs;
 using DSharpPlus.Exceptions;
 
 using IgorBot.Core;
-using IgorBot.Handlers;
 using IgorBot.Schema;
 using IgorBot.Util;
 
@@ -120,7 +119,7 @@ internal partial class ApplicationWorkflow
 
         logger.LogInformation("Submitting new member workflow message");
 
-        await messageBus.SendLocal(message);
+        await onboardingQueue.EnqueueAsync(message);
     }
 
     /// <summary>

@@ -1,10 +1,11 @@
-﻿using DSharpPlus;
+using DSharpPlus;
 using DSharpPlus.Entities;
 using DSharpPlus.EventArgs;
 using DSharpPlus.Exceptions;
 
 using IgorBot.Core;
 using IgorBot.Schema;
+using IgorBot.Services;
 
 using JetBrains.Annotations;
 
@@ -13,8 +14,6 @@ using Microsoft.Extensions.Options;
 using MongoDB.Entities;
 
 using Nefarius.DSharpPlus.Extensions.Hosting.Events;
-
-using Rebus.Bus;
 
 namespace IgorBot.Modules;
 
@@ -27,7 +26,7 @@ internal partial class ApplicationWorkflow(
     DB db,
     ILogger<ApplicationWorkflow> logger,
     IOptionsMonitor<IgorConfig> config,
-    IBus messageBus)
+    IOnboardingQueue onboardingQueue)
     :
         IDiscordGuildMemberAddedEventSubscriber,
         IDiscordGuildMemberUpdatedEventSubscriber,

@@ -70,4 +70,3 @@ docker build --platform linux/amd64 --push -t containinger/igor-bot .
 - [MongoDB.Entities](https://mongodb-entities.com/)
 - [Coravel](https://docs.coravel.net/)
 - [MongoDB](https://www.mongodb.com/)
-- [Rebus](https://github.com/rebus-org/Rebus)
