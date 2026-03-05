@@ -15,11 +15,6 @@ joins of accounts that sit idle—only to eventually post spam and scam links. A
 way to separate humans from bots, and it helps identify new members who genuinely care about joining for a cause rather
 than those who simply found a link.
 
-## Disclaimer
-
-I am using it successfully for a couple of years on my community servers now, however especially configuration
-simplification has missing features. You have been warned.
-
 ## Prerequisites
 
 - **Option A**: Enable `AutoAssignStrangerRoleOnJoin` in your guild config so Igor assigns the "Lurker" role to new
