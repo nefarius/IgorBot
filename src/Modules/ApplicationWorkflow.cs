@@ -194,17 +194,33 @@ internal partial class ApplicationWorkflow(
         GuildMember entry,
         DiscordMember member, GuildConfig guildConfig)
     {
+        DiscordRole strangerRole = args.Guild.GetRole(guildConfig.StrangerRoleId);
+        DiscordRole memberRole = args.Guild.GetRole(guildConfig.MemberRoleId);
+
+        // Perform Discord mutations before persisting so the DB is only updated
+        // when both role operations have actually succeeded.
+        await member.GrantRoleAsync(memberRole);
+
+        try
+        {
+            await member.RevokeRoleAsync(strangerRole);
+        }
+        catch (Exception ex)
+        {
+            // Member role was already granted; log and surface the error so the
+            // moderator can manually revoke the stranger role.
+            logger.LogError(ex, "RevokeRoleAsync failed for {Member} after GrantRoleAsync succeeded; " +
+                                "member role has been granted but stranger role was not removed", member);
+            throw;
+        }
+
+        // Both Discord mutations succeeded — persist the promotion.
+        // Note: GuildMemberUpdated also calls TransitionToAsync(FullMember) when the
+        // role-add event fires; the guard in TransitionToAsync makes that a no-op here.
         await entry.TransitionToAsync(db, MemberStatus.FullMember, actorId: args.User.Id);
 
         logger.LogInformation("{User} promoted {Member}",
             args.User, member);
-
-        DiscordRole strangerRole = args.Guild.GetRole(guildConfig.StrangerRoleId);
-        DiscordRole memberRole = args.Guild.GetRole(guildConfig.MemberRoleId);
-
-        await member.GrantRoleAsync(memberRole);
-
-        await member.RevokeRoleAsync(strangerRole);
 
         await entry.RespondToInteraction(args, client);
 
@@ -228,10 +244,24 @@ internal partial class ApplicationWorkflow(
         logger.LogInformation("{User} banned {Member}",
             args.User, member);
 
-        await member.BanAsync();
-
+        // Pre-mark in DB so that the GuildMemberRemoved event that fires immediately
+        // after BanAsync sees the correct terminal status even if this process restarts.
+        MemberStatus previousStatus = entry.Status;
         await entry.TransitionToAsync(db, MemberStatus.BannedByModerator,
             reason: args.User.ToString(), actorId: args.User.Id);
+
+        try
+        {
+            await member.BanAsync();
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "BanAsync failed for {Member}, rolling back status to {Previous}",
+                member, previousStatus);
+            await entry.TransitionToAsync(db, previousStatus,
+                reason: $"rollback after failed ban by {args.User}", actorId: args.User.Id);
+            throw;
+        }
 
         await entry.RespondToInteraction(args, client);
     }
@@ -243,10 +273,24 @@ internal partial class ApplicationWorkflow(
         logger.LogInformation("{User} kicked {Member}",
             args.User, member);
 
-        await member.RemoveAsync();
-
+        // Pre-mark in DB so that the GuildMemberRemoved event that fires immediately
+        // after RemoveAsync sees the correct terminal status even if this process restarts.
+        MemberStatus previousStatus = entry.Status;
         await entry.TransitionToAsync(db, MemberStatus.KickedByModerator,
             reason: args.User.ToString(), actorId: args.User.Id);
+
+        try
+        {
+            await member.RemoveAsync();
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "RemoveAsync failed for {Member}, rolling back status to {Previous}",
+                member, previousStatus);
+            await entry.TransitionToAsync(db, previousStatus,
+                reason: $"rollback after failed kick by {args.User}", actorId: args.User.Id);
+            throw;
+        }
 
         await entry.RespondToInteraction(args, client);
     }
