@@ -41,10 +41,13 @@ internal class KickStaleInvokable(
                 continue;
             }
 
-            // Query for members that are in the Onboarding (or QuestionnaireSubmitted) state,
-            // have auto-kick enabled, and whose application window has expired.
-            // The Status filter is the canonical gating condition; the legacy timestamp
-            // filters serve as a fallback for un-migrated documents (Status == Unknown).
+            // Query for members that are in the Onboarding state, have auto-kick enabled,
+            // and whose application window has expired.
+            // QuestionnaireSubmittedAt == null is a hard guard: members in the
+            // QuestionnaireSubmitted status always have a non-null QuestionnaireSubmittedAt
+            // and are therefore excluded from this query.
+            // For un-migrated documents (Status == Unknown) the legacy timestamp fields
+            // (PromotedAt, StrangerRoleRemovedAt, FullMemberAt) serve as a fallback gate.
             List<GuildMember> staleMembers = await db.Find<GuildMember>()
                 .ManyAsync(m =>
                     m.Lt(f => f.Application.CreatedAt, DateTime.UtcNow.Add(-config1.IdleKickTimeSpan!.Value)) &

@@ -211,16 +211,40 @@ internal sealed class NewMemberHandler(
                 return;
             }
 
+            try
+            {
+                await dbMember.CreateApplicationWidget(db, client, guild, strangerStatusChannel);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Creating status widget failed, rolling back channel creation");
+                await RollbackChannelCreationAsync(dbMember, channel, guildProperties);
+                return;
+            }
+
+            try
+            {
+                await dbMember.TransitionToAsync(db, MemberStatus.Onboarding);
+            }
+            catch (Exception ex)
+            {
+                // Widget was created successfully but the status transition failed.
+                // Clean up the widget (Discord message + DB entity) before rolling back
+                // the channel so no orphaned moderator panel is left behind.
+                logger.LogError(ex,
+                    "TransitionToAsync failed after widget creation, rolling back widget and channel");
                 try
                 {
-                    await dbMember.CreateApplicationWidget(db, client, guild, strangerStatusChannel);
-                    await dbMember.TransitionToAsync(db, MemberStatus.Onboarding);
+                    await dbMember.DeleteApplicationWidget(db, client);
                 }
-                catch (Exception ex)
+                catch (Exception widgetEx)
                 {
-                    logger.LogError(ex, "Creating status widget failed, rolling back channel creation");
-                    await RollbackChannelCreationAsync(dbMember, channel, guildProperties);
+                    logger.LogError(widgetEx,
+                        "Failed to delete orphan application widget during rollback");
                 }
+
+                await RollbackChannelCreationAsync(dbMember, channel, guildProperties);
+            }
         }
         finally
         {
