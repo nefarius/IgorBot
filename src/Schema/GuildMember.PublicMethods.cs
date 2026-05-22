@@ -35,14 +35,27 @@ internal sealed partial class GuildMember
         };
 
         // Build an atomic updateOne: $set the canonical fields + $push the history event.
+        // All legacy timestamp/flag fields are cleared first so that rollbacks (e.g.
+        // BannedByModerator → Onboarding) never leave stale values like BannedAt or
+        // RemovedByModeration=true in the document. Each switch branch then re-sets only
+        // the fields that belong to the target status.
         Update<GuildMember> update = db.Update<GuildMember>()
             .MatchID(ID)
             .Modify(m => m.Status, next)
             .Modify(m => m.StatusChangedAt, (DateTime?)now)
             .Modify(m => m.StatusReason, reason)
-            .Modify(b => b.Push(m => m.StatusHistory, evt));
+            .Modify(b => b.Push(m => m.StatusHistory, evt))
+            // Clear all legacy terminal fields unconditionally.
+            .Modify(m => m.LeftAt, (DateTime?)null)
+            .Modify(m => m.KickedAt, (DateTime?)null)
+            .Modify(m => m.BannedAt, (DateTime?)null)
+            .Modify(m => m.AutoKickedAt, (DateTime?)null)
+            .Modify(m => m.PromotedAt, (DateTime?)null)
+            .Modify(m => m.FullMemberAt, (DateTime?)null)
+            .Modify(m => m.StrangerRoleRemovedAt, (DateTime?)null)
+            .Modify(m => m.RemovedByModeration, false);
 
-        // Mirror legacy timestamp fields so existing queries continue to work.
+        // Re-set only the fields that apply to the target status.
         switch (next)
         {
             case MemberStatus.LeftVoluntarily:
@@ -78,6 +91,16 @@ internal sealed partial class GuildMember
 
         // Mirror to in-memory state only after the DB write succeeded so the
         // in-memory object never gets ahead of what is persisted.
+        // Clear all legacy fields first, matching the DB update above.
+        LeftAt = null;
+        KickedAt = null;
+        BannedAt = null;
+        AutoKickedAt = null;
+        PromotedAt = null;
+        FullMemberAt = null;
+        StrangerRoleRemovedAt = null;
+        RemovedByModeration = false;
+
         StatusHistory.Add(evt);
         Status = next;
         StatusChangedAt = now;
