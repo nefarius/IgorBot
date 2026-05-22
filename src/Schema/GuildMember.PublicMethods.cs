@@ -11,6 +11,10 @@ internal sealed partial class GuildMember
     /// <summary>
     ///     Transitions this member to a new <see cref="MemberStatus" />, recording a history event,
     ///     mirroring to the legacy timestamp fields for backwards compatibility, and persisting.
+    ///     The canonical-state fields and the history-array append are issued as a single atomic
+    ///     MongoDB <c>updateOne</c> ($set + $push) so no intermediate state is visible to other
+    ///     readers and a concurrent append to StatusHistory cannot be lost by a full-document
+    ///     replace racing with this call.
     /// </summary>
     public async Task TransitionToAsync(
         DB db,
@@ -23,53 +27,108 @@ internal sealed partial class GuildMember
             return;
         }
 
-        StatusHistory.Add(new MemberStatusEvent
+        DateTime now = DateTime.UtcNow;
+
+        MemberStatusEvent evt = new()
         {
-            From = Status, To = next, At = DateTime.UtcNow, Reason = reason, ActorId = actorId
-        });
+            From = Status, To = next, At = now, Reason = reason, ActorId = actorId
+        };
 
-        Status = next;
-        StatusChangedAt = DateTime.UtcNow;
-        StatusReason = reason;
+        // Build an atomic updateOne: $set the canonical fields + $push the history event.
+        Update<GuildMember> update = db.Update<GuildMember>()
+            .MatchID(ID)
+            .Modify(m => m.Status, next)
+            .Modify(m => m.StatusChangedAt, (DateTime?)now)
+            .Modify(m => m.StatusReason, reason)
+            .Modify(b => b.Push(m => m.StatusHistory, evt));
 
-        // Mirror into legacy timestamp fields so old queries and the widget
-        // continue to work during the migration window.
+        // Mirror legacy timestamp fields so existing queries continue to work.
         switch (next)
         {
             case MemberStatus.LeftVoluntarily:
-                LeftAt = StatusChangedAt;
+                update = update.Modify(m => m.LeftAt, (DateTime?)now);
                 break;
             case MemberStatus.KickedByModerator:
             case MemberStatus.KickedExternally:
-                KickedAt = StatusChangedAt;
+                update = update
+                    .Modify(m => m.KickedAt, (DateTime?)now)
+                    .Modify(m => m.RemovedByModeration, true);
+                break;
+            case MemberStatus.BannedByModerator:
+            case MemberStatus.BannedByHoneypot:
+            case MemberStatus.BannedExternally:
+                update = update
+                    .Modify(m => m.BannedAt, (DateTime?)now)
+                    .Modify(m => m.RemovedByModeration, true);
+                break;
+            case MemberStatus.AutoKicked:
+                update = update.Modify(m => m.AutoKickedAt, (DateTime?)now);
+                break;
+            case MemberStatus.FullMember:
+                update = update
+                    .Modify(m => m.PromotedAt, (DateTime?)now)
+                    .Modify(m => m.FullMemberAt, (DateTime?)now);
+                break;
+            case MemberStatus.StrangerRoleRemoved:
+                update = update.Modify(m => m.StrangerRoleRemovedAt, (DateTime?)now);
+                break;
+        }
+
+        await update.ExecuteAsync();
+
+        // Mirror to in-memory state only after the DB write succeeded so the
+        // in-memory object never gets ahead of what is persisted.
+        StatusHistory.Add(evt);
+        Status = next;
+        StatusChangedAt = now;
+        StatusReason = reason;
+
+        switch (next)
+        {
+            case MemberStatus.LeftVoluntarily:
+                LeftAt = now;
+                break;
+            case MemberStatus.KickedByModerator:
+            case MemberStatus.KickedExternally:
+                KickedAt = now;
                 RemovedByModeration = true;
                 break;
             case MemberStatus.BannedByModerator:
             case MemberStatus.BannedByHoneypot:
             case MemberStatus.BannedExternally:
-                BannedAt = StatusChangedAt;
+                BannedAt = now;
                 RemovedByModeration = true;
                 break;
             case MemberStatus.AutoKicked:
-                AutoKickedAt = StatusChangedAt;
+                AutoKickedAt = now;
                 break;
             case MemberStatus.FullMember:
-                PromotedAt = StatusChangedAt;
-                FullMemberAt = StatusChangedAt;
+                PromotedAt = now;
+                FullMemberAt = now;
                 break;
             case MemberStatus.StrangerRoleRemoved:
-                StrangerRoleRemovedAt = StatusChangedAt;
+                StrangerRoleRemovedAt = now;
                 break;
         }
-
-        await db.SaveAsync(this);
     }
 
     /// <summary>
     ///     Resets certain properties to their defaults. Call when a member (re-)joined.
+    ///     Appends a rejoin event to <see cref="StatusHistory" /> in memory; the caller is
+    ///     responsible for persisting via <c>db.SaveAsync</c>.
     /// </summary>
     public void Reset()
     {
+        // Record the rejoin before wiping the lifecycle fields so the history
+        // shows what state the member was in when they came back.
+        StatusHistory.Add(new MemberStatusEvent
+        {
+            From = Status,
+            To = MemberStatus.New,
+            At = DateTime.UtcNow,
+            Reason = "rejoin"
+        });
+
         LeftAt = null;
         KickedAt = null;
         BannedAt = null;
@@ -79,7 +138,7 @@ internal sealed partial class GuildMember
         StrangerRoleRemovedAt = null;
         RemovedByModeration = false;
 
-        // Reset canonical state to New for the next lifecycle pass
+        // Reset canonical state to New for the next lifecycle pass.
         Status = MemberStatus.New;
         StatusChangedAt = DateTime.UtcNow;
         StatusReason = null;
