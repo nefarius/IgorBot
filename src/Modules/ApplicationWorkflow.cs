@@ -258,8 +258,18 @@ internal partial class ApplicationWorkflow(
         {
             logger.LogError(ex, "BanAsync failed for {Member}, rolling back status to {Previous}",
                 member, previousStatus);
-            await entry.TransitionToAsync(db, previousStatus,
-                reason: $"rollback after failed ban by {args.User}", actorId: args.User.Id);
+            try
+            {
+                await entry.TransitionToAsync(db, previousStatus,
+                    reason: $"rollback after failed ban by {args.User}", actorId: args.User.Id);
+            }
+            catch (Exception rollbackEx)
+            {
+                logger.LogError(rollbackEx,
+                    "Rollback to {Previous} failed for {Member} after BanAsync failure (actor: {User})",
+                    previousStatus, member, args.User);
+            }
+
             throw;
         }
 
@@ -287,8 +297,18 @@ internal partial class ApplicationWorkflow(
         {
             logger.LogError(ex, "RemoveAsync failed for {Member}, rolling back status to {Previous}",
                 member, previousStatus);
-            await entry.TransitionToAsync(db, previousStatus,
-                reason: $"rollback after failed kick by {args.User}", actorId: args.User.Id);
+            try
+            {
+                await entry.TransitionToAsync(db, previousStatus,
+                    reason: $"rollback after failed kick by {args.User}", actorId: args.User.Id);
+            }
+            catch (Exception rollbackEx)
+            {
+                logger.LogError(rollbackEx,
+                    "Rollback to {Previous} failed for {Member} after RemoveAsync failure (actor: {User})",
+                    previousStatus, member, args.User);
+            }
+
             throw;
         }
 

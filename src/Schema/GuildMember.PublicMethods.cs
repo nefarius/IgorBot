@@ -119,14 +119,17 @@ internal sealed partial class GuildMember
     /// </summary>
     public void Reset()
     {
+        const string rejoinReason = "rejoin";
+        DateTime now = DateTime.UtcNow;
+
         // Record the rejoin before wiping the lifecycle fields so the history
         // shows what state the member was in when they came back.
         StatusHistory.Add(new MemberStatusEvent
         {
             From = Status,
             To = MemberStatus.New,
-            At = DateTime.UtcNow,
-            Reason = "rejoin"
+            At = now,
+            Reason = rejoinReason
         });
 
         LeftAt = null;
@@ -138,10 +141,10 @@ internal sealed partial class GuildMember
         StrangerRoleRemovedAt = null;
         RemovedByModeration = false;
 
-        // Reset canonical state to New for the next lifecycle pass.
+        // Canonical fields use the same timestamp and reason as the history entry.
         Status = MemberStatus.New;
-        StatusChangedAt = DateTime.UtcNow;
-        StatusReason = null;
+        StatusChangedAt = now;
+        StatusReason = rejoinReason;
 
         Application = null;
         Channel = null;
