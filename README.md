@@ -10,17 +10,13 @@ Advanced Discord bot to automate new member onboarding.
 
 ## Motivation
 
-Discord's built-in anti-spam and moderation tools at the time of creation were insufficient to protect against mass
-joins of accounts that sit idle—only to eventually post spam and scam links. An onboarding questionnaire is an effective
-way to separate humans from bots, and it helps identify new members who genuinely care about joining for a cause rather
-than those who simply found a link.
+Discord's built-in anti-spam tools were insufficient to protect against mass joins of idle accounts that later post spam and scam links. An onboarding questionnaire separates humans from bots and filters out members who don't genuinely care about the community.
 
 ## Prerequisites
 
-- **Option A**: Enable `AutoAssignStrangerRoleOnJoin` in your guild config so Igor assigns the "Lurker" role to new
-  members automatically. The bot needs the Manage Roles permission and its role must be above the Lurker role.
-- **Option B**: Use another bot (Carl, MEE6, ...) that assigns the "Lurker" role to new members.
-- **Option C**: Assign the "Lurker" role to new members manually to trigger onboarding.
+- **Option A**: Enable `auto_assign_stranger_role` in your guild config so Igor assigns the stranger role automatically. The bot needs **Manage Roles** and its role must be above the stranger role in the hierarchy.
+- **Option B**: Use another bot (Carl, MEE6, …) to assign the stranger role on join.
+- **Option C**: Assign the stranger role to new members manually.
 
 ## Setup
 
@@ -43,24 +39,20 @@ Embed Links, Read Message History, Manage Messages.
 
 ### Running the bot
 
-It's recommended to use Docker and docker-compose to bring up the bot and its companion services.
+It's recommended to use Docker and Docker Compose v2 to bring up the bot and its companion services.
 
 - Copy `docker/docker-compose.example.yml` as `docker-compose.yml` to a directory of your choice and add your bot token
-  in there
-- Copy `docker/appsettings.Production.example.json` as `appsettings.Production.json` into the same directory as the
-  compose file
-- Run `docker-compose pull` to fetch the container images
-- Run `docker-compose up -d` to bring the bot and database services online
+- Copy `docker/appsettings.Production.example.json` as `appsettings.Production.json` into the same directory
+- Run `docker compose pull` to fetch the container images
+- Run `docker compose up -d` to bring the bot and database services online
 
 ## Configuration
 
-Configuration is **runtime-configurable** via Discord slash commands—no restart required. Guild config lives in MongoDB
-and can be migrated from `appsettings` on first run (see below).
+Configuration is **runtime-configurable** via Discord slash commands—no restart required. Guild config lives in MongoDB and can be migrated from `appsettings` on first run (see below).
 
 ### Quick start with `/config setup`
 
-After inviting the bot to your server, run `/config setup` in Discord ( Administrator permission required). This prompts
-you for:
+After inviting the bot to your server, run `/config setup` in Discord (Administrator permission required). This prompts you for:
 
 | Option                       | Description                                                    | Default                         |
 |------------------------------|----------------------------------------------------------------|---------------------------------|
@@ -76,7 +68,7 @@ you for:
 | `idle_kick_minutes`          | Minutes before kicking inactive strangers (`0` = disabled)     | `0`                             |
 | `honeypot_channel`           | (Optional) Channel that bans users who post in it              | —                               |
 | `moderator_role`             | (Optional) Role that can see and interact with newbie channels | —                               |
-| `enable_onboarding_workflow`  | Run onboarding workflow when member gets stranger role        | `true`                          |
+| `enable_onboarding_workflow` | Run onboarding workflow when member gets stranger role         | `true`                          |
 
 Use `/config view` to inspect the current configuration and `/config set` to update individual options. Available
 options include: stranger role, member role, application category, stranger status channel, member welcome channel,
@@ -89,8 +81,8 @@ For servers that only need the honeypot feature (no onboarding workflow), run `/
 
 | Option                    | Description                            |
 |---------------------------|----------------------------------------|
-| `honeypot_channel`        | Channel that bans users who post in it |
-| `honeypot_exclusion_role` | (Optional) Role exempt from honeypot ban |
+| `honeypot_channel`         | Channel that bans users who post in it    |
+| `honeypot_exclusion_role`  | (Optional) Role exempt from honeypot ban |
 
 This creates a minimal config. Add more exclusion roles later via `/config set` → **Honeypot exclusion role (add)** or remove them with **Honeypot exclusion role (remove)**.
 
@@ -106,32 +98,31 @@ Individual features can be enabled or disabled per guild:
 
 ### Optional: Initial config via appsettings
 
-If `Bot:Guilds` is present in `appsettings.json` or `appsettings.Production.json`, guild configs are migrated once to
-MongoDB on startup. (.NET uses colon-separated key paths for nested config, e.g., `Bot:Guilds` in appsettings.)
-Afterwards
-all config lives in MongoDB. You can still add new guilds via `/config setup` in Discord.
+If `Bot:Guilds` is present in `appsettings.json` or `appsettings.Production.json`, guild configs are migrated once to MongoDB on startup; afterwards all configuration lives in MongoDB. (.NET uses colon-separated key paths for nested config, e.g. `Bot:Guilds`.) You can still add new guilds later via `/config setup` in Discord.
 
 ### Discord server preparations
 
-- Add a "Lurker" role and set it as `stranger_role` (or `StrangerRoleId` if using appsettings)—the role new members
-  receive before completing onboarding.
-- If using Option A (auto-assign): Set `auto_assign_stranger_role` to `true`. The bot needs **Manage Roles** and its
-  role must be above the Lurker role in the server's role hierarchy. Enable the **Guild Members** privileged intent in
-  the [Discord Developer Portal](https://discord.com/developers/applications) for your bot.
-- Add a "Full Member" role and set it as `member_role` (or `MemberRoleId`)—the role promoted members receive when
-  approved by a moderator.
-- Create a category (e.g. "Newbies") and set it as `application_category` (or `ApplicationCategoryId`).
-- (Optional) Add one or more moderator role IDs via `moderator_role` or `ApplicationModeratorRoleIds` to give them the
-  power to kick, ban or approve new members.
-- Add a **private** channel for bot status messages → `stranger_status_channel` / `StrangerStatusChannelId`.
-- Add a **public** channel for welcome messages → `member_welcome_channel` / `MemberWelcomeMessageChannelId`.
-- (Optional) Add a **honeypot** channel and set it as `honeypot_channel`—users who post in it are automatically banned
-  (useful for catching bots). For honeypot-only servers, use `/config setup-honeypot` instead of full setup.
+All items below correspond to `/config setup` parameters (appsettings equivalents in parentheses).
+
+- Add a stranger role (e.g. "Lurker") → `stranger_role` (`StrangerRoleId`)
+- Add a member role (e.g. "Full Member") → `member_role` (`MemberRoleId`)
+- Create a category (e.g. "Newbies") → `application_category` (`ApplicationCategoryId`)
+- Add a **private** status channel → `stranger_status_channel` (`StrangerStatusChannelId`)
+- Add a **public** welcome channel → `member_welcome_channel` (`MemberWelcomeMessageChannelId`)
+- (Optional) Add a moderator role → `moderator_role` (`ApplicationModeratorRoleIds`)
+- (Optional) Add a **honeypot** channel → `honeypot_channel`—users who post in it are automatically banned. For honeypot-only servers, use `/config setup-honeypot` instead of full setup.
+- If using Option A (auto-assign): the bot needs **Manage Roles** and its role must be above the stranger role. Enable the **Guild Members** privileged intent in the [Discord Developer Portal](https://discord.com/developers/applications).
 
 ## How to build
 
 ```bash
-docker build --platform linux/amd64 --push -t containinger/igor-bot .
+docker build -t igor-bot:local .
+```
+
+Maintainers publishing the official image use:
+
+```bash
+docker buildx build --platform linux/amd64 --push -t containinger/igor-bot:latest .
 ```
 
 ## 3rd party credits
