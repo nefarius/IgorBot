@@ -211,15 +211,16 @@ internal sealed class NewMemberHandler(
                 return;
             }
 
-            try
-            {
-                await dbMember.CreateApplicationWidget(db, client, guild, strangerStatusChannel);
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Creating status widget failed, rolling back channel creation");
-                await RollbackChannelCreationAsync(dbMember, channel, guildProperties);
-            }
+                try
+                {
+                    await dbMember.CreateApplicationWidget(db, client, guild, strangerStatusChannel);
+                    await dbMember.TransitionToAsync(db, MemberStatus.Onboarding);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Creating status widget failed, rolling back channel creation");
+                    await RollbackChannelCreationAsync(dbMember, channel, guildProperties);
+                }
         }
         finally
         {

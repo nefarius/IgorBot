@@ -35,18 +35,29 @@ internal partial class ApplicationWorkflow
             return;
         }
 
-        if (member.Channel is null)
-        {
-            logger.LogInformation("{Member} has no newbie channel", e.Member);
-            return;
-        }
-
         _ = Task.Run(async () =>
         {
-            member.LeftAt = DateTime.UtcNow;
-            await db.SaveAsync(member);
+            // Record departure. Only transition to LeftVoluntarily if no more-specific
+            // terminal status (mod kick, ban, auto-kick, honeypot) has already been set.
+            if (member.Status is MemberStatus.Unknown
+                || member.Status is MemberStatus.New
+                || member.Status is MemberStatus.Onboarding
+                || member.Status is MemberStatus.QuestionnaireSubmitted
+                || member.Status is MemberStatus.FullMember
+                || member.Status is MemberStatus.StrangerRoleRemoved)
+            {
+                await member.TransitionToAsync(db, MemberStatus.LeftVoluntarily);
+            }
+            else
+            {
+                // Terminal state was already set (e.g. by honeypot, KickStaleInvokable, or a
+                // panel action that fired before the Discord event arrived). Just stamp LeftAt
+                // for legacy queries without overwriting the canonical status.
+                member.LeftAt = DateTime.UtcNow;
+                await db.SaveAsync(member);
+            }
 
-            // Remove newbie channel
+            // Remove newbie channel (only strangers in onboarding have one)
             NewbieChannel newbieChannel = member.Channel;
 
             if (newbieChannel is not null)
@@ -76,6 +87,10 @@ internal partial class ApplicationWorkflow
                     if (member.RemovedByModeration)
                     {
                         logger.LogWarning("{Member} left due to moderator action", e.Member);
+
+                        // Refresh the widget so buttons are removed and final state is shown;
+                        // do NOT delete it — mods need to see the panel after the action.
+                        await member.UpdateApplicationWidget(sender);
                         return;
                     }
 
@@ -85,8 +100,6 @@ internal partial class ApplicationWorkflow
                             : "{Member} left by themselves", e.Member);
 
                     await member.DeleteApplicationWidget(db, sender);
-
-                    await member.DeleteApplication(db);
                 }
                 catch (Exception ex)
                 {

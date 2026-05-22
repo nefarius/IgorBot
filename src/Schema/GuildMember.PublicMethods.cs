@@ -9,6 +9,63 @@ namespace IgorBot.Schema;
 internal sealed partial class GuildMember
 {
     /// <summary>
+    ///     Transitions this member to a new <see cref="MemberStatus" />, recording a history event,
+    ///     mirroring to the legacy timestamp fields for backwards compatibility, and persisting.
+    /// </summary>
+    public async Task TransitionToAsync(
+        DB db,
+        MemberStatus next,
+        string? reason = null,
+        ulong? actorId = null)
+    {
+        if (Status == next)
+        {
+            return;
+        }
+
+        StatusHistory.Add(new MemberStatusEvent
+        {
+            From = Status, To = next, At = DateTime.UtcNow, Reason = reason, ActorId = actorId
+        });
+
+        Status = next;
+        StatusChangedAt = DateTime.UtcNow;
+        StatusReason = reason;
+
+        // Mirror into legacy timestamp fields so old queries and the widget
+        // continue to work during the migration window.
+        switch (next)
+        {
+            case MemberStatus.LeftVoluntarily:
+                LeftAt = StatusChangedAt;
+                break;
+            case MemberStatus.KickedByModerator:
+            case MemberStatus.KickedExternally:
+                KickedAt = StatusChangedAt;
+                RemovedByModeration = true;
+                break;
+            case MemberStatus.BannedByModerator:
+            case MemberStatus.BannedByHoneypot:
+            case MemberStatus.BannedExternally:
+                BannedAt = StatusChangedAt;
+                RemovedByModeration = true;
+                break;
+            case MemberStatus.AutoKicked:
+                AutoKickedAt = StatusChangedAt;
+                break;
+            case MemberStatus.FullMember:
+                PromotedAt = StatusChangedAt;
+                FullMemberAt = StatusChangedAt;
+                break;
+            case MemberStatus.StrangerRoleRemoved:
+                StrangerRoleRemovedAt = StatusChangedAt;
+                break;
+        }
+
+        await db.SaveAsync(this);
+    }
+
+    /// <summary>
     ///     Resets certain properties to their defaults. Call when a member (re-)joined.
     /// </summary>
     public void Reset()
@@ -18,7 +75,14 @@ internal sealed partial class GuildMember
         BannedAt = null;
         AutoKickedAt = null;
         PromotedAt = null;
+        FullMemberAt = null;
         StrangerRoleRemovedAt = null;
+        RemovedByModeration = false;
+
+        // Reset canonical state to New for the next lifecycle pass
+        Status = MemberStatus.New;
+        StatusChangedAt = DateTime.UtcNow;
+        StatusReason = null;
 
         Application = null;
         Channel = null;

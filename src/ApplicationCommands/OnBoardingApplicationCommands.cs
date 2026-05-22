@@ -140,6 +140,11 @@ public sealed class OnBoardingApplicationCommands(DB db, IGuildConfigService gui
         }
         catch (UnauthorizedException)
         {
+            // Re-arm auto-kick since we never started the questionnaire
+            application.IsAutoKickEnabled = true;
+            await db.SaveAsync(application);
+            await db.SaveAsync(dbMember);
+
             await ctx.EditResponseAsync(new DiscordWebhookBuilder().AddEmbed(new DiscordEmbedBuilder
             {
                 Title = "Couldn't DM member",
@@ -165,7 +170,8 @@ public sealed class OnBoardingApplicationCommands(DB db, IGuildConfigService gui
         }
 
         //
-        // All validation passed; persist IsAutoKickEnabled and update widget
+        // Disable auto-kick for the duration of the questionnaire so the idle
+        // timer does not fire while the member is actively answering.
         //
         application.IsAutoKickEnabled = false;
         await db.SaveAsync(dbMember.Application);
@@ -222,6 +228,11 @@ public sealed class OnBoardingApplicationCommands(DB db, IGuildConfigService gui
             //
             if (response.TimedOut)
             {
+                // Re-arm auto-kick so the idle timer can still fire
+                application.IsAutoKickEnabled = true;
+                await db.SaveAsync(application);
+                await db.SaveAsync(dbMember);
+
                 string error = $"{ctx.Member.Mention} too slow, your questionnaire has timed out, please try again!";
 
                 if (questionnaire.ConductInPrivate)
@@ -350,6 +361,11 @@ public sealed class OnBoardingApplicationCommands(DB db, IGuildConfigService gui
         #region Application widget logic
 
         application.QuestionnaireSubmittedAt = DateTime.UtcNow;
+
+        // Persist the submission timestamp so the Promote button remains visible
+        // after a bot restart and so the auto-kick query filter stays correct.
+        await db.SaveAsync(application);
+        await dbMember.TransitionToAsync(db, MemberStatus.QuestionnaireSubmitted);
 
         logger.LogInformation("Updating status message {Id}", application.MessageId);
 

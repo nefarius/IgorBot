@@ -36,6 +36,9 @@ IHostBuilder builder = Host.CreateDefaultBuilder(args)
         services.AddSingleton(db);
         GuildConfigMigration.Run(hostContext.Configuration, db);
 
+        bool migrationDryRun = hostContext.Configuration.GetValue<bool>("Bot:Migration:DryRun");
+        GuildMemberStatusMigration.RunAsync(db, migrationDryRun).GetAwaiter().GetResult();
+
         services.AddSingleton<GuildConfigService>();
         services.AddSingleton<IGuildConfigService>(sp =>
             new CachedGuildConfigService(

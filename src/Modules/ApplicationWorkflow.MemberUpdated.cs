@@ -43,8 +43,7 @@ internal partial class ApplicationWorkflow
                 e.RolesAfter.Any(role => role.Id == guildConfig.MemberRoleId))
             {
                 logger.LogInformation("Full member role set for {Member}", e.Member);
-                member.FullMemberAt = DateTime.UtcNow;
-                await db.SaveAsync(member);
+                await member.TransitionToAsync(db, MemberStatus.FullMember);
                 return;
             }
 
@@ -151,9 +150,8 @@ internal partial class ApplicationWorkflow
     {
         logger.LogInformation("Stranger role removed for {Member}", member);
 
-        member.StrangerRoleRemovedAt = DateTime.UtcNow;
         member.IsOnboardingInProgress = false;
-        await db.SaveAsync(member);
+        await member.TransitionToAsync(db, MemberStatus.StrangerRoleRemoved);
 
         // Remove channel
         NewbieChannel newbieChannel = member.Channel;

@@ -18,6 +18,7 @@ namespace IgorBot.Modules;
 [DiscordGuildMemberAddedEventSubscriber]
 [DiscordGuildMemberUpdatedEventSubscriber]
 [DiscordGuildMemberRemovedEventSubscriber]
+[DiscordGuildBanAddedEventSubscriber]
 [DiscordComponentInteractionCreatedEventSubscriber]
 [UsedImplicitly]
 internal partial class ApplicationWorkflow(
@@ -29,6 +30,7 @@ internal partial class ApplicationWorkflow(
         IDiscordGuildMemberAddedEventSubscriber,
         IDiscordGuildMemberUpdatedEventSubscriber,
         IDiscordGuildMemberRemovedEventSubscriber,
+        IDiscordGuildBanAddedEventSubscriber,
         IDiscordComponentInteractionCreatedEventSubscriber
 {
     public async Task DiscordOnComponentInteractionCreated(DiscordClient sender,
@@ -192,9 +194,7 @@ internal partial class ApplicationWorkflow(
         GuildMember entry,
         DiscordMember member, GuildConfig guildConfig)
     {
-        entry.PromotedAt = DateTime.UtcNow;
-
-        await db.SaveAsync(entry);
+        await entry.TransitionToAsync(db, MemberStatus.FullMember, actorId: args.User.Id);
 
         logger.LogInformation("{User} promoted {Member}",
             args.User, member);
@@ -230,10 +230,8 @@ internal partial class ApplicationWorkflow(
 
         await member.BanAsync();
 
-        entry.RemovedByModeration = true;
-        entry.BannedAt = DateTime.UtcNow;
-
-        await db.SaveAsync(entry);
+        await entry.TransitionToAsync(db, MemberStatus.BannedByModerator,
+            reason: args.User.ToString(), actorId: args.User.Id);
 
         await entry.RespondToInteraction(args, client);
     }
@@ -247,10 +245,8 @@ internal partial class ApplicationWorkflow(
 
         await member.RemoveAsync();
 
-        entry.RemovedByModeration = true;
-        entry.KickedAt = DateTime.UtcNow;
-
-        await db.SaveAsync(entry);
+        await entry.TransitionToAsync(db, MemberStatus.KickedByModerator,
+            reason: args.User.ToString(), actorId: args.User.Id);
 
         await entry.RespondToInteraction(args, client);
     }
