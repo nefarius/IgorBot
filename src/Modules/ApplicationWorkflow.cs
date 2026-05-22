@@ -73,7 +73,9 @@ internal partial class ApplicationWorkflow(
 
         logger.LogDebug("Got {Collection} - {Id} with action {Action}", category, dbId, action);
 
-        await args.Interaction.CreateResponseAsync(InteractionResponseType.DeferredMessageUpdate);
+        await args.Interaction.CreateResponseAsync(
+            InteractionResponseType.UpdateMessage,
+            BuildBusyMirror(args.Message));
 
         _ = Task.Run(async () =>
         {
@@ -165,6 +167,16 @@ internal partial class ApplicationWorkflow(
             catch (Exception ex)
             {
                 logger.LogError(ex, "Unhandled exception in interaction processing");
+                try
+                {
+                    await args.Interaction.EditOriginalResponseAsync(
+                        BuildRestoredWidget(args.Message)
+                            .WithContent("An error occurred while processing the action. Please try again."));
+                }
+                catch (Exception editEx)
+                {
+                    logger.LogError(editEx, "Failed to restore widget after interaction error");
+                }
             }
         }).ContinueWith(t =>
         {
@@ -256,5 +268,73 @@ internal partial class ApplicationWorkflow(
         await db.SaveAsync(entry);
 
         await entry.RespondToInteraction(args, client);
+    }
+
+    /// <summary>
+    ///     Builds an immediate interaction response that mirrors the current message with all buttons disabled,
+    ///     providing instant visual feedback while the action runs in the background.
+    /// </summary>
+    private static DiscordInteractionResponseBuilder BuildBusyMirror(DiscordMessage message)
+    {
+        DiscordInteractionResponseBuilder builder = new();
+
+        foreach (DiscordEmbed embed in message.Embeds)
+        {
+            builder.AddEmbed(embed);
+        }
+
+        foreach (DiscordActionRowComponent row in message.Components)
+        {
+            List<DiscordComponent> cloned = new();
+            foreach (DiscordComponent component in row.Components)
+            {
+                if (component is DiscordButtonComponent button)
+                {
+                    cloned.Add(new DiscordButtonComponent(button).Disable());
+                }
+                else
+                {
+                    cloned.Add(component);
+                }
+            }
+
+            builder.AddComponents(cloned);
+        }
+
+        return builder;
+    }
+
+    /// <summary>
+    ///     Builds a webhook edit that restores the original message (with buttons re-enabled) so moderators
+    ///     can retry after an error.
+    /// </summary>
+    private static DiscordWebhookBuilder BuildRestoredWidget(DiscordMessage message)
+    {
+        DiscordWebhookBuilder builder = new();
+
+        foreach (DiscordEmbed embed in message.Embeds)
+        {
+            builder.AddEmbed(embed);
+        }
+
+        foreach (DiscordActionRowComponent row in message.Components)
+        {
+            List<DiscordComponent> cloned = new();
+            foreach (DiscordComponent component in row.Components)
+            {
+                if (component is DiscordButtonComponent button)
+                {
+                    cloned.Add(new DiscordButtonComponent(button).Enable());
+                }
+                else
+                {
+                    cloned.Add(component);
+                }
+            }
+
+            builder.AddComponents(cloned);
+        }
+
+        return builder;
     }
 }
