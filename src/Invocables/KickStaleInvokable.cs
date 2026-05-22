@@ -55,10 +55,7 @@ internal class KickStaleInvokable(
                     m.Eq(f => f.Application.IsAutoKickEnabled, true) &
                     m.Eq(f => f.Application.QuestionnaireSubmittedAt, null) &
                     (
-                        m.In(f => f.Status, new[]
-                        {
-                            MemberStatus.Unknown, MemberStatus.Onboarding
-                        }) |
+                        m.Eq(f => f.Status, MemberStatus.Onboarding) |
                         (
                             m.Eq(f => f.Status, MemberStatus.Unknown) &
                             m.Eq(f => f.PromotedAt, null) &
