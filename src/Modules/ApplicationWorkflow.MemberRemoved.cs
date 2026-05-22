@@ -37,14 +37,11 @@ internal partial class ApplicationWorkflow
 
         _ = Task.Run(async () =>
         {
-            // Record departure. Only transition to LeftVoluntarily if no more-specific
-            // terminal status (mod kick, ban, auto-kick, honeypot) has already been set.
-            if (member.Status is MemberStatus.Unknown
-                || member.Status is MemberStatus.New
-                || member.Status is MemberStatus.Onboarding
-                || member.Status is MemberStatus.QuestionnaireSubmitted
-                || member.Status is MemberStatus.FullMember
-                || member.Status is MemberStatus.StrangerRoleRemoved)
+            // Record departure. Only transition to LeftVoluntarily when no more-specific
+            // terminal cause (mod kick, ban, auto-kick, honeypot) has already been set.
+            // For un-migrated documents (Status == Unknown) the legacy timestamp fields
+            // are the source of truth — check them before overwriting with LeftVoluntarily.
+            if (IsEligibleForVoluntaryLeave(member))
             {
                 await member.TransitionToAsync(db, MemberStatus.LeftVoluntarily);
             }
@@ -115,4 +112,29 @@ internal partial class ApplicationWorkflow
             }
         }, TaskContinuationOptions.OnlyOnFaulted);
     }
+
+    /// <summary>
+    ///     Returns true when a member's departure should be recorded as a voluntary leave.
+    ///     Migrated documents (Status != Unknown) are eligible when in a non-terminal state.
+    ///     Un-migrated documents (Status == Unknown) are eligible only when no legacy terminal
+    ///     timestamp (KickedAt, BannedAt, AutoKickedAt) has already been set.
+    /// </summary>
+    private static bool IsEligibleForVoluntaryLeave(GuildMember member) =>
+        member.Status switch
+        {
+            MemberStatus.New or
+            MemberStatus.Onboarding or
+            MemberStatus.QuestionnaireSubmitted or
+            MemberStatus.FullMember or
+            MemberStatus.StrangerRoleRemoved => true,
+
+            // Legacy document: defer to timestamp fields to avoid overwriting a terminal marker.
+            MemberStatus.Unknown =>
+                !member.KickedAt.HasValue &&
+                !member.BannedAt.HasValue &&
+                !member.AutoKickedAt.HasValue,
+
+            // Already in a terminal state set by a prior action — do not overwrite.
+            _ => false
+        };
 }
