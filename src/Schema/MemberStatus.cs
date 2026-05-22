@@ -5,6 +5,10 @@ namespace IgorBot.Schema;
 /// </summary>
 public enum MemberStatus
 {
+    // IMPORTANT: ordinals are persisted in MongoDB as integers.
+    // Never change an existing value, and always assign an explicit value to new members
+    // to prevent silent reordering from corrupting stored data.
+
     /// <summary>
     ///     Not yet determined (default value; used to detect un-migrated documents).
     /// </summary>
@@ -13,61 +17,61 @@ public enum MemberStatus
     /// <summary>
     ///     Member joined the guild; no stranger role assigned yet or onboarding not started.
     /// </summary>
-    New,
+    New = 1,
 
     /// <summary>
     ///     Member has the stranger role and an active newbie channel + application widget.
     /// </summary>
-    Onboarding,
+    Onboarding = 2,
 
     /// <summary>
     ///     Member completed the questionnaire and is awaiting moderator review.
     /// </summary>
-    QuestionnaireSubmitted,
+    QuestionnaireSubmitted = 3,
 
     /// <summary>
     ///     Member was promoted to full member.
     /// </summary>
-    FullMember,
+    FullMember = 4,
 
     /// <summary>
     ///     Member left the guild voluntarily.
     /// </summary>
-    LeftVoluntarily,
+    LeftVoluntarily = 5,
 
     /// <summary>
     ///     Member was kicked via the bot's moderator panel.
     /// </summary>
-    KickedByModerator,
+    KickedByModerator = 6,
 
     /// <summary>
     ///     Member was banned via the bot's moderator panel.
     /// </summary>
-    BannedByModerator,
+    BannedByModerator = 7,
 
     /// <summary>
     ///     Member was automatically kicked by the idle timer.
     /// </summary>
-    AutoKicked,
+    AutoKicked = 8,
 
     /// <summary>
     ///     Member was banned by the honeypot feature.
     /// </summary>
-    BannedByHoneypot,
+    BannedByHoneypot = 9,
 
     /// <summary>
     ///     Member was banned outside the bot (Discord UI or another bot) — inferred from GuildBanAdd.
     /// </summary>
-    BannedExternally,
+    BannedExternally = 10,
 
     /// <summary>
     ///     Member was kicked outside the bot (Discord UI or another bot) — inferred from audit log.
     /// </summary>
-    KickedExternally,
+    KickedExternally = 11,
 
     /// <summary>
     ///     The stranger role was removed from the member while they remained in the guild
     ///     (e.g. manual role removal by a moderator, not via the bot's promote flow).
     /// </summary>
-    StrangerRoleRemoved
+    StrangerRoleRemoved = 12
 }
