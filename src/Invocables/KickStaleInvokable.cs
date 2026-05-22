@@ -57,7 +57,7 @@ internal class KickStaleInvokable(
                     (
                         m.In(f => f.Status, new[]
                         {
-                            MemberStatus.Unknown, MemberStatus.Onboarding, MemberStatus.QuestionnaireSubmitted
+                            MemberStatus.Unknown, MemberStatus.Onboarding
                         }) |
                         (
                             m.Eq(f => f.Status, MemberStatus.Unknown) &
