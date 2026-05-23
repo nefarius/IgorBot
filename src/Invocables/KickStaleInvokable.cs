@@ -114,15 +114,47 @@ internal class KickStaleInvokable(
                     logger.LogError(ex, "Failed to auto-remove {MemberId}, rolling back status to {Previous}",
                         guildMember.MemberId, previousStatus);
 
+                    // Before rolling back, confirm the member is still in the guild.
+                    // RemoveAsync can fail after Discord already processed the kick (e.g. a
+                    // transient 5xx), in which case the pre-marked AutoKicked status is correct
+                    // and must not be overwritten. Only roll back when the member is confirmed
+                    // still present.
+                    bool memberStillPresent;
                     try
                     {
-                        await guildMember.TransitionToAsync(db, previousStatus, "rollback after failed auto-kick");
+                        await guild.GetMemberAsync(guildMember.MemberId);
+                        memberStillPresent = true;
                     }
-                    catch (Exception rollbackEx)
+                    catch (NotFoundException)
                     {
-                        logger.LogError(rollbackEx,
-                            "Rollback to {Previous} failed for {MemberId} after auto-kick failure",
-                            previousStatus, guildMember.MemberId);
+                        // Kick went through despite the error; DB is already correct.
+                        logger.LogWarning(
+                            "Member {MemberId} is no longer in the guild after failed RemoveAsync; keeping AutoKicked status",
+                            guildMember.MemberId);
+                        memberStillPresent = false;
+                    }
+                    catch (Exception confirmEx)
+                    {
+                        // Cannot confirm membership; leave AutoKicked in place to avoid
+                        // re-opening the member for a duplicate kick on the next tick.
+                        logger.LogError(confirmEx,
+                            "Could not confirm membership for {MemberId} after failed RemoveAsync; keeping AutoKicked status",
+                            guildMember.MemberId);
+                        memberStillPresent = false;
+                    }
+
+                    if (memberStillPresent)
+                    {
+                        try
+                        {
+                            await guildMember.TransitionToAsync(db, previousStatus, "rollback after failed auto-kick");
+                        }
+                        catch (Exception rollbackEx)
+                        {
+                            logger.LogError(rollbackEx,
+                                "Rollback to {Previous} failed for {MemberId} after auto-kick failure",
+                                previousStatus, guildMember.MemberId);
+                        }
                     }
                 }
             }
