@@ -82,7 +82,7 @@ host.Services.UseScheduler(scheduler =>
 
         scheduler
             .Schedule<OrphanEmbedReconciliationInvokable>()
-            .Hourly();
+            .Daily();
     }
 );
 
