@@ -77,25 +77,53 @@ internal class KickStaleInvokable(
             {
                 logger.LogInformation("Processing stale member {MemberId}", guildMember.MemberId);
 
+                DiscordMember member;
+
                 try
                 {
-                    DiscordMember member = await guild.GetMemberAsync(guildMember.MemberId);
-
-                    await member.RemoveAsync("Member removed due to idle timeout");
-
-                    logger.LogWarning("Removed {@Member} due to idle timeout", guildMember);
-
-                    await guildMember.TransitionToAsync(db, MemberStatus.AutoKicked, "idle timeout");
+                    member = await guild.GetMemberAsync(guildMember.MemberId);
                 }
                 catch (NotFoundException)
                 {
                     logger.LogWarning("Member {MemberId} already left the guild, marking as auto-kicked",
                         guildMember.MemberId);
                     await guildMember.TransitionToAsync(db, MemberStatus.AutoKicked, "idle timeout (already left)");
+                    continue;
+                }
+
+                // Pre-mark in DB so that the GuildMemberRemoved event that fires immediately
+                // after RemoveAsync sees AutoKicked and does not mis-classify the departure
+                // as a voluntary leave (mirroring HandleStrangerKick / HandleStrangerBan).
+                MemberStatus previousStatus = guildMember.Status;
+                await guildMember.TransitionToAsync(db, MemberStatus.AutoKicked, "idle timeout");
+
+                try
+                {
+                    await member.RemoveAsync("Member removed due to idle timeout");
+
+                    logger.LogWarning("Removed {@Member} due to idle timeout", guildMember);
+                }
+                catch (NotFoundException)
+                {
+                    // Member left between GetMemberAsync and RemoveAsync; DB is already correct.
+                    logger.LogWarning("Member {MemberId} left during auto-kick, DB already marked as auto-kicked",
+                        guildMember.MemberId);
                 }
                 catch (Exception ex)
                 {
-                    logger.LogError(ex, "Failed to auto-remove {MemberId}", guildMember.MemberId);
+                    logger.LogError(ex, "Failed to auto-remove {MemberId}, rolling back status to {Previous}",
+                        guildMember.MemberId, previousStatus);
+
+                    try
+                    {
+                        await guildMember.TransitionToAsync(db, previousStatus, "rollback after failed auto-kick");
+                    }
+                    catch (Exception rollbackEx)
+                    {
+                        logger.LogError(rollbackEx,
+                            "Rollback to {Previous} failed for {MemberId} after auto-kick failure",
+                            previousStatus, guildMember.MemberId);
+                    }
                 }
             }
         }
