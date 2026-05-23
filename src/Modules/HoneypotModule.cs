@@ -4,9 +4,13 @@ using DSharpPlus.EventArgs;
 using DSharpPlus.Exceptions;
 
 using IgorBot.Core;
+using IgorBot.Schema;
 using IgorBot.Services;
+using IgorBot.Util;
 
 using JetBrains.Annotations;
+
+using MongoDB.Entities;
 
 using Nefarius.DSharpPlus.Extensions.Hosting.Events;
 
@@ -18,7 +22,7 @@ namespace IgorBot.Modules;
 /// </summary>
 [DiscordMessageCreatedEventSubscriber]
 [UsedImplicitly]
-internal sealed class HoneypotModule(IGuildConfigService guildConfigService, ILogger<HoneypotModule> logger)
+internal sealed class HoneypotModule(DB db, IGuildConfigService guildConfigService, ILogger<HoneypotModule> logger)
     : IDiscordMessageCreatedEventSubscriber
 {
     public async Task DiscordOnMessageCreated(DiscordClient sender, MessageCreateEventArgs args)
@@ -63,9 +67,51 @@ internal sealed class HoneypotModule(IGuildConfigService guildConfigService, ILo
                 return;
             }
 
+            // Mark the ban in our DB before the Discord call so the subsequent
+            // GuildMemberRemoved event sees it as a moderation removal, not a self-leave.
+            GuildMember guildMember = await db.Find<GuildMember>().OneAsync(member.ToEntityId());
+
+            bool isNewDocument = guildMember is null;
+            if (isNewDocument)
+            {
+                guildMember = new GuildMember
+                {
+                    GuildId = args.Guild.Id,
+                    MemberId = member.Id,
+                    Member = member.ToString(),
+                    Mention = member.Mention
+                };
+                await db.SaveAsync(guildMember);
+            }
+
+            MemberStatus previousStatus = guildMember.Status;
+            await guildMember.TransitionToAsync(db, MemberStatus.BannedByHoneypot, "honeypot");
+
             // yeet!
             logger.LogInformation("Banning {Member} due to messaging in honeypot channel", member);
-            await member.BanAsync(1, "User fell into honeypot trap");
+            try
+            {
+                await member.BanAsync(1, "User fell into honeypot trap");
+            }
+            catch (Exception banEx)
+            {
+                logger.LogError(banEx, "BanAsync failed for honeypot member {Member}, reverting DB state", member);
+                try
+                {
+                    // Newly-created documents have no meaningful prior history — revert to New.
+                    // Existing documents are rolled back to whatever state they were in before.
+                    MemberStatus revertTo = isNewDocument ? MemberStatus.New : previousStatus;
+                    await guildMember.TransitionToAsync(db, revertTo, "revert-honeypot-ban");
+                }
+                catch (Exception revertEx)
+                {
+                    logger.LogError(revertEx,
+                        "Failed to revert DB state for {Member} after BanAsync failure", member);
+                }
+
+                throw;
+            }
+
             logger.LogInformation("{Member} banned", member);
         }
         catch (NotFoundException)

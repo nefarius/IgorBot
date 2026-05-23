@@ -41,16 +41,28 @@ internal class KickStaleInvokable(
                 continue;
             }
 
-            // query for members of the current guild where the application lifetime has exceeded the allowed idle time
+            // Query for members that are in the Onboarding state, have auto-kick enabled,
+            // and whose application window has expired.
+            // QuestionnaireSubmittedAt == null is a hard guard: members in the
+            // QuestionnaireSubmitted status always have a non-null QuestionnaireSubmittedAt
+            // and are therefore excluded from this query.
+            // For un-migrated documents (Status == Unknown) the legacy timestamp fields
+            // (PromotedAt, StrangerRoleRemovedAt, FullMemberAt) serve as a fallback gate.
             List<GuildMember> staleMembers = await db.Find<GuildMember>()
                 .ManyAsync(m =>
                     m.Lt(f => f.Application.CreatedAt, DateTime.UtcNow.Add(-config1.IdleKickTimeSpan!.Value)) &
                     m.Eq(f => f.GuildId, config1.GuildId) &
                     m.Eq(f => f.Application.IsAutoKickEnabled, true) &
                     m.Eq(f => f.Application.QuestionnaireSubmittedAt, null) &
-                    m.Eq(f => f.PromotedAt, null) &
-                    m.Eq(f => f.StrangerRoleRemovedAt, null) &
-                    m.Eq(f => f.FullMemberAt, null) &
+                    (
+                        m.Eq(f => f.Status, MemberStatus.Onboarding) |
+                        (
+                            m.Eq(f => f.Status, MemberStatus.Unknown) &
+                            m.Eq(f => f.PromotedAt, null) &
+                            m.Eq(f => f.StrangerRoleRemovedAt, null) &
+                            m.Eq(f => f.FullMemberAt, null)
+                        )
+                    ) &
                     m.Eq(f => f.AutoKickedAt, null)
                 );
 
@@ -73,15 +85,13 @@ internal class KickStaleInvokable(
 
                     logger.LogWarning("Removed {@Member} due to idle timeout", guildMember);
 
-                    guildMember.AutoKickedAt = DateTime.UtcNow;
-                    await db.SaveAsync(guildMember);
+                    await guildMember.TransitionToAsync(db, MemberStatus.AutoKicked, "idle timeout");
                 }
                 catch (NotFoundException)
                 {
                     logger.LogWarning("Member {MemberId} already left the guild, marking as auto-kicked",
                         guildMember.MemberId);
-                    guildMember.AutoKickedAt = DateTime.UtcNow;
-                    await db.SaveAsync(guildMember);
+                    await guildMember.TransitionToAsync(db, MemberStatus.AutoKicked, "idle timeout (already left)");
                 }
                 catch (Exception ex)
                 {

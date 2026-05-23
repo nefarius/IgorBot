@@ -45,7 +45,7 @@ internal partial class ApplicationWorkflow
             logger.LogInformation("{Member} added to DB", e.Member);
         }
 
-        guildMember.JoinedAt = DateTime.Now;
+        guildMember.JoinedAt = DateTime.UtcNow;
         guildMember.Reset();
 
         await db.SaveAsync(guildMember);

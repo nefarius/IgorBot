@@ -27,6 +27,10 @@ IHostBuilder builder = Host.CreateDefaultBuilder(args)
         IConfigurationSection section = hostContext.Configuration.GetSection("Bot");
         services.Configure<IgorConfig>(section);
 
+        // Configure Serilog first so the static Log.Logger is set before any migration
+        // code runs; both GuildConfigMigration and GuildMemberStatusMigration log via Log.*.
+        ConfigureLogging(hostContext, services);
+
         string connectionString = hostContext.Configuration.GetConnectionString("MongoDB");
 
         DB db = DB.InitAsync("IgorBot", MongoClientSettings.FromConnectionString(connectionString))
@@ -35,6 +39,9 @@ IHostBuilder builder = Host.CreateDefaultBuilder(args)
 
         services.AddSingleton(db);
         GuildConfigMigration.Run(hostContext.Configuration, db);
+
+        bool migrationDryRun = hostContext.Configuration.GetValue<bool>("Bot:Migration:DryRun");
+        GuildMemberStatusMigration.RunAsync(db, migrationDryRun).GetAwaiter().GetResult();
 
         services.AddSingleton<GuildConfigService>();
         services.AddSingleton<IGuildConfigService>(sp =>
@@ -51,8 +58,6 @@ IHostBuilder builder = Host.CreateDefaultBuilder(args)
         services.AddSingleton<IOnboardingQueue, OnboardingQueue>();
         services.AddSingleton<NewMemberHandler>();
         services.AddHostedService<OnboardingQueueProcessor>();
-
-        ConfigureLogging(hostContext, services);
 
         ConfigureScheduler(services);
 

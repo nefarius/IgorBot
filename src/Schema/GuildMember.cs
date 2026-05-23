@@ -47,28 +47,26 @@ internal sealed partial class GuildMember : IEntity, INotifyPropertyChanged
     /// <summary>
     ///     The embed color depending on member state.
     /// </summary>
-    private DiscordColor EmbedColor
+    private DiscordColor EmbedColor => Status switch
     {
-        get
-        {
-            if (IsNew)
-            {
-                return DiscordColor.Blue;
-            }
-
-            if (HasLeftGuild)
-            {
-                return DiscordColor.DarkGray;
-            }
-
-            if (IsBanned)
-            {
-                return DiscordColor.Red;
-            }
-
-            return IsFullMember ? DiscordColor.Green : DiscordColor.None;
-        }
-    }
+        MemberStatus.New => DiscordColor.Blue,
+        MemberStatus.Onboarding => DiscordColor.Blue,
+        MemberStatus.QuestionnaireSubmitted => DiscordColor.Yellow,
+        MemberStatus.FullMember => DiscordColor.Green,
+        MemberStatus.LeftVoluntarily => DiscordColor.DarkGray,
+        MemberStatus.KickedByModerator => DiscordColor.Orange,
+        MemberStatus.KickedExternally => DiscordColor.Orange,
+        MemberStatus.AutoKicked => DiscordColor.Gray,
+        MemberStatus.BannedByModerator => DiscordColor.Red,
+        MemberStatus.BannedByHoneypot => DiscordColor.DarkRed,
+        MemberStatus.BannedExternally => DiscordColor.DarkRed,
+        MemberStatus.StrangerRoleRemoved => DiscordColor.Blurple,
+        // Unknown: fall back to legacy logic
+        _ => IsNew ? DiscordColor.Blue :
+             HasLeftGuild ? DiscordColor.DarkGray :
+             IsBanned ? DiscordColor.Red :
+             IsFullMember ? DiscordColor.Green : DiscordColor.None
+    };
 
     object IEntity.GenerateNewID()
     {
@@ -137,8 +135,19 @@ internal sealed partial class GuildMember : IEntity, INotifyPropertyChanged
 
         statusEmbed.AddField("Member", Mention);
         statusEmbed.AddField("Database ID", ID);
+        statusEmbed.AddField("Status", Status.ToString(), true);
         statusEmbed.AddField("Created at", Formatter.Timestamp(CreatedAt));
         statusEmbed.AddField("Joined at", Formatter.Timestamp(JoinedAt), true);
+
+        if (StatusChangedAt.HasValue && Status != MemberStatus.Unknown && Status != MemberStatus.New)
+        {
+            statusEmbed.AddField("Status changed at", Formatter.Timestamp(StatusChangedAt.Value), true);
+        }
+
+        if (!string.IsNullOrEmpty(StatusReason))
+        {
+            statusEmbed.AddField("Reason", StatusReason, true);
+        }
 
         if (Channel is not null)
         {
