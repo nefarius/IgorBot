@@ -30,7 +30,9 @@ internal partial class ApplicationWorkflow
 
         GuildMember? guildMember = await db.Find<GuildMember>().OneAsync(e.ToEntityId());
 
-        if (guildMember is null)
+        bool isFirstJoin = guildMember is null;
+
+        if (isFirstJoin)
         {
             guildMember = new GuildMember
             {
@@ -45,10 +47,26 @@ internal partial class ApplicationWorkflow
             logger.LogInformation("{Member} added to DB", e.Member);
         }
 
-        guildMember.JoinedAt = DateTime.UtcNow;
-        guildMember.Reset();
+        // guildMember is guaranteed non-null: either it existed before or was just created above.
+        GuildMember member = guildMember!;
+        member.JoinedAt = DateTime.UtcNow;
 
-        await db.SaveAsync(guildMember);
+        if (isFirstJoin)
+        {
+            // Brand-new member: initialize canonical state without recording a misleading "rejoin" history entry.
+            DateTime now = DateTime.UtcNow;
+            member.Status = MemberStatus.New;
+            member.StatusChangedAt = now;
+            member.StatusReason = "join";
+            logger.LogInformation("GuildMember {MemberId} initialized as New (first join)", member.ID);
+        }
+        else
+        {
+            // Returning member: reset lifecycle fields and record a rejoin history event.
+            member.Reset();
+        }
+
+        await db.SaveAsync(member);
 
         logger.LogInformation("{Member} updated in DB", e.Member);
         DiscordRole strangerRole = e.Guild.GetRole(guildConfig.StrangerRoleId);
@@ -64,7 +82,7 @@ internal partial class ApplicationWorkflow
         {
             logger.LogInformation("{Member} has stranger role, submitting workflow", e.Member);
 
-            await ProcessStrangerAssignment(e.Guild, guildConfig, guildMember);
+            await ProcessStrangerAssignment(e.Guild, guildConfig, member);
         }
     }
 }
