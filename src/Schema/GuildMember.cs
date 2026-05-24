@@ -1,5 +1,4 @@
-﻿using System.ComponentModel;
-using System.Diagnostics.CodeAnalysis;
+﻿using System.Diagnostics.CodeAnalysis;
 
 using DSharpPlus;
 using DSharpPlus.Entities;
@@ -14,7 +13,7 @@ namespace IgorBot.Schema;
 [SuppressMessage("ReSharper", "MemberCanBePrivate.Global")]
 [SuppressMessage("ReSharper", "UnusedMember.Global")]
 [SuppressMessage("ReSharper", "UnusedMember.Local")]
-internal sealed partial class GuildMember : IEntity, INotifyPropertyChanged
+internal sealed partial class GuildMember : IEntity
 {
     internal const string StrangerCommandKick = "kick";
     internal const string StrangerCommandBan = "ban";
