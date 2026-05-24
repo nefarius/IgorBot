@@ -36,13 +36,15 @@ internal partial class ApplicationWorkflow
             e.Member, roles, e.Member.JoinedAt);
 
         string entityId = $"{e.Guild.Id}-{e.Member.Id}";
-        GuildMember member = await db.Find<GuildMember>().OneAsync(entityId);
+        GuildMember? memberOrNull = await db.Find<GuildMember>().OneAsync(entityId);
 
-        if (member is null)
+        if (memberOrNull is null)
         {
             logger.LogWarning("{Member} not found in DB", e.Member);
             return;
         }
+
+        GuildMember member = memberOrNull;
 
         _ = Task.Run(async () =>
         {
@@ -58,10 +60,10 @@ internal partial class ApplicationWorkflow
             if (IsEligibleForVoluntaryLeave(member))
             {
                 await Task.Delay(TimeSpan.FromMilliseconds(500));
-                member = await db.Find<GuildMember>().OneAsync(entityId) ?? member;
+                member = (await db.Find<GuildMember>().OneAsync(entityId)) ?? member;
             }
 
-            MemberStatusEvent lastEvent = member.StatusHistory.LastOrDefault();
+            MemberStatusEvent? lastEvent = member.StatusHistory.LastOrDefault();
 
             logger.LogInformation(
                 "Member {Member} departure snapshot — " +
@@ -98,7 +100,7 @@ internal partial class ApplicationWorkflow
             }
 
             // Remove newbie channel (only strangers in onboarding have one)
-            NewbieChannel newbieChannel = member.Channel;
+            NewbieChannel? newbieChannel = member.Channel;
 
             if (newbieChannel is not null)
             {
@@ -118,7 +120,7 @@ internal partial class ApplicationWorkflow
                 }
             }
 
-            StrangerApplicationEmbed application = member.Application;
+            StrangerApplicationEmbed? application = member.Application;
 
             if (application is not null)
             {

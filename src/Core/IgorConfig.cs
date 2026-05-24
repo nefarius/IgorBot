@@ -16,7 +16,7 @@ internal sealed class DiscordConfig
     /// <summary>
     ///     Bot token.
     /// </summary>
-    public string Token { get; set; }
+    public string Token { get; set; } = null!;
 }
 
 /// <summary>
@@ -53,7 +53,7 @@ public sealed class GuildConfig
     /// <summary>
     ///     Format string to use when naming newbie channels.
     /// </summary>
-    public string ApplicationChannelNameFormat { get; set; }
+    public string? ApplicationChannelNameFormat { get; set; }
 
     /// <summary>
     ///     Optional list of snowflake IDs of moderators with permissions to see and interact newbie channels.
@@ -63,7 +63,7 @@ public sealed class GuildConfig
     /// <summary>
     ///     Message template the bot uses to welcome a newbie in their channel.
     /// </summary>
-    public string NewbieWelcomeTemplate { get; set; }
+    public string? NewbieWelcomeTemplate { get; set; }
 
     /// <summary>
     ///     Channel snowflake ID where the status embed messages should appear.
@@ -73,7 +73,7 @@ public sealed class GuildConfig
     /// <summary>
     ///     Message template the bot uses to welcome promoted members.
     /// </summary>
-    public string MemberWelcomeTemplate { get; set; }
+    public string? MemberWelcomeTemplate { get; set; }
 
     /// <summary>
     ///     Channel snowflake ID where the welcome messages of promoted members should appear.
@@ -128,7 +128,7 @@ public sealed class Question
     /// <summary>
     ///     Content of the question.
     /// </summary>
-    public string Content { get; set; }
+    public required string Content { get; set; }
 }
 
 /// <summary>
@@ -148,7 +148,7 @@ public sealed class SubmissionActionButton
     /// <summary>
     ///     The visible button label.
     /// </summary>
-    public string Label { get; set; }
+    public required string Label { get; set; }
 
     /// <summary>
     ///     If disabled, the button won't be click-able.
@@ -158,7 +158,7 @@ public sealed class SubmissionActionButton
     /// <summary>
     ///     Custom ID used in interaction event callback.
     /// </summary>
-    public string CustomId { get; set; }
+    public required string CustomId { get; set; }
 }
 
 /// <summary>
@@ -174,12 +174,12 @@ public sealed class Questionnaire
     /// <summary>
     ///     Friendly name identifying this questionnaire.
     /// </summary>
-    public string Name { get; set; }
+    public required string Name { get; set; }
 
     /// <summary>
     ///     Unique ID.
     /// </summary>
-    public string Id { get; set; }
+    public required string Id { get; set; }
 
     /// <summary>
     ///     An optional description.
@@ -220,7 +220,7 @@ public sealed class Questionnaire
 [SuppressMessage("ReSharper", "CollectionNeverUpdated.Global")]
 internal sealed class IgorConfig
 {
-    public DiscordConfig Discord { get; set; }
+    public DiscordConfig Discord { get; set; } = null!;
 
     public Dictionary<string, GuildConfig> Guilds { get; set; } = new();
 }

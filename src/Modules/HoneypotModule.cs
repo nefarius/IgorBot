@@ -42,7 +42,7 @@ internal sealed class HoneypotModule(DB db, IGuildConfigService guildConfigServi
                 return;
             }
 
-            GuildConfig guildConfig = await guildConfigService.GetAsync(args.Guild.Id);
+            GuildConfig? guildConfig = await guildConfigService.GetAsync(args.Guild.Id);
             if (guildConfig == null)
             {
                 return;
@@ -69,18 +69,18 @@ internal sealed class HoneypotModule(DB db, IGuildConfigService guildConfigServi
 
             // Mark the ban in our DB before the Discord call so the subsequent
             // GuildMemberRemoved event sees it as a moderation removal, not a self-leave.
-            GuildMember guildMember = await db.Find<GuildMember>().OneAsync(member.ToEntityId());
+            GuildMember? existing = await db.Find<GuildMember>().OneAsync(member.ToEntityId());
 
-            bool isNewDocument = guildMember is null;
+            bool isNewDocument = existing is null;
+            GuildMember guildMember = existing ?? new GuildMember
+            {
+                GuildId = args.Guild.Id,
+                MemberId = member.Id,
+                Member = member.ToString(),
+                Mention = member.Mention
+            };
             if (isNewDocument)
             {
-                guildMember = new GuildMember
-                {
-                    GuildId = args.Guild.Id,
-                    MemberId = member.Id,
-                    Member = member.ToString(),
-                    Mention = member.Mention
-                };
                 await db.SaveAsync(guildMember);
             }
 

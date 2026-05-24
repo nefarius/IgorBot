@@ -21,20 +21,22 @@ internal partial class ApplicationWorkflow
             return;
         }
 
-        GuildConfig guildConfig = await guildConfigService.GetAsync(e.Guild.Id);
+        GuildConfig? guildConfig = await guildConfigService.GetAsync(e.Guild.Id);
         if (guildConfig == null)
         {
             return;
         }
 
         // At this point we expect to have the user in the DB
-        GuildMember member = await db.Find<GuildMember>().OneAsync(e.ToEntityId());
+        GuildMember? memberOrNull = await db.Find<GuildMember>().OneAsync(e.ToEntityId());
 
-        if (member is null)
+        if (memberOrNull is null)
         {
             logger.LogWarning("{Member} not found in DB", e.Member);
             return;
         }
+
+        GuildMember member = memberOrNull;
 
         _ = Task.Run(async () =>
         {
@@ -121,7 +123,7 @@ internal partial class ApplicationWorkflow
         GuildMember member
     )
     {
-        GuildProperties guildRuntime = await db.Find<GuildProperties>().OneAsync(guild.Id.ToString());
+        GuildProperties? guildRuntime = await db.Find<GuildProperties>().OneAsync(guild.Id.ToString());
 
         if (guildRuntime is null)
         {
@@ -154,7 +156,7 @@ internal partial class ApplicationWorkflow
         await member.TransitionToAsync(db, MemberStatus.StrangerRoleRemoved);
 
         // Remove channel
-        NewbieChannel newbieChannel = member.Channel;
+        NewbieChannel? newbieChannel = member.Channel;
 
         if (newbieChannel is not null)
         {

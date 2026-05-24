@@ -36,7 +36,7 @@ internal class KickStaleInvokable(
         // Enumerate guild configs with an active idle timespan set
         foreach (GuildConfig config1 in allConfigs.Where(gc => gc.IdleKickTimeSpan.HasValue))
         {
-            if (!discord.Client.Guilds.TryGetValue(config1.GuildId, out DiscordGuild guild))
+            if (!discord.Client.Guilds.TryGetValue(config1.GuildId, out DiscordGuild? guild))
             {
                 // If GuildAvailable has never fired for this guild the client cache is still
                 // being populated (startup race). Log at Debug to avoid false-alarm warnings.
@@ -63,10 +63,10 @@ internal class KickStaleInvokable(
             // (PromotedAt, StrangerRoleRemovedAt, FullMemberAt) serve as a fallback gate.
             List<GuildMember> staleMembers = await db.Find<GuildMember>()
                 .ManyAsync(m =>
-                    m.Lt(f => f.Application.CreatedAt, DateTime.UtcNow.Add(-config1.IdleKickTimeSpan!.Value)) &
+                    m.Lt(f => f.Application!.CreatedAt, DateTime.UtcNow.Add(-config1.IdleKickTimeSpan!.Value)) &
                     m.Eq(f => f.GuildId, config1.GuildId) &
-                    m.Eq(f => f.Application.IsAutoKickEnabled, true) &
-                    m.Eq(f => f.Application.QuestionnaireSubmittedAt, null) &
+                    m.Eq(f => f.Application!.IsAutoKickEnabled, true) &
+                    m.Eq(f => f.Application!.QuestionnaireSubmittedAt, null) &
                     (
                         m.Eq(f => f.Status, MemberStatus.Onboarding) |
                         (

@@ -7,7 +7,7 @@ namespace IgorBot.Schema;
 
 internal sealed partial class GuildMember
 {
-    public event PropertyChangedEventHandler PropertyChanged;
+    public event PropertyChangedEventHandler? PropertyChanged;
 
     [SuppressMessage("ReSharper", "UnusedMember.Global")]
     public void OnPropertyChanged(string propertyName, object before, object after)

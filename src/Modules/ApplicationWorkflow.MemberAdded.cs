@@ -20,7 +20,7 @@ internal partial class ApplicationWorkflow
             return;
         }
 
-        GuildConfig guildConfig = await guildConfigService.GetAsync(e.Guild.Id);
+        GuildConfig? guildConfig = await guildConfigService.GetAsync(e.Guild.Id);
         if (guildConfig == null)
         {
             return;
@@ -28,7 +28,7 @@ internal partial class ApplicationWorkflow
 
         logger.LogInformation("{Member} joined", e.Member);
 
-        GuildMember guildMember = await db.Find<GuildMember>().OneAsync(e.ToEntityId());
+        GuildMember? guildMember = await db.Find<GuildMember>().OneAsync(e.ToEntityId());
 
         if (guildMember is null)
         {

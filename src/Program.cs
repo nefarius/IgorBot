@@ -31,7 +31,7 @@ IHostBuilder builder = Host.CreateDefaultBuilder(args)
         // code runs; both GuildConfigMigration and GuildMemberStatusMigration log via Log.*.
         ConfigureLogging(hostContext, services);
 
-        string connectionString = hostContext.Configuration.GetConnectionString("MongoDB");
+        string? connectionString = hostContext.Configuration.GetConnectionString("MongoDB");
 
         DB db = DB.InitAsync("IgorBot", MongoClientSettings.FromConnectionString(connectionString))
             .GetAwaiter()
@@ -63,7 +63,7 @@ IHostBuilder builder = Host.CreateDefaultBuilder(args)
 
         ConfigureScheduler(services);
 
-        IgorConfig config = section.Get<IgorConfig>();
+        IgorConfig? config = section.Get<IgorConfig>();
         if (config?.Discord?.Token == null)
         {
             throw new InvalidOperationException("Bot:Discord:Token is required in configuration.");

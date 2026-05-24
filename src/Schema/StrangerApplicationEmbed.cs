@@ -84,7 +84,7 @@ internal sealed class StrangerApplicationEmbed : IEntity
 
     [BsonId]
     [SuppressMessage("ReSharper", "InconsistentNaming")]
-    public string ID { get; set; }
+    public string ID { get; set; } = null!;
 
     object IEntity.GenerateNewID()
     {

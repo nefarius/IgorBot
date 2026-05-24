@@ -115,7 +115,7 @@ internal sealed partial class GuildMember : IEntity, INotifyPropertyChanged
     {
         DiscordGuild guild = client.Guilds[GuildId];
 
-        if (guild.Members.TryGetValue(MemberId, out DiscordMember member))
+        if (guild.Members.TryGetValue(MemberId, out DiscordMember? member))
         {
             Member = member.ToString();
             Mention = member.Mention;

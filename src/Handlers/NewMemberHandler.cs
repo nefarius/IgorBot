@@ -26,7 +26,7 @@ internal sealed class NewMemberHandler(
     {
         logger.LogInformation("Processing new member workflow");
 
-        GuildMember dbMember = await db.Find<GuildMember>().OneAsync(message.MemberEntryId);
+        GuildMember? dbMember = await db.Find<GuildMember>().OneAsync(message.MemberEntryId);
 
         if (dbMember is null)
         {

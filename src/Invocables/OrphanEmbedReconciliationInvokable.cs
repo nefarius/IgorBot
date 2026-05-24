@@ -46,7 +46,7 @@ internal class OrphanEmbedReconciliationInvokable(
 
             foreach (GuildConfig guildConfig in guildConfigs)
             {
-                if (!discord.Client.Guilds.TryGetValue(guildConfig.GuildId, out DiscordGuild guild))
+                if (!discord.Client.Guilds.TryGetValue(guildConfig.GuildId, out DiscordGuild? guild))
                 {
                     continue;
                 }
@@ -78,7 +78,7 @@ internal class OrphanEmbedReconciliationInvokable(
             }
 
             List<GuildMember> referencingMembers = await db.Find<GuildMember>()
-                .ManyAsync(m => m.Eq(f => f.Application.ID, embed.ID));
+                .ManyAsync(m => m.Eq(f => f.Application!.ID, embed.ID));
 
             if (referencingMembers.Count == 0)
             {
