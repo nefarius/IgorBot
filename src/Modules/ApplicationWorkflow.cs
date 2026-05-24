@@ -70,6 +70,11 @@ internal partial class ApplicationWorkflow(
         if (guildConfig == null)
         {
             logger.LogWarning("Guild {GuildId} not configured, ignoring component interaction", args.Guild.Id);
+            await args.Interaction.CreateResponseAsync(
+                InteractionResponseType.ChannelMessageWithSource,
+                new DiscordInteractionResponseBuilder()
+                    .WithContent("This server is not configured yet.")
+                    .AsEphemeral());
             return;
         }
 

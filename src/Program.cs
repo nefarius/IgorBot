@@ -33,6 +33,12 @@ IHostBuilder builder = Host.CreateDefaultBuilder(args)
 
         string? connectionString = hostContext.Configuration.GetConnectionString("MongoDB");
 
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            throw new InvalidOperationException(
+                "ConnectionStrings:MongoDB is required in configuration but is missing or empty.");
+        }
+
         DB db = DB.InitAsync("IgorBot", MongoClientSettings.FromConnectionString(connectionString))
             .GetAwaiter()
             .GetResult();
