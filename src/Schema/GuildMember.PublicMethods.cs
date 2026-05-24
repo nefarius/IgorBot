@@ -4,6 +4,8 @@ using DSharpPlus.EventArgs;
 
 using MongoDB.Entities;
 
+using Serilog;
+
 namespace IgorBot.Schema;
 
 internal sealed partial class GuildMember
@@ -26,6 +28,10 @@ internal sealed partial class GuildMember
         {
             return;
         }
+
+        Log.Information(
+            "GuildMember {MemberId} transitioning {From} -> {To} reason={Reason} actor={ActorId}",
+            ID, Status, next, reason, actorId);
 
         DateTime now = DateTime.UtcNow;
 
@@ -89,6 +95,10 @@ internal sealed partial class GuildMember
 
         await update.ExecuteAsync();
 
+        Log.Information(
+            "GuildMember {MemberId} transitioned {From} -> {To}",
+            ID, Status, next);
+
         // Mirror to in-memory state only after the DB write succeeded so the
         // in-memory object never gets ahead of what is persisted.
         // Clear all legacy fields first, matching the DB update above.
@@ -144,6 +154,10 @@ internal sealed partial class GuildMember
     {
         const string rejoinReason = "rejoin";
         DateTime now = DateTime.UtcNow;
+
+        Log.Information(
+            "GuildMember {MemberId} Reset from {PreviousStatus} (rejoin)",
+            ID, Status);
 
         // Record the rejoin before wiping the lifecycle fields so the history
         // shows what state the member was in when they came back.

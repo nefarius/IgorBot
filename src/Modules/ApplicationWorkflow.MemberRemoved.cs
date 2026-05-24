@@ -25,7 +25,13 @@ internal partial class ApplicationWorkflow
             return;
         }
 
-        logger.LogInformation("{Member} left", e.Member);
+        string roles = e.Member.Roles.Any()
+            ? string.Join(", ", e.Member.Roles.Select(r => $"{r.Name}({r.Id})"))
+            : "(none)";
+
+        logger.LogInformation(
+            "{Member} left — Discord roles at removal: [{Roles}], Discord joined {DiscordJoinedAt}",
+            e.Member, roles, e.Member.JoinedAt);
 
         GuildMember member = await db.Find<GuildMember>().OneAsync(e.ToEntityId());
 
@@ -41,8 +47,28 @@ internal partial class ApplicationWorkflow
             // terminal cause (mod kick, ban, auto-kick, honeypot) has already been set.
             // For un-migrated documents (Status == Unknown) the legacy timestamp fields
             // are the source of truth — check them before overwriting with LeftVoluntarily.
+            MemberStatusEvent lastEvent = member.StatusHistory.LastOrDefault();
+
+            logger.LogInformation(
+                "Member {Member} departure snapshot — " +
+                "status={Status} since {StatusChangedAt} (reason={StatusReason}), " +
+                "RemovedByModeration={RemovedByModeration}, " +
+                "KickedAt={KickedAt}, BannedAt={BannedAt}, AutoKickedAt={AutoKickedAt}, " +
+                "JoinedAt={JoinedAt}, HasApplication={HasApplication}, HasChannel={HasChannel}, " +
+                "historyDepth={HistoryDepth}, " +
+                "lastTransition=[{LastFrom}->{LastTo} at {LastAt} actor={LastActor} reason={LastReason}]",
+                e.Member,
+                member.Status, member.StatusChangedAt, member.StatusReason,
+                member.RemovedByModeration,
+                member.KickedAt, member.BannedAt, member.AutoKickedAt,
+                member.JoinedAt, member.Application is not null, member.Channel is not null,
+                member.StatusHistory.Count,
+                lastEvent?.From, lastEvent?.To, lastEvent?.At, lastEvent?.ActorId, lastEvent?.Reason);
+
             if (IsEligibleForVoluntaryLeave(member))
             {
+                logger.LogInformation("Classifying {Member} as voluntary leave (status was {Status})",
+                    e.Member, member.Status);
                 await member.TransitionToAsync(db, MemberStatus.LeftVoluntarily);
             }
             else
@@ -50,6 +76,9 @@ internal partial class ApplicationWorkflow
                 // Terminal state was already set (e.g. by honeypot, KickStaleInvokable, or a
                 // panel action that fired before the Discord event arrived). Just stamp LeftAt
                 // for legacy queries without overwriting the canonical status.
+                logger.LogInformation(
+                    "Preserving terminal status {Status} for {Member}, stamping LeftAt only",
+                    member.Status, e.Member);
                 member.LeftAt = DateTime.UtcNow;
                 await db.SaveAsync(member);
             }

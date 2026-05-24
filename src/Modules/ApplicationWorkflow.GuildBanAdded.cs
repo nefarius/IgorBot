@@ -40,6 +40,9 @@ internal partial class ApplicationWorkflow : IDiscordGuildBanAddedEventSubscribe
             or MemberStatus.BannedByHoneypot
             or MemberStatus.BannedExternally)
         {
+            logger.LogInformation(
+                "GuildBanAdded for {Member} skipped: status already {Status}",
+                e.Member, member.Status);
             return;
         }
 

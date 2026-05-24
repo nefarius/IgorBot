@@ -241,8 +241,8 @@ internal partial class ApplicationWorkflow(
         GuildMember entry,
         DiscordMember member)
     {
-        logger.LogInformation("{User} banned {Member}",
-            args.User, member);
+        logger.LogInformation("{User} initiating ban of {Member} (current status {Status})",
+            args.User, member, entry.Status);
 
         // Pre-mark in DB so that the GuildMemberRemoved event that fires immediately
         // after BanAsync sees the correct terminal status even if this process restarts.
@@ -253,6 +253,8 @@ internal partial class ApplicationWorkflow(
         try
         {
             await member.BanAsync();
+
+            logger.LogInformation("{Member} ban completed by {User}", member, args.User);
         }
         catch (Exception ex)
         {
@@ -280,8 +282,8 @@ internal partial class ApplicationWorkflow(
         GuildMember entry,
         DiscordMember member)
     {
-        logger.LogInformation("{User} kicked {Member}",
-            args.User, member);
+        logger.LogInformation("{User} initiating kick of {Member} (current status {Status})",
+            args.User, member, entry.Status);
 
         // Pre-mark in DB so that the GuildMemberRemoved event that fires immediately
         // after RemoveAsync sees the correct terminal status even if this process restarts.
@@ -292,6 +294,8 @@ internal partial class ApplicationWorkflow(
         try
         {
             await member.RemoveAsync();
+
+            logger.LogInformation("{Member} kick completed by {User}", member, args.User);
         }
         catch (Exception ex)
         {

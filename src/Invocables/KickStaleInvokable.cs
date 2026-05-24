@@ -23,7 +23,8 @@ internal class KickStaleInvokable(
     DB db,
     ILogger<KickStaleInvokable> logger,
     IGuildConfigService guildConfigService,
-    IDiscordClientService discord)
+    IDiscordClientService discord,
+    IDiscordReadinessService readiness)
     : IInvocable
 {
     public async Task Invoke()
@@ -37,7 +38,19 @@ internal class KickStaleInvokable(
         {
             if (!discord.Client.Guilds.TryGetValue(config1.GuildId, out DiscordGuild guild))
             {
-                logger.LogWarning("Guild {GuildId} not present in client, skipping stale kick", config1.GuildId);
+                // If GuildAvailable has never fired for this guild the client cache is still
+                // being populated (startup race). Log at Debug to avoid false-alarm warnings.
+                // Once the guild has been seen at least once, a missing entry is a real problem.
+                if (readiness.IsGuildReady(config1.GuildId))
+                {
+                    logger.LogWarning("Guild {GuildId} not present in client, skipping stale kick", config1.GuildId);
+                }
+                else
+                {
+                    logger.LogDebug("Guild {GuildId} not yet available in client (startup), skipping stale kick",
+                        config1.GuildId);
+                }
+
                 continue;
             }
 
@@ -75,7 +88,9 @@ internal class KickStaleInvokable(
 
             foreach (GuildMember guildMember in staleMembers)
             {
-                logger.LogInformation("Processing stale member {MemberId}", guildMember.MemberId);
+                logger.LogInformation(
+                    "Initiating auto-kick of stale member {MemberId} (current status {Status}, widget created {CreatedAt})",
+                    guildMember.MemberId, guildMember.Status, guildMember.Application?.CreatedAt);
 
                 DiscordMember member;
 
@@ -99,9 +114,10 @@ internal class KickStaleInvokable(
 
                 try
                 {
+                    logger.LogInformation("Calling RemoveAsync for stale member {MemberId}", guildMember.MemberId);
                     await member.RemoveAsync("Member removed due to idle timeout");
 
-                    logger.LogWarning("Removed {@Member} due to idle timeout", guildMember);
+                    logger.LogInformation("Auto-kicked stale member {MemberId} due to idle timeout", guildMember.MemberId);
                 }
                 catch (NotFoundException)
                 {
