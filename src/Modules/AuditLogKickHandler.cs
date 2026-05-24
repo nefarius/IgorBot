@@ -43,7 +43,7 @@ internal sealed class AuditLogKickHandler(
         ulong guildId;
         ulong targetId;
         ulong? actorId = null;
-        string reason = null;
+        string? reason = null;
 
         try
         {
@@ -78,7 +78,7 @@ internal sealed class AuditLogKickHandler(
 
             if (root.TryGetProperty("reason", out JsonElement reasonEl))
             {
-                reason = reasonEl.GetString();
+                reason = reasonEl.GetString() ?? reason;
             }
         }
         catch (JsonException ex)
@@ -93,7 +93,7 @@ internal sealed class AuditLogKickHandler(
         }
 
         string entityId = $"{guildId}-{targetId}";
-        GuildMember member = await db.Find<GuildMember>().OneAsync(entityId);
+        GuildMember? member = await db.Find<GuildMember>().OneAsync(entityId);
 
         if (member is null)
         {

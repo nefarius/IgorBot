@@ -171,5 +171,5 @@ internal sealed partial class GuildMember
     ///     MongoDB ID.
     /// </summary>
     [BsonId]
-    public string ID { get; set; }
+    public string ID { get; set; } = null!;
 }

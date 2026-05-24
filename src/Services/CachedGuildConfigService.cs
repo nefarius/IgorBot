@@ -17,7 +17,7 @@ internal sealed class CachedGuildConfigService(IGuildConfigService inner, ILogge
 
     public async Task<GuildConfig?> GetAsync(ulong guildId, CancellationToken ct = default)
     {
-        if (_cache.TryGetValue(guildId, out CachedEntry entry) && !entry.IsExpired())
+        if (_cache.TryGetValue(guildId, out CachedEntry? entry) && !entry.IsExpired())
         {
             return entry.Config;
         }

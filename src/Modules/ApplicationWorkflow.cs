@@ -66,10 +66,15 @@ internal partial class ApplicationWorkflow(
             return;
         }
 
-        GuildConfig guildConfig = await guildConfigService.GetAsync(args.Guild.Id);
+        GuildConfig? guildConfig = await guildConfigService.GetAsync(args.Guild.Id);
         if (guildConfig == null)
         {
             logger.LogWarning("Guild {GuildId} not configured, ignoring component interaction", args.Guild.Id);
+            await args.Interaction.CreateResponseAsync(
+                InteractionResponseType.ChannelMessageWithSource,
+                new DiscordInteractionResponseBuilder()
+                    .WithContent("This server is not configured yet.")
+                    .AsEphemeral());
             return;
         }
 
@@ -89,8 +94,8 @@ internal partial class ApplicationWorkflow(
 
                         logger.LogDebug("Database ID: {Id}", dbId);
 
-                        GuildMember dbMember = (await db.Find<GuildMember>()
-                                .ManyAsync(m => m.Eq(f => f.Application.ID, dbId)))
+                        GuildMember? dbMember = (await db.Find<GuildMember>()
+                                .ManyAsync(m => m.Eq(f => f.Application!.ID, dbId)))
                             .FirstOrDefault();
 
                         if (dbMember is null)
@@ -106,7 +111,7 @@ internal partial class ApplicationWorkflow(
                             }
                         }
 
-                        StrangerApplicationEmbed application = dbMember.Application;
+                        StrangerApplicationEmbed? application = dbMember.Application;
 
                         if (application is null)
                         {
@@ -224,16 +229,24 @@ internal partial class ApplicationWorkflow(
 
         await entry.RespondToInteraction(args, client);
 
-        try
+        if (!string.IsNullOrEmpty(guildConfig.MemberWelcomeTemplate))
         {
-            DiscordChannel welcomeChannel = args.Guild.GetChannel(guildConfig.MemberWelcomeMessageChannelId);
+            try
+            {
+                DiscordChannel welcomeChannel = args.Guild.GetChannel(guildConfig.MemberWelcomeMessageChannelId);
 
-            await welcomeChannel
-                .SendMessageAsync(string.Format(guildConfig.MemberWelcomeTemplate, member.Mention));
+                await welcomeChannel
+                    .SendMessageAsync(string.Format(guildConfig.MemberWelcomeTemplate, member.Mention));
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Failed to deliver welcome message");
+            }
         }
-        catch (Exception ex)
+        else
         {
-            logger.LogError(ex, "Failed to deliver welcome message");
+            logger.LogWarning("MemberWelcomeTemplate is not configured for guild {GuildId}, skipping welcome message",
+                args.Guild.Id);
         }
     }
 

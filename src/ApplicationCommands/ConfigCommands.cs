@@ -41,9 +41,9 @@ public sealed class ConfigCommands(IGuildConfigService guildConfigService) : App
         [Option("idle_kick_minutes", "Minutes before kicking inactive strangers (0 or omit to disable)")]
         long idleKickMinutes = 0,
         [Option("honeypot_channel", "Channel that bans users who post in it (optional)")]
-        DiscordChannel honeypotChannel = null,
+        DiscordChannel? honeypotChannel = null,
         [Option("moderator_role", "Role that can see and interact with newbie channels (optional)")]
-        DiscordRole moderatorRole = null,
+        DiscordRole? moderatorRole = null,
         [Option("enable_onboarding_workflow", "Run onboarding workflow when member gets stranger role")]
         bool enableOnboardingWorkflow = true
     )
@@ -111,7 +111,7 @@ public sealed class ConfigCommands(IGuildConfigService guildConfigService) : App
         [Option("honeypot_channel", "Channel that bans users who post in it")]
         DiscordChannel honeypotChannel,
         [Option("honeypot_exclusion_role", "Role exempt from honeypot ban (optional)")]
-        DiscordRole honeypotExclusionRole = null
+        DiscordRole? honeypotExclusionRole = null
     )
     {
         await ctx.DeferAsync();
@@ -219,7 +219,7 @@ public sealed class ConfigCommands(IGuildConfigService guildConfigService) : App
         }
 
         ulong? parsedId = ParseSnowflake(value);
-        string validationError = null;
+        string? validationError = null;
 
         switch (option)
         {
@@ -382,7 +382,7 @@ public sealed class ConfigCommands(IGuildConfigService guildConfigService) : App
         }));
     }
 
-    private static string ValidateRole(DiscordGuild guild, ulong? parsedId, out ulong roleId)
+    private static string? ValidateRole(DiscordGuild guild, ulong? parsedId, out ulong roleId)
     {
         roleId = 0;
         if (!parsedId.HasValue)
@@ -407,7 +407,7 @@ public sealed class ConfigCommands(IGuildConfigService guildConfigService) : App
         }
     }
 
-    private static string ValidateCategoryChannel(DiscordGuild guild, ulong? parsedId, out ulong channelId)
+    private static string? ValidateCategoryChannel(DiscordGuild guild, ulong? parsedId, out ulong channelId)
     {
         channelId = 0;
         if (!parsedId.HasValue)
@@ -432,7 +432,7 @@ public sealed class ConfigCommands(IGuildConfigService guildConfigService) : App
         }
     }
 
-    private static string ValidateTextChannel(DiscordGuild guild, ulong? parsedId, out ulong channelId)
+    private static string? ValidateTextChannel(DiscordGuild guild, ulong? parsedId, out ulong channelId)
     {
         channelId = 0;
         if (!parsedId.HasValue)
@@ -457,7 +457,7 @@ public sealed class ConfigCommands(IGuildConfigService guildConfigService) : App
         }
     }
 
-    private static string ValidateApplicationChannelFormat(string value)
+    private static string? ValidateApplicationChannelFormat(string value)
     {
         try
         {
@@ -470,7 +470,7 @@ public sealed class ConfigCommands(IGuildConfigService guildConfigService) : App
         }
     }
 
-    private static string ValidateMentionTemplate(string value)
+    private static string? ValidateMentionTemplate(string value)
     {
         try
         {

@@ -7,9 +7,9 @@ namespace IgorBot.Core;
 /// </summary>
 internal sealed class NewMemberMessage
 {
-    public GuildProperties GuildProperties { get; init; }
+    public required GuildProperties GuildProperties { get; init; }
 
-    public GuildConfig GuildConfig { get; init; }
+    public required GuildConfig GuildConfig { get; init; }
 
-    public string MemberEntryId { get; init; }
+    public required string MemberEntryId { get; init; }
 }

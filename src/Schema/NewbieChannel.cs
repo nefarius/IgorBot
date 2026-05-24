@@ -25,12 +25,12 @@ internal sealed class NewbieChannel : IEntity
     /// <summary>
     ///     Display name of the channel.
     /// </summary>
-    public string ChannelName { get; init; }
+    public required string ChannelName { get; init; }
 
     /// <summary>
     ///     Channel mention string.
     /// </summary>
-    public string Mention { get; init; }
+    public required string Mention { get; init; }
 
     /// <summary>
     ///     Creation timestamp.
@@ -39,7 +39,7 @@ internal sealed class NewbieChannel : IEntity
 
     [SuppressMessage("ReSharper", "InconsistentNaming")]
     [BsonId]
-    public string ID { get; set; }
+    public string ID { get; set; } = null!;
 
     object IEntity.GenerateNewID()
     {

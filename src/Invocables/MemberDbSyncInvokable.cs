@@ -32,7 +32,7 @@ internal class MemberDbSyncInvokable(
             IReadOnlyList<GuildConfig> guildConfigs = await guildConfigService.GetAllAsync();
             foreach (GuildConfig guildConfig in guildConfigs)
             {
-                if (!discord.Client.Guilds.TryGetValue(guildConfig.GuildId, out DiscordGuild guild))
+                if (!discord.Client.Guilds.TryGetValue(guildConfig.GuildId, out DiscordGuild? guild))
                 {
                     logger.LogWarning("Guild {GuildId} not present in client, skipping sync", guildConfig.GuildId);
                     continue;
@@ -45,7 +45,7 @@ internal class MemberDbSyncInvokable(
                 foreach (DiscordMember member in members.Where(m => !m.IsBot))
                 {
                     string id = member.ToEntityId();
-                    GuildMember guildMember = await db.Find<GuildMember>().OneAsync(id);
+                    GuildMember? guildMember = await db.Find<GuildMember>().OneAsync(id);
 
                     // already exists
                     if (guildMember is not null)

@@ -27,7 +27,7 @@ internal partial class ApplicationWorkflow : IDiscordGuildBanAddedEventSubscribe
             return;
         }
 
-        GuildMember member = await db.Find<GuildMember>().OneAsync(e.Member.ToEntityId());
+        GuildMember? member = await db.Find<GuildMember>().OneAsync(e.Member.ToEntityId());
 
         if (member is null)
         {

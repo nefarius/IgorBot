@@ -35,7 +35,7 @@ public class GuildConfigEntity : IEntity
     /// <summary>
     ///     Format string to use when naming newbie channels.
     /// </summary>
-    public string ApplicationChannelNameFormat { get; set; }
+    public string? ApplicationChannelNameFormat { get; set; }
 
     /// <summary>
     ///     Optional list of snowflake IDs of moderators with permissions to see and interact newbie channels.
@@ -45,7 +45,7 @@ public class GuildConfigEntity : IEntity
     /// <summary>
     ///     Message template the bot uses to welcome a newbie in their channel.
     /// </summary>
-    public string NewbieWelcomeTemplate { get; set; }
+    public string? NewbieWelcomeTemplate { get; set; }
 
     /// <summary>
     ///     Channel snowflake ID where the status embed messages should appear.
@@ -55,7 +55,7 @@ public class GuildConfigEntity : IEntity
     /// <summary>
     ///     Message template the bot uses to welcome promoted members.
     /// </summary>
-    public string MemberWelcomeTemplate { get; set; }
+    public string? MemberWelcomeTemplate { get; set; }
 
     /// <summary>
     ///     Channel snowflake ID where the welcome messages of promoted members should appear.
@@ -95,7 +95,7 @@ public class GuildConfigEntity : IEntity
     [SuppressMessage("ReSharper", "InconsistentNaming")]
     [BsonId]
     [SuppressMessage("ReSharper", "UnusedMember.Global")]
-    public string ID { get; set; }
+    public string ID { get; set; } = null!;
 
     object IEntity.GenerateNewID()
     {

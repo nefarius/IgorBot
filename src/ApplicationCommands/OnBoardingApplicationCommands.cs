@@ -37,7 +37,7 @@ public sealed class OnBoardingApplicationCommands(DB db, IGuildConfigService gui
 
         await ctx.DeferAsync();
 
-        GuildMember dbMember = await db.Find<GuildMember>().OneAsync(ctx.ToEntityId());
+        GuildMember? dbMember = await db.Find<GuildMember>().OneAsync(ctx.ToEntityId());
 
         if (dbMember is null)
         {
@@ -52,7 +52,7 @@ public sealed class OnBoardingApplicationCommands(DB db, IGuildConfigService gui
             return;
         }
 
-        StrangerApplicationEmbed application = dbMember.Application;
+        StrangerApplicationEmbed? application = dbMember.Application;
 
         if (application is null)
         {
@@ -72,7 +72,7 @@ public sealed class OnBoardingApplicationCommands(DB db, IGuildConfigService gui
         #region Questionaire logic
 
         DiscordGuild guild = ctx.Guild;
-        GuildConfig guildConfig = await guildConfigService.GetAsync(guild.Id);
+        GuildConfig? guildConfig = await guildConfigService.GetAsync(guild.Id);
         if (guildConfig == null)
         {
             await ctx.EditResponseAsync(new DiscordWebhookBuilder().AddEmbed(new DiscordEmbedBuilder
@@ -85,7 +85,7 @@ public sealed class OnBoardingApplicationCommands(DB db, IGuildConfigService gui
             return;
         }
 
-        if (!guildConfig.Questionnaires.TryGetValue("Member", out Questionnaire questionnaire) || questionnaire == null)
+        if (!guildConfig.Questionnaires.TryGetValue("Member", out Questionnaire? questionnaire) || questionnaire == null)
         {
             await ctx.EditResponseAsync(new DiscordWebhookBuilder().AddEmbed(new DiscordEmbedBuilder
             {
@@ -174,7 +174,7 @@ public sealed class OnBoardingApplicationCommands(DB db, IGuildConfigService gui
         // timer does not fire while the member is actively answering.
         //
         application.IsAutoKickEnabled = false;
-        await db.SaveAsync(dbMember.Application);
+        await db.SaveAsync(application);
         await db.SaveAsync(dbMember);
         await dbMember.UpdateApplicationWidget(ctx.Client);
 

@@ -23,7 +23,7 @@ public class GuildProperties : IEntity
     [SuppressMessage("ReSharper", "InconsistentNaming")]
     [BsonId]
     [SuppressMessage("ReSharper", "UnusedMember.Global")]
-    public string ID { get; set; }
+    public string ID { get; set; } = null!;
 
     object IEntity.GenerateNewID()
     {
