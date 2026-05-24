@@ -3,6 +3,8 @@ using FluentAssertions;
 using IgorBot.Schema;
 using IgorBot.Services;
 
+using MongoDB.Bson;
+using MongoDB.Driver;
 using MongoDB.Entities;
 
 namespace IgorBot.Tests.Integration;
@@ -238,4 +240,64 @@ public sealed class GuildMemberStatusMigrationDbTests : IAsyncLifetime
     }
 
     private static string UniqueId() => Guid.NewGuid().ToString("N")[..16];
+
+    // ─── Legacy shape regression (no Status field in BSON) ───────────────────
+
+    /// <summary>
+    ///     Reproduces the true production legacy shape: a raw BSON document written before Phase 2
+    ///     that has no <c>Status</c> field at all (not even <c>Status: 0</c>).
+    /// </summary>
+    private async Task<string> InsertLegacyRaw(
+        DateTime? leftAt = null,
+        DateTime? kickedAt = null,
+        DateTime? bannedAt = null,
+        DateTime? promotedAt = null)
+    {
+        string id = UniqueId();
+
+        // Bypass MongoDB.Entities serialization so Status is genuinely absent.
+        IMongoCollection<GuildMember> typedColl = _db.Collection<GuildMember>();
+        IMongoCollection<BsonDocument> rawColl =
+            typedColl.Database.GetCollection<BsonDocument>(typedColl.CollectionNamespace.CollectionName);
+
+        BsonDocument doc = new()
+        {
+            ["_id"] = id,
+            ["MemberId"] = new BsonInt64(2),
+            ["GuildId"] = new BsonInt64(1),
+            ["Application"] = BsonNull.Value,
+            ["Channel"] = BsonNull.Value,
+            ["CreatedAt"] = new BsonDateTime(DateTime.UtcNow.AddDays(-1)),
+            ["JoinedAt"] = new BsonDateTime(DateTime.UtcNow.AddDays(-1)),
+            ["LeftAt"] = leftAt.HasValue ? new BsonDateTime(leftAt.Value) : BsonNull.Value,
+            ["PromotedAt"] = promotedAt.HasValue ? new BsonDateTime(promotedAt.Value) : BsonNull.Value,
+            ["KickedAt"] = kickedAt.HasValue ? new BsonDateTime(kickedAt.Value) : BsonNull.Value,
+            ["BannedAt"] = bannedAt.HasValue ? new BsonDateTime(bannedAt.Value) : BsonNull.Value,
+            ["Member"] = $"Member {id}; legacy#0000 (legacy)",
+            ["Mention"] = $"<@!{id}>"
+            // Intentionally no "Status" key — this is the pre-Phase-2 shape
+        };
+
+        await rawColl.InsertOneAsync(doc);
+        return id;
+    }
+
+    [Fact]
+    public async Task RunAsync_LegacyDocWithoutStatusField_IsMigrated()
+    {
+        // Arrange: insert a raw legacy document that has no Status field (true production shape)
+        string id = await InsertLegacyRaw(leftAt: DateTime.UtcNow.AddHours(-1));
+
+        // Act
+        await GuildMemberStatusMigration.RunAsync(_db);
+
+        // Assert
+        GuildMember? loaded = await _db.Find<GuildMember>().OneAsync(id);
+        loaded.Should().NotBeNull(because: "the raw legacy document must be findable after migration");
+        loaded!.Status.Should().Be(MemberStatus.LeftVoluntarily,
+            because: "LeftAt is set so the member left voluntarily");
+        loaded.StatusHistory.Should().ContainSingle(
+            because: "migration must append exactly one history event");
+        loaded.StatusHistory[0].Reason.Should().Be("migration");
+    }
 }

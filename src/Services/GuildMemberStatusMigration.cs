@@ -26,7 +26,9 @@ internal static class GuildMemberStatusMigration
         Log.Information("GuildMemberStatusMigration starting (dryRun={DryRun})", dryRun);
 
         List<GuildMember> unmigratedMembers = await db.Find<GuildMember>()
-            .ManyAsync(m => m.Eq(f => f.Status, MemberStatus.Unknown));
+            .ManyAsync(f => f.Or(
+                f.Eq(m => m.Status, MemberStatus.Unknown),
+                f.Exists(m => m.Status, false)));
 
         if (unmigratedMembers.Count == 0)
         {
@@ -126,7 +128,7 @@ internal static class GuildMemberStatusMigration
             return (MemberStatus.FullMember, m.PromotedAt ?? m.FullMemberAt!.Value);
         }
 
-        if (m.Application is not null && m.Application.QuestionnaireSubmittedAt.HasValue)
+        if (m.Application?.QuestionnaireSubmittedAt != null)
         {
             return (MemberStatus.QuestionnaireSubmitted, m.Application.QuestionnaireSubmittedAt.Value);
         }
