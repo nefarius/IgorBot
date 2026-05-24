@@ -104,7 +104,7 @@ public sealed class MemberLifecycleClassifierTests
             From = MemberStatus.Unknown,
             To = MemberStatus.New,
             At = DateTime.UtcNow,
-            Reason = "discovered_by_sync"
+            Reason = MemberLifecycleClassifier.DiscoveredBySyncReason
         });
 
         MemberLifecycleClassifier.ClassifyVoluntaryLeavePath(member)
@@ -149,7 +149,7 @@ public sealed class MemberLifecycleClassifierTests
             From = MemberStatus.Unknown,
             To = MemberStatus.New,
             At = DateTime.UtcNow.AddDays(-2),
-            Reason = "discovered_by_sync"
+            Reason = MemberLifecycleClassifier.DiscoveredBySyncReason
         });
         member.StatusHistory.Add(new MemberStatusEvent
         {
@@ -173,7 +173,7 @@ public sealed class MemberLifecycleClassifierTests
             From = MemberStatus.Unknown,
             To = MemberStatus.New,
             At = DateTime.UtcNow,
-            Reason = "discovered_by_sync"
+            Reason = MemberLifecycleClassifier.DiscoveredBySyncReason
         });
 
         MemberLifecycleClassifier.IsEligibleForVoluntaryLeave(member).Should().BeTrue();

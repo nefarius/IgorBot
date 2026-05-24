@@ -31,6 +31,15 @@ internal enum VoluntaryLeavePath
 internal static class MemberLifecycleClassifier
 {
     /// <summary>
+    ///     Reason string written to <see cref="MemberStatusEvent.Reason" /> and
+    ///     <see cref="GuildMember.StatusReason" /> when a document is first inserted by
+    ///     <c>MemberDbSyncInvokable</c>. Used as a sentinel by
+    ///     <see cref="ClassifyVoluntaryLeavePath" /> to identify pre-existing members
+    ///     who were never onboarded before leaving.
+    /// </summary>
+    internal const string DiscoveredBySyncReason = "discovered_by_sync";
+
+    /// <summary>
     ///     Returns <see langword="true" /> when a member's departure should be recorded as a voluntary leave.
     ///     Migrated documents (<see cref="MemberStatus" /> != <see cref="MemberStatus.Unknown" />) are eligible
     ///     when in a non-terminal active state.
@@ -77,7 +86,7 @@ internal static class MemberLifecycleClassifier
             && member.Application is null
             && member.Channel is null
             && member.StatusHistory.Count == 1
-            && member.StatusHistory[0].Reason == "discovered_by_sync")
+            && member.StatusHistory[0].Reason == DiscoveredBySyncReason)
         {
             return VoluntaryLeavePath.LegacyDiscoveredBySync;
         }

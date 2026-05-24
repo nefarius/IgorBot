@@ -81,14 +81,14 @@ internal class MemberDbSyncInvokable(
                         Mention = member.Mention,
                         Status = MemberStatus.New,
                         StatusChangedAt = now,
-                        StatusReason = "discovered_by_sync"
+                        StatusReason = MemberLifecycleClassifier.DiscoveredBySyncReason
                     };
                     guildMember.StatusHistory.Add(new MemberStatusEvent
                     {
                         From = MemberStatus.Unknown,
                         To = MemberStatus.New,
                         At = now,
-                        Reason = "discovered_by_sync"
+                        Reason = MemberLifecycleClassifier.DiscoveredBySyncReason
                     });
 
                     await db.SaveAsync(guildMember);
