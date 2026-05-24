@@ -178,6 +178,62 @@ public sealed class GuildMemberDerivedFlagsTests
         }
     }
 
+    [Fact]
+    public void IsInGuild_Unknown_NoTimestamps_IsTrue()
+    {
+        GuildMember member = Build(MemberStatus.Unknown);
+        member.IsInGuild.Should().BeTrue();
+    }
+
+    [Fact]
+    public void IsInGuild_Unknown_BannedAtAfterJoin_IsFalse()
+    {
+        GuildMember member = Build(MemberStatus.Unknown);
+        member.JoinedAt = DateTime.UtcNow.AddHours(-1);
+        member.BannedAt = DateTime.UtcNow;
+        member.IsInGuild.Should().BeFalse();
+    }
+
+    [Fact]
+    public void IsInGuild_Unknown_KickedAtAfterJoin_IsFalse()
+    {
+        GuildMember member = Build(MemberStatus.Unknown);
+        member.JoinedAt = DateTime.UtcNow.AddHours(-1);
+        member.KickedAt = DateTime.UtcNow;
+        member.IsInGuild.Should().BeFalse();
+    }
+
+    [Fact]
+    public void IsInGuild_Unknown_LeftAtAfterJoin_IsFalse()
+    {
+        GuildMember member = Build(MemberStatus.Unknown);
+        member.JoinedAt = DateTime.UtcNow.AddHours(-1);
+        member.LeftAt = DateTime.UtcNow;
+        member.IsInGuild.Should().BeFalse();
+    }
+
+    [Fact]
+    public void IsInGuild_Unknown_KickedAtBeforeJoin_IsTrue()
+    {
+        // Timestamp from a previous join cycle that predates the current JoinedAt
+        // must not be treated as a current departure.
+        GuildMember member = Build(MemberStatus.Unknown);
+        member.JoinedAt = DateTime.UtcNow;
+        member.KickedAt = DateTime.UtcNow.AddHours(-1);
+        member.IsInGuild.Should().BeTrue();
+    }
+
+    [Fact]
+    public void IsInGuild_Unknown_AllTimestampsBeforeJoin_IsTrue()
+    {
+        GuildMember member = Build(MemberStatus.Unknown);
+        member.JoinedAt = DateTime.UtcNow;
+        member.BannedAt = DateTime.UtcNow.AddHours(-1);
+        member.KickedAt = DateTime.UtcNow.AddHours(-2);
+        member.LeftAt = DateTime.UtcNow.AddHours(-3);
+        member.IsInGuild.Should().BeTrue();
+    }
+
     // ─── IsFullMember (Status-known path) ────────────────────────────────────
 
     [Fact]

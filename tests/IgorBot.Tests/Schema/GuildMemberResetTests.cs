@@ -130,7 +130,18 @@ public sealed class GuildMemberResetTests
     private static void SetPrivate(object obj, string propertyName, object? value)
     {
         System.Reflection.PropertyInfo? prop = obj.GetType()
-            .GetProperty(propertyName, System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
-        prop?.SetValue(obj, value);
+            .GetProperty(propertyName,
+                System.Reflection.BindingFlags.NonPublic |
+                System.Reflection.BindingFlags.Public |
+                System.Reflection.BindingFlags.Instance);
+
+        if (prop is null)
+        {
+            throw new InvalidOperationException(
+                $"Property '{propertyName}' not found on type '{obj.GetType().FullName}'. " +
+                "Check the property name and access modifiers.");
+        }
+
+        prop.SetValue(obj, value);
     }
 }
