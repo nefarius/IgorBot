@@ -72,17 +72,29 @@ internal class MemberDbSyncInvokable(
                     }
 
                     // add missing
+                    DateTime now = DateTime.UtcNow;
                     guildMember = new GuildMember
                     {
                         GuildId = member.Guild.Id,
                         MemberId = member.Id,
                         Member = member.ToString(),
-                        Mention = member.Mention
+                        Mention = member.Mention,
+                        Status = MemberStatus.New,
+                        StatusChangedAt = now,
+                        StatusReason = MemberLifecycleClassifier.DiscoveredBySyncReason
                     };
+                    guildMember.StatusHistory.Add(new MemberStatusEvent
+                    {
+                        From = MemberStatus.Unknown,
+                        To = MemberStatus.New,
+                        At = now,
+                        Reason = MemberLifecycleClassifier.DiscoveredBySyncReason
+                    });
 
                     await db.SaveAsync(guildMember);
 
-                    logger.LogInformation("{Member} added to DB", member);
+                    logger.LogInformation("{Member} added to DB by sync (stamped Status={Status})", member,
+                        MemberStatus.New);
                 }
             }
 

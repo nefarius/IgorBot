@@ -84,6 +84,101 @@ public sealed class MemberLifecycleClassifierTests
         MemberLifecycleClassifier.IsEligibleForVoluntaryLeave(member).Should().BeFalse();
     }
 
+    // ─── ClassifyVoluntaryLeavePath ──────────────────────────────────────────
+
+    [Fact]
+    public void ClassifyVoluntaryLeavePath_Unknown_NoHistoryNoApplication_ReturnsLegacyUnknown()
+    {
+        GuildMember member = BuildMember(MemberStatus.Unknown);
+
+        MemberLifecycleClassifier.ClassifyVoluntaryLeavePath(member)
+            .Should().Be(VoluntaryLeavePath.LegacyUnknown);
+    }
+
+    [Fact]
+    public void ClassifyVoluntaryLeavePath_New_SingleDiscoveredBySyncHistory_ReturnsLegacyDiscoveredBySync()
+    {
+        GuildMember member = BuildMember(MemberStatus.New);
+        member.StatusHistory.Add(new MemberStatusEvent
+        {
+            From = MemberStatus.Unknown,
+            To = MemberStatus.New,
+            At = DateTime.UtcNow,
+            Reason = MemberLifecycleClassifier.DiscoveredBySyncReason
+        });
+
+        MemberLifecycleClassifier.ClassifyVoluntaryLeavePath(member)
+            .Should().Be(VoluntaryLeavePath.LegacyDiscoveredBySync);
+    }
+
+    [Fact]
+    public void ClassifyVoluntaryLeavePath_New_SingleHistoryWithDifferentReason_ReturnsStandard()
+    {
+        GuildMember member = BuildMember(MemberStatus.New);
+        member.StatusHistory.Add(new MemberStatusEvent
+        {
+            From = MemberStatus.Unknown,
+            To = MemberStatus.New,
+            At = DateTime.UtcNow,
+            Reason = "rejoin"
+        });
+
+        MemberLifecycleClassifier.ClassifyVoluntaryLeavePath(member)
+            .Should().Be(VoluntaryLeavePath.Standard);
+    }
+
+    [Theory]
+    [InlineData(MemberStatus.Onboarding)]
+    [InlineData(MemberStatus.QuestionnaireSubmitted)]
+    [InlineData(MemberStatus.FullMember)]
+    [InlineData(MemberStatus.StrangerRoleRemoved)]
+    public void ClassifyVoluntaryLeavePath_OnboardedStatuses_ReturnsStandard(MemberStatus status)
+    {
+        GuildMember member = BuildMember(status);
+
+        MemberLifecycleClassifier.ClassifyVoluntaryLeavePath(member)
+            .Should().Be(VoluntaryLeavePath.Standard);
+    }
+
+    [Fact]
+    public void ClassifyVoluntaryLeavePath_New_DiscoveredBySyncReason_ButMultipleHistoryEntries_ReturnsStandard()
+    {
+        GuildMember member = BuildMember(MemberStatus.New);
+        member.StatusHistory.Add(new MemberStatusEvent
+        {
+            From = MemberStatus.Unknown,
+            To = MemberStatus.New,
+            At = DateTime.UtcNow.AddDays(-2),
+            Reason = MemberLifecycleClassifier.DiscoveredBySyncReason
+        });
+        member.StatusHistory.Add(new MemberStatusEvent
+        {
+            From = MemberStatus.New,
+            To = MemberStatus.New,
+            At = DateTime.UtcNow,
+            Reason = "rejoin"
+        });
+
+        MemberLifecycleClassifier.ClassifyVoluntaryLeavePath(member)
+            .Should().Be(VoluntaryLeavePath.Standard);
+    }
+
+    // Regression guard: a member discovered by sync is still eligible for voluntary leave.
+    [Fact]
+    public void IsEligibleForVoluntaryLeave_New_DiscoveredBySyncHistory_ReturnsTrue()
+    {
+        GuildMember member = BuildMember(MemberStatus.New);
+        member.StatusHistory.Add(new MemberStatusEvent
+        {
+            From = MemberStatus.Unknown,
+            To = MemberStatus.New,
+            At = DateTime.UtcNow,
+            Reason = MemberLifecycleClassifier.DiscoveredBySyncReason
+        });
+
+        MemberLifecycleClassifier.IsEligibleForVoluntaryLeave(member).Should().BeTrue();
+    }
+
     // ─── Helpers ─────────────────────────────────────────────────────────────
 
     private static GuildMember BuildMember(MemberStatus status) =>
