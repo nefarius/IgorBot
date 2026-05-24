@@ -304,6 +304,30 @@ public sealed class GuildMemberStatusMigrationDbTests : IAsyncLifetime
     // ─── Corrupted document with null _id is skipped gracefully ─────────────
 
     [Fact]
+    public async Task RunAsync_WriteSidePredicate_DoesNotOverwriteConcurrentlyMigratedDoc()
+    {
+        // Arrange: insert a legacy doc that the outer Find would return (Status=Unknown).
+        GuildMember m = await InsertUnmigrated(leftAt: DateTime.UtcNow.AddHours(-1));
+
+        // Simulate a concurrent TransitionToAsync winning the race: directly stamp a real status
+        // on the document in the DB before RunAsync issues its updateOne.
+        await _db.Update<GuildMember>()
+            .MatchID(m.ID)
+            .Modify(x => x.Status, MemberStatus.FullMember)
+            .ExecuteAsync();
+
+        // Act: migration runs; its write-side predicate sees Status != Unknown → no-op.
+        await GuildMemberStatusMigration.RunAsync(_db);
+
+        // Assert: the concurrent winner's status is preserved; no "migration" history entry.
+        GuildMember loaded = await Reload(m);
+        loaded.Status.Should().Be(MemberStatus.FullMember,
+            because: "the write-side predicate must not overwrite a status set after the Find");
+        loaded.StatusHistory.Should().BeEmpty(
+            because: "no migration event must be appended when the update is a no-op");
+    }
+
+    [Fact]
     public async Task RunAsync_DocumentWithNullId_IsSkippedWithoutCrash()
     {
         // Arrange: insert a corrupted document whose _id is BsonNull — this is what the C#

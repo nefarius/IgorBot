@@ -82,8 +82,14 @@ internal static class GuildMemberStatusMigration
             // Use an atomic $set + $push instead of SaveAsync so we can never accidentally
             // INSERT a document (SaveAsync's insert-vs-replace is decided by HasDefaultID(),
             // which is unreliable for legacy documents with unusual _id shapes).
+            // The write-side predicate mirrors the read-side filter: if another writer
+            // (e.g. TransitionToAsync) already set a real Status between our Find and this
+            // update, the updateOne matches 0 documents and becomes a safe no-op.
             Update<GuildMember> update = db.Update<GuildMember>()
                 .MatchID(member.ID)
+                .Match(f => f.Or(
+                    f.Eq(m => m.Status, MemberStatus.Unknown),
+                    f.Exists(m => m.Status, false)))
                 .Modify(m => m.Status, derivedStatus)
                 .Modify(m => m.StatusChangedAt, (DateTime?)derivedAt)
                 .Modify(b => b.Push(m => m.StatusHistory, evt));
