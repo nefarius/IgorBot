@@ -85,9 +85,19 @@ internal partial class ApplicationWorkflow
 
             if (IsEligibleForVoluntaryLeave(member))
             {
-                logger.LogInformation("Classifying {Member} as voluntary leave (status was {Status})",
-                    e.Member, member.Status);
-                await member.TransitionToAsync(db, MemberStatus.LeftVoluntarily);
+                VoluntaryLeavePath path = ClassifyVoluntaryLeavePath(member);
+                string reason = path switch
+                {
+                    VoluntaryLeavePath.LegacyUnknown => "legacy_unknown_voluntary_leave",
+                    VoluntaryLeavePath.LegacyDiscoveredBySync => "legacy_discovered_voluntary_leave",
+                    _ => "voluntary_leave"
+                };
+
+                logger.LogInformation(
+                    "Classifying {Member} as voluntary leave (path={Path}, status was {Status})",
+                    e.Member, path, member.Status);
+
+                await member.TransitionToAsync(db, MemberStatus.LeftVoluntarily, reason);
             }
             else
             {
