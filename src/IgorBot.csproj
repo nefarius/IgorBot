@@ -5,7 +5,7 @@
         <UserSecretsId>dotnet-IgorBot-B2265C36-7248-46E7-A1FA-942CD00C041F</UserSecretsId>
         <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
         <DockerfileContext>.</DockerfileContext>
-        <Nullable>disable</Nullable>
+        <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
     </PropertyGroup>
 
