@@ -29,10 +29,6 @@
 
     <ItemGroup>
         <PackageReference Include="Coravel" Version="6.0.2"/>
-        <PackageReference Include="Fody" Version="6.9.3">
-            <PrivateAssets>all</PrivateAssets>
-            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-        </PackageReference>
         <PackageReference Include="Microsoft.Extensions.Configuration" Version="10.0.8"/>
         <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.8"/>
         <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="10.0.8"/>
@@ -43,9 +39,6 @@
         <PackageReference Include="MongoDB.Entities" Version="25.1.0"/>
         <PackageReference Include="Nefarius.DSharpPlus.Interactivity.Extensions.Hosting" Version="6.2.7"/>
         <PackageReference Include="Nefarius.DSharpPlus.SlashCommands.Extensions.Hosting" Version="6.2.7"/>
-        <PackageReference Include="PropertyChanged.Fody" Version="4.1.0">
-            <PrivateAssets>all</PrivateAssets>
-        </PackageReference>
         <PackageReference Include="Serilog.Extensions.Logging" Version="10.0.0"/>
         <PackageReference Include="Serilog.Settings.Configuration" Version="10.0.0"/>
         <PackageReference Include="Serilog.Sinks.Console" Version="6.1.1"/>
