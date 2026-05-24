@@ -25,6 +25,8 @@ internal partial class ApplicationWorkflow
             return;
         }
 
+        // Capture Discord-side state immediately — roles and join date are unavailable
+        // after the member leaves, so log them here before the DB lookup.
         string roles = e.Member.Roles.Any()
             ? string.Join(", ", e.Member.Roles.Select(r => $"{r.Name}({r.Id})"))
             : "(none)";
@@ -33,7 +35,8 @@ internal partial class ApplicationWorkflow
             "{Member} left — Discord roles at removal: [{Roles}], Discord joined {DiscordJoinedAt}",
             e.Member, roles, e.Member.JoinedAt);
 
-        GuildMember member = await db.Find<GuildMember>().OneAsync(e.ToEntityId());
+        string entityId = $"{e.Guild.Id}-{e.Member.Id}";
+        GuildMember member = await db.Find<GuildMember>().OneAsync(entityId);
 
         if (member is null)
         {
@@ -47,6 +50,17 @@ internal partial class ApplicationWorkflow
             // terminal cause (mod kick, ban, auto-kick, honeypot) has already been set.
             // For un-migrated documents (Status == Unknown) the legacy timestamp fields
             // are the source of truth — check them before overwriting with LeftVoluntarily.
+
+            // When the initially-loaded status is still non-terminal, a concurrent handler
+            // (AuditLogKickHandler for external kicks, or GuildBanAdded for external bans)
+            // may be writing a terminal status to the DB right now. Wait briefly then
+            // re-fetch so we see their result before making the classification decision.
+            if (IsEligibleForVoluntaryLeave(member))
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(500));
+                member = await db.Find<GuildMember>().OneAsync(entityId) ?? member;
+            }
+
             MemberStatusEvent lastEvent = member.StatusHistory.LastOrDefault();
 
             logger.LogInformation(
