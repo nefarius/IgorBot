@@ -85,6 +85,11 @@ internal sealed class HoneypotModule(DB db, IGuildConfigService guildConfigServi
             }
 
             MemberStatus previousStatus = guildMember.Status;
+
+            logger.LogInformation(
+                "Honeypot triggered by {Member} (existing document: {Existing}, prior status {Previous})",
+                member, !isNewDocument, previousStatus);
+
             await guildMember.TransitionToAsync(db, MemberStatus.BannedByHoneypot, "honeypot");
 
             // yeet!

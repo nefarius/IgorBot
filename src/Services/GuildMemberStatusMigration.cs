@@ -52,6 +52,9 @@ internal static class GuildMemberStatusMigration
                 continue;
             }
 
+            Log.Information("Migrating {MemberId} {Unknown} -> {Derived} at {At}",
+                member.ID, MemberStatus.Unknown, derivedStatus, derivedAt);
+
             member.Status = derivedStatus;
             member.StatusChangedAt = derivedAt;
 

@@ -41,8 +41,16 @@ internal partial class ApplicationWorkflow
             // terminal cause (mod kick, ban, auto-kick, honeypot) has already been set.
             // For un-migrated documents (Status == Unknown) the legacy timestamp fields
             // are the source of truth — check them before overwriting with LeftVoluntarily.
+            logger.LogInformation(
+                "Member {Member} departure: loaded status {Status}, RemovedByModeration={RemovedByModeration}, " +
+                "KickedAt={KickedAt}, BannedAt={BannedAt}, AutoKickedAt={AutoKickedAt}, history depth {HistoryDepth}",
+                e.Member, member.Status, member.RemovedByModeration,
+                member.KickedAt, member.BannedAt, member.AutoKickedAt, member.StatusHistory.Count);
+
             if (IsEligibleForVoluntaryLeave(member))
             {
+                logger.LogInformation("Classifying {Member} as voluntary leave (status was {Status})",
+                    e.Member, member.Status);
                 await member.TransitionToAsync(db, MemberStatus.LeftVoluntarily);
             }
             else
@@ -50,6 +58,9 @@ internal partial class ApplicationWorkflow
                 // Terminal state was already set (e.g. by honeypot, KickStaleInvokable, or a
                 // panel action that fired before the Discord event arrived). Just stamp LeftAt
                 // for legacy queries without overwriting the canonical status.
+                logger.LogInformation(
+                    "Preserving terminal status {Status} for {Member}, stamping LeftAt only",
+                    member.Status, e.Member);
                 member.LeftAt = DateTime.UtcNow;
                 await db.SaveAsync(member);
             }
