@@ -4,8 +4,6 @@
 [![.NET Tests](https://github.com/nefarius/IgorBot/actions/workflows/dotnet-tests.yml/badge.svg)](https://github.com/nefarius/IgorBot/actions/workflows/dotnet-tests.yml)
 [![Requirements](https://img.shields.io/badge/Requirements-.NET%2010.0-blue.svg)](https://github.com/dotnet/core/blob/main/release-notes/10.0/supported-os.md)
 [![Docker Pulls](https://img.shields.io/docker/pulls/containinger/igor-bot)](https://hub.docker.com/r/containinger/igor-bot)
-![Docker Image Version (latest by date)](https://img.shields.io/docker/v/containinger/igor-bot)
-![Docker Image Size (latest by date)](https://img.shields.io/docker/image-size/containinger/igor-bot)
 
 Advanced Discord bot to automate new member onboarding.
 
