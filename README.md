@@ -1,6 +1,7 @@
 # <img src="assets/NSS-128x128.png" align="left" />IgorBot
 
 [![Docker Image CI](https://github.com/nefarius/IgorBot/actions/workflows/docker-image.yml/badge.svg)](https://github.com/nefarius/IgorBot/actions/workflows/docker-image.yml)
+[![.NET Tests](https://github.com/nefarius/IgorBot/actions/workflows/dotnet-tests.yml/badge.svg)](https://github.com/nefarius/IgorBot/actions/workflows/dotnet-tests.yml)
 [![Requirements](https://img.shields.io/badge/Requirements-.NET%2010.0-blue.svg)](https://github.com/dotnet/core/blob/main/release-notes/10.0/supported-os.md)
 [![Docker Pulls](https://img.shields.io/docker/pulls/containinger/igor-bot)](https://hub.docker.com/r/containinger/igor-bot)
 ![Docker Image Version (latest by date)](https://img.shields.io/docker/v/containinger/igor-bot)
@@ -112,6 +113,17 @@ All items below correspond to `/config setup` parameters (appsettings equivalent
 - (Optional) Add a moderator role → `moderator_role` (`ApplicationModeratorRoleIds`)
 - (Optional) Add a **honeypot** channel → `honeypot_channel`—users who post in it are automatically banned. For honeypot-only servers, use `/config setup-honeypot` instead of full setup.
 - If using Option A (auto-assign): the bot needs **Manage Roles** and its role must be above the stranger role. Enable the **Guild Members** privileged intent in the [Discord Developer Portal](https://discord.com/developers/applications).
+
+## Running tests
+
+```bash
+dotnet test tests/IgorBot.Tests/IgorBot.Tests.csproj
+```
+
+The test suite has two layers:
+
+- **Pure unit tests** (`tests/IgorBot.Tests/Schema/`) — exercise `MemberLifecycleClassifier`, `GuildMemberStatusMigration.DeriveStatus`, the derived flags on `GuildMember`, `Reset()`, and `MemberStatus` ordinal pins. No external dependencies; runs instantly.
+- **Integration tests** (`tests/IgorBot.Tests/Integration/`) — exercise `TransitionToAsync` and `GuildMemberStatusMigration.RunAsync` against a real embedded MongoDB instance. [EphemeralMongo](https://github.com/asimmon/ephemeral-mongo) downloads the mongod binary automatically on first run (no Docker or separate MongoDB installation required).
 
 ## How to build
 

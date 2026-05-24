@@ -6,6 +6,8 @@ using DSharpPlus.Exceptions;
 using IgorBot.Schema;
 using IgorBot.Util;
 
+using static IgorBot.Schema.MemberLifecycleClassifier;
+
 namespace IgorBot.Modules;
 
 internal partial class ApplicationWorkflow
@@ -158,28 +160,4 @@ internal partial class ApplicationWorkflow
         }, TaskContinuationOptions.OnlyOnFaulted);
     }
 
-    /// <summary>
-    ///     Returns true when a member's departure should be recorded as a voluntary leave.
-    ///     Migrated documents (Status != Unknown) are eligible when in a non-terminal state.
-    ///     Un-migrated documents (Status == Unknown) are eligible only when no legacy terminal
-    ///     timestamp (KickedAt, BannedAt, AutoKickedAt) has already been set.
-    /// </summary>
-    private static bool IsEligibleForVoluntaryLeave(GuildMember member) =>
-        member.Status switch
-        {
-            MemberStatus.New or
-            MemberStatus.Onboarding or
-            MemberStatus.QuestionnaireSubmitted or
-            MemberStatus.FullMember or
-            MemberStatus.StrangerRoleRemoved => true,
-
-            // Legacy document: defer to timestamp fields to avoid overwriting a terminal marker.
-            MemberStatus.Unknown =>
-                !member.KickedAt.HasValue &&
-                !member.BannedAt.HasValue &&
-                !member.AutoKickedAt.HasValue,
-
-            // Already in a terminal state set by a prior action — do not overwrite.
-            _ => false
-        };
 }

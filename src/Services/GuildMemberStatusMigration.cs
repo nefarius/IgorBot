@@ -97,7 +97,7 @@ internal static class GuildMemberStatusMigration
     ///     BannedAt → KickedAt → AutoKickedAt → LeftAt → FullMember → QuestionnaireSubmitted
     ///     → Onboarding → StrangerRoleRemoved → New.
     /// </summary>
-    private static (MemberStatus status, DateTime at) DeriveStatus(GuildMember m)
+    internal static (MemberStatus status, DateTime at) DeriveStatus(GuildMember m)
     {
         if (m.BannedAt.HasValue)
         {

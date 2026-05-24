@@ -11,6 +11,12 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+            <_Parameter1>IgorBot.Tests</_Parameter1>
+        </AssemblyAttribute>
+    </ItemGroup>
+
+    <ItemGroup>
         <Compile Remove="Logs\**"/>
         <Content Remove="Logs\**"/>
         <EmbeddedResource Remove="Logs\**"/>

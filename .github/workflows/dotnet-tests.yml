@@ -1,0 +1,43 @@
+name: .NET Tests
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+
+  test:
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore dependencies
+        run: dotnet restore IgorBot.sln
+
+      - name: Build
+        run: dotnet build IgorBot.sln -c Release --no-restore
+
+      - name: Test
+        run: >
+          dotnet test tests/IgorBot.Tests/IgorBot.Tests.csproj
+          -c Release
+          --no-build
+          --logger "trx;LogFileName=test-results.trx"
+          --collect:"XPlat Code Coverage"
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: |
+            tests/IgorBot.Tests/TestResults/**/test-results.trx
+            tests/IgorBot.Tests/TestResults/**/coverage.cobertura.xml
