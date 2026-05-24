@@ -300,4 +300,40 @@ public sealed class GuildMemberStatusMigrationDbTests : IAsyncLifetime
             because: "migration must append exactly one history event");
         loaded.StatusHistory[0].Reason.Should().Be("migration");
     }
+
+    // ─── Corrupted document with null _id is skipped gracefully ─────────────
+
+    [Fact]
+    public async Task RunAsync_DocumentWithNullId_IsSkippedWithoutCrash()
+    {
+        // Arrange: insert a corrupted document whose _id is BsonNull — this is what the C#
+        // driver deserializes to string ID = null, triggering the SaveAsync → INSERT → DupKey
+        // crash that was observed in production.
+        IMongoCollection<GuildMember> typedColl = _db.Collection<GuildMember>();
+        IMongoCollection<BsonDocument> rawColl =
+            typedColl.Database.GetCollection<BsonDocument>(typedColl.CollectionNamespace.CollectionName);
+
+        BsonDocument corrupted = new()
+        {
+            ["_id"] = BsonNull.Value,
+            ["MemberId"] = new BsonInt64(99),
+            ["GuildId"] = new BsonInt64(1),
+            ["JoinedAt"] = new BsonDateTime(DateTime.UtcNow.AddDays(-1)),
+            ["LeftAt"] = new BsonDateTime(DateTime.UtcNow.AddHours(-1)),
+            ["Member"] = "corrupted#0000",
+            ["Mention"] = "<@!99>"
+        };
+        await rawColl.InsertOneAsync(corrupted);
+
+        // Also insert one healthy legacy doc so we can verify normal migration still completes.
+        string healthyId = await InsertLegacyRaw(leftAt: DateTime.UtcNow.AddHours(-2));
+
+        // Act — must not throw
+        await GuildMemberStatusMigration.RunAsync(_db);
+
+        // Assert: the healthy document was migrated; the corrupted one was skipped.
+        GuildMember? healthy = await _db.Find<GuildMember>().OneAsync(healthyId);
+        healthy!.Status.Should().Be(MemberStatus.LeftVoluntarily,
+            because: "healthy legacy doc must still be migrated despite the corrupted peer");
+    }
 }

@@ -40,8 +40,22 @@ internal static class GuildMemberStatusMigration
 
         Dictionary<MemberStatus, int> histogram = new();
 
+        int skippedCount = 0;
+
         foreach (GuildMember member in unmigratedMembers)
         {
+            // Corrupted documents (e.g. created with a non-string _id before Phase 1) have a
+            // null ID after deserialization. SaveAsync would treat them as new documents and try
+            // to INSERT, producing a duplicate-key error. Skip them with a warning instead.
+            if (string.IsNullOrEmpty(member.ID))
+            {
+                Log.Warning(
+                    "GuildMemberStatusMigration: skipping document with null/empty ID (GuildId={GuildId}, MemberId={MemberId})",
+                    member.GuildId, member.MemberId);
+                skippedCount++;
+                continue;
+            }
+
             (MemberStatus derivedStatus, DateTime derivedAt) = DeriveStatus(member);
 
             histogram.TryGetValue(derivedStatus, out int existing);
@@ -57,27 +71,37 @@ internal static class GuildMemberStatusMigration
             Log.Information("Migrating {MemberId} {Unknown} -> {Derived} at {At}",
                 member.ID, MemberStatus.Unknown, derivedStatus, derivedAt);
 
-            member.Status = derivedStatus;
-            member.StatusChangedAt = derivedAt;
-
-            // Synthetic history entry so it is clear this came from migration
-            member.StatusHistory.Add(new MemberStatusEvent
+            MemberStatusEvent evt = new()
             {
                 From = MemberStatus.Unknown,
                 To = derivedStatus,
                 At = derivedAt,
                 Reason = "migration"
-            });
+            };
+
+            // Use an atomic $set + $push instead of SaveAsync so we can never accidentally
+            // INSERT a document (SaveAsync's insert-vs-replace is decided by HasDefaultID(),
+            // which is unreliable for legacy documents with unusual _id shapes).
+            Update<GuildMember> update = db.Update<GuildMember>()
+                .MatchID(member.ID)
+                .Modify(m => m.Status, derivedStatus)
+                .Modify(m => m.StatusChangedAt, (DateTime?)derivedAt)
+                .Modify(b => b.Push(m => m.StatusHistory, evt));
 
             // Mirror flags: keep RemovedByModeration accurate for legacy code paths
             if (derivedStatus is MemberStatus.KickedByModerator or MemberStatus.BannedByModerator
                 or MemberStatus.BannedByHoneypot or MemberStatus.BannedExternally
                 or MemberStatus.KickedExternally)
             {
-                member.RemovedByModeration = true;
+                update = update.Modify(m => m.RemovedByModeration, true);
             }
 
-            await db.SaveAsync(member);
+            await update.ExecuteAsync();
+        }
+
+        if (skippedCount > 0)
+        {
+            Log.Warning("GuildMemberStatusMigration: skipped {Count} documents with null/empty ID", skippedCount);
         }
 
         // Always log the histogram regardless of dry-run
