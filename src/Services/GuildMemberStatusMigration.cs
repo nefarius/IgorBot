@@ -21,7 +21,7 @@ internal static class GuildMemberStatusMigration
     ///     When <c>true</c>, log what would be done but do NOT write to the database.
     ///     Safe to run repeatedly for verification.
     /// </param>
-    public static async Task RunAsync(DB db, bool dryRun = false)
+    public static async Task RunAsync(DB db, bool dryRun = false, Func<Task>? beforeUpdateHook = null)
     {
         Log.Information("GuildMemberStatusMigration starting (dryRun={DryRun})", dryRun);
 
@@ -100,6 +100,11 @@ internal static class GuildMemberStatusMigration
                 or MemberStatus.KickedExternally)
             {
                 update = update.Modify(m => m.RemovedByModeration, true);
+            }
+
+            if (beforeUpdateHook is not null)
+            {
+                await beforeUpdateHook();
             }
 
             await update.ExecuteAsync();

@@ -306,20 +306,22 @@ public sealed class GuildMemberStatusMigrationDbTests : IAsyncLifetime
     [Fact]
     public async Task RunAsync_WriteSidePredicate_DoesNotOverwriteConcurrentlyMigratedDoc()
     {
-        // Arrange: insert a legacy doc that the outer Find would return (Status=Unknown).
+        // Arrange: doc starts with Status=Unknown so the Find picks it up.
         GuildMember m = await InsertUnmigrated(leftAt: DateTime.UtcNow.AddHours(-1));
 
-        // Simulate a concurrent TransitionToAsync winning the race: directly stamp a real status
-        // on the document in the DB before RunAsync issues its updateOne.
-        await _db.Update<GuildMember>()
-            .MatchID(m.ID)
-            .Modify(x => x.Status, MemberStatus.FullMember)
-            .ExecuteAsync();
+        // Act: inject a hook that fires after Find (document is already in the candidate list)
+        // but before the updateOne — this is the exact window the write-side predicate guards.
+        // The hook simulates a concurrent TransitionToAsync that wins the race.
+        await GuildMemberStatusMigration.RunAsync(_db, beforeUpdateHook: async () =>
+        {
+            await _db.Update<GuildMember>()
+                .MatchID(m.ID)
+                .Modify(x => x.Status, MemberStatus.FullMember)
+                .ExecuteAsync();
+        });
 
-        // Act: migration runs; its write-side predicate sees Status != Unknown → no-op.
-        await GuildMemberStatusMigration.RunAsync(_db);
-
-        // Assert: the concurrent winner's status is preserved; no "migration" history entry.
+        // Assert: the write-side predicate sees Status != Unknown and makes the updateOne a
+        // no-op; the concurrent winner's status and empty history are preserved.
         GuildMember loaded = await Reload(m);
         loaded.Status.Should().Be(MemberStatus.FullMember,
             because: "the write-side predicate must not overwrite a status set after the Find");
