@@ -78,6 +78,16 @@ public class GuildConfigEntity : IEntity
     public ulong? HoneypotChannelId { get; set; }
 
     /// <summary>
+    ///     UTC time <see cref="HoneypotChannelId" /> was last set or changed. Null when unset or unknown.
+    /// </summary>
+    public DateTime? HoneypotChannelActivatedAt { get; set; }
+
+    /// <summary>
+    ///     Optimistic-concurrency token incremented on each successful save.
+    /// </summary>
+    public int ConfigVersion { get; set; }
+
+    /// <summary>
     ///     Role members immune to honeypot actions.
     /// </summary>
     public List<ulong> HoneypotExclusionRoleIds { get; set; } = new();
@@ -132,6 +142,7 @@ public class GuildConfigEntity : IEntity
             MemberWelcomeMessageChannelId = MemberWelcomeMessageChannelId,
             IdleKickTimeSpan = IdleKickTimeSpan,
             HoneypotChannelId = HoneypotChannelId,
+            HoneypotChannelActivatedAt = HoneypotChannelActivatedAt,
             HoneypotExclusionRoleIds = new List<ulong>(HoneypotExclusionRoleIds),
             AutoAssignStrangerRoleOnJoin = AutoAssignStrangerRoleOnJoin,
             EnableOnboardingWorkflow = EnableOnboardingWorkflow ?? true
@@ -160,6 +171,7 @@ public class GuildConfigEntity : IEntity
             Questionnaires = new Dictionary<string, Questionnaire>(config.Questionnaires),
             IdleKickTimeSpan = config.IdleKickTimeSpan,
             HoneypotChannelId = config.HoneypotChannelId,
+            HoneypotChannelActivatedAt = config.HoneypotChannelActivatedAt,
             HoneypotExclusionRoleIds = new List<ulong>(config.HoneypotExclusionRoleIds),
             AutoAssignStrangerRoleOnJoin = config.AutoAssignStrangerRoleOnJoin,
             EnableOnboardingWorkflow = config.EnableOnboardingWorkflow

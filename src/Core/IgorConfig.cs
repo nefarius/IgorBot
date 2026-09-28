@@ -100,6 +100,11 @@ public sealed class GuildConfig
     public ulong? HoneypotChannelId { get; set; }
 
     /// <summary>
+    ///     UTC time <see cref="HoneypotChannelId" /> was last set or changed. Null when unset or unknown.
+    /// </summary>
+    public DateTime? HoneypotChannelActivatedAt { get; set; }
+
+    /// <summary>
     ///     Role members immune to <see cref="HoneypotChannelId" /> actions.
     /// </summary>
     public List<ulong> HoneypotExclusionRoleIds { get; set; } = new();
