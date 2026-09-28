@@ -30,6 +30,7 @@ public sealed class GuildConfigHoneypotActivationTests : IAsyncLifetime
     public async Task SaveAsync_NewHoneypotChannel_StampsActivation()
     {
         DateTime before = DateTime.UtcNow;
+        DateTime lowerBound = before.AddMilliseconds(-1);
         GuildConfig config = MinimalConfig(channelId: 10);
 
         await _sut.SaveAsync(config);
@@ -37,7 +38,7 @@ public sealed class GuildConfigHoneypotActivationTests : IAsyncLifetime
         GuildConfig? loaded = await _sut.GetAsync(GuildId);
         loaded!.HoneypotChannelId.Should().Be(10UL);
         loaded.HoneypotChannelActivatedAt.Should().NotBeNull();
-        loaded.HoneypotChannelActivatedAt!.Value.Should().BeOnOrAfter(before);
+        loaded.HoneypotChannelActivatedAt!.Value.Should().BeOnOrAfter(lowerBound);
         config.HoneypotChannelActivatedAt.Should()
             .BeCloseTo(loaded.HoneypotChannelActivatedAt.Value, TimeSpan.FromMilliseconds(1));
     }
@@ -77,6 +78,26 @@ public sealed class GuildConfigHoneypotActivationTests : IAsyncLifetime
         loaded!.HoneypotChannelId.Should().Be(20UL);
         loaded.HoneypotChannelActivatedAt.Should().NotBeNull();
         loaded.HoneypotChannelActivatedAt.Should().BeAfter(first!.Value);
+    }
+
+    [Fact]
+    public async Task SaveAsync_StaleSnapshot_DoesNotOverwriteNewerHoneypotChannel()
+    {
+        await _sut.SaveAsync(MinimalConfig(channelId: 10));
+        GuildConfig stale = (await _sut.GetAsync(GuildId))!;
+
+        GuildConfig newer = (await _sut.GetAsync(GuildId))!;
+        newer.HoneypotChannelId = 20;
+        await _sut.SaveAsync(newer);
+        DateTime? activationAfterChannelChange = (await _sut.GetAsync(GuildId))!.HoneypotChannelActivatedAt;
+
+        stale.IdleKickTimeSpan = TimeSpan.FromMinutes(15);
+        await _sut.SaveAsync(stale);
+
+        GuildConfig? loaded = await _sut.GetAsync(GuildId);
+        loaded!.HoneypotChannelId.Should().Be(20UL);
+        loaded.IdleKickTimeSpan.Should().Be(TimeSpan.FromMinutes(15));
+        loaded.HoneypotChannelActivatedAt.Should().Be(activationAfterChannelChange);
     }
 
     [Fact]

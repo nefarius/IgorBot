@@ -83,6 +83,11 @@ public class GuildConfigEntity : IEntity
     public DateTime? HoneypotChannelActivatedAt { get; set; }
 
     /// <summary>
+    ///     Optimistic-concurrency token incremented on each successful save.
+    /// </summary>
+    public int ConfigVersion { get; set; }
+
+    /// <summary>
     ///     Role members immune to honeypot actions.
     /// </summary>
     public List<ulong> HoneypotExclusionRoleIds { get; set; } = new();

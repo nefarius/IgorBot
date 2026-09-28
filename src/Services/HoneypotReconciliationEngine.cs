@@ -34,24 +34,27 @@ internal static class HoneypotReconciliationEngine
 
     /// <summary>
     ///     Returns the message ID to pass to <c>GetMessagesAfterAsync</c>.
-    ///     Missing checkpoints start at the later of <paramref name="channelActivatedAt" />
-    ///     and <see cref="InitialLookback" /> before <paramref name="utcNow" />.
+    ///     The scan starts at the later of the activation/lookback boundary and
+    ///     <paramref name="lastProcessedMessageId" />, so a stale checkpoint cannot
+    ///     walk history from before the channel was (re)activated.
     /// </summary>
     public static ulong ResolveAfterId(
         ulong? lastProcessedMessageId,
         DateTime utcNow,
         DateTime? channelActivatedAt = null)
     {
-        if (lastProcessedMessageId.HasValue)
-        {
-            return lastProcessedMessageId.Value;
-        }
-
         DateTime lookbackStart = utcNow - InitialLookback;
-        DateTime start = channelActivatedAt is DateTime activated && activated > lookbackStart
+        DateTime boundary = channelActivatedAt is DateTime activated && activated > lookbackStart
             ? activated
             : lookbackStart;
-        return SnowflakeFromTimestamp(start);
+        ulong boundaryId = SnowflakeFromTimestamp(boundary);
+
+        if (lastProcessedMessageId is ulong checkpoint && checkpoint > boundaryId)
+        {
+            return checkpoint;
+        }
+
+        return boundaryId;
     }
 
     /// <summary>

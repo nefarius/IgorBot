@@ -70,26 +70,28 @@ public sealed class HoneypotReconciliationStateTests : IAsyncLifetime
     [Fact]
     public async Task Rerun_IsIdempotentWhenCheckpointUnchanged()
     {
+        DateTime now = DateTime.UtcNow;
+        ulong checkpoint = HoneypotReconciliationEngine.SnowflakeFromTimestamp(now.AddMinutes(-5));
         HoneypotReconciliationState state = new()
         {
             GuildId = 5,
             ChannelId = 6,
-            LastProcessedMessageId = 50,
+            LastProcessedMessageId = checkpoint,
             ID = "5-6"
         };
         await _db.SaveAsync(state);
 
-        ulong afterId = HoneypotReconciliationEngine.ResolveAfterId(state.LastProcessedMessageId, DateTime.UtcNow);
-        afterId.Should().Be(50UL);
+        ulong afterId = HoneypotReconciliationEngine.ResolveAfterId(checkpoint, now);
+        afterId.Should().Be(checkpoint);
 
         ulong? next = HoneypotReconciliationEngine.AdvanceCheckpoint(afterId, []);
-        next.Should().Be(50UL);
+        next.Should().Be(checkpoint);
 
         state.LastProcessedMessageId = next.Value;
         await _db.SaveAsync(state);
 
         HoneypotReconciliationState? loaded = await _db.Find<HoneypotReconciliationState>().OneAsync("5-6");
-        loaded!.LastProcessedMessageId.Should().Be(50UL);
+        loaded!.LastProcessedMessageId.Should().Be(checkpoint);
     }
 
     [Fact]

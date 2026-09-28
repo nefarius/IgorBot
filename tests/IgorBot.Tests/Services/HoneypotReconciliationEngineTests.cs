@@ -20,10 +20,13 @@ public sealed class HoneypotReconciliationEngineTests
     }
 
     [Fact]
-    public void ResolveAfterId_ExistingCheckpoint_ReturnsThatId()
+    public void ResolveAfterId_NewerCheckpoint_IsPreserved()
     {
-        HoneypotReconciliationEngine.ResolveAfterId(123456789UL, DateTime.UtcNow)
-            .Should().Be(123456789UL);
+        DateTime now = new(2026, 9, 28, 16, 0, 0, DateTimeKind.Utc);
+        ulong checkpoint = HoneypotReconciliationEngine.SnowflakeFromTimestamp(now.AddHours(-1));
+
+        HoneypotReconciliationEngine.ResolveAfterId(checkpoint, now)
+            .Should().Be(checkpoint);
     }
 
     [Fact]
@@ -52,12 +55,27 @@ public sealed class HoneypotReconciliationEngineTests
     }
 
     [Fact]
-    public void ResolveAfterId_CheckpointTakesPrecedenceOverActivation()
+    public void ResolveAfterId_NewerCheckpoint_TakesPrecedenceOverActivation()
     {
         DateTime now = new(2026, 9, 28, 16, 0, 0, DateTimeKind.Utc);
+        DateTime activated = now.AddHours(-2);
+        ulong checkpoint = HoneypotReconciliationEngine.SnowflakeFromTimestamp(now.AddHours(-1));
 
-        HoneypotReconciliationEngine.ResolveAfterId(999UL, now, now.AddHours(-1))
-            .Should().Be(999UL);
+        HoneypotReconciliationEngine.ResolveAfterId(checkpoint, now, activated)
+            .Should().Be(checkpoint);
+    }
+
+    [Fact]
+    public void ResolveAfterId_CheckpointOlderThanActivation_UsesActivationBoundary()
+    {
+        DateTime now = new(2026, 9, 28, 16, 0, 0, DateTimeKind.Utc);
+        DateTime activated = now.AddHours(-2);
+        ulong staleCheckpoint = HoneypotReconciliationEngine.SnowflakeFromTimestamp(activated.AddHours(-3));
+
+        ulong afterId = HoneypotReconciliationEngine.ResolveAfterId(staleCheckpoint, now, activated);
+
+        afterId.Should().Be(HoneypotReconciliationEngine.SnowflakeFromTimestamp(activated));
+        afterId.Should().BeGreaterThan(staleCheckpoint);
     }
 
     [Fact]
