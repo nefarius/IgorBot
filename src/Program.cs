@@ -50,6 +50,8 @@ IHostBuilder builder = Host.CreateDefaultBuilder(args)
         GuildMemberStatusMigration.RunAsync(db, migrationDryRun).GetAwaiter().GetResult();
 
         services.AddSingleton<IDiscordReadinessService, DiscordReadinessService>();
+        services.AddSingleton<IHoneypotBanClient, DiscordHoneypotBanClient>();
+        services.AddSingleton<IHoneypotEnforcementService, HoneypotEnforcementService>();
 
         services.AddSingleton<GuildConfigService>();
         services.AddSingleton<IGuildConfigService>(sp =>
@@ -91,6 +93,11 @@ host.Services.UseScheduler(scheduler =>
         scheduler
             .Schedule<OrphanEmbedReconciliationInvokable>()
             .Daily();
+
+        scheduler
+            .Schedule<HoneypotReconciliationInvokable>()
+            .EveryMinute()
+            .PreventOverlapping(nameof(HoneypotReconciliationInvokable));
     }
 );
 
@@ -154,4 +161,5 @@ void ConfigureScheduler(IServiceCollection serviceCollection)
     serviceCollection.AddTransient<KickStaleInvokable>();
     serviceCollection.AddTransient<MemberDbSyncInvokable>();
     serviceCollection.AddTransient<OrphanEmbedReconciliationInvokable>();
+    serviceCollection.AddTransient<HoneypotReconciliationInvokable>();
 }

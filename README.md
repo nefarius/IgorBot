@@ -120,8 +120,8 @@ dotnet test tests/IgorBot.Tests/IgorBot.Tests.csproj
 
 The test suite has two layers:
 
-- **Pure unit tests** (`tests/IgorBot.Tests/Schema/`) — exercise `MemberLifecycleClassifier`, `GuildMemberStatusMigration.DeriveStatus`, the derived flags on `GuildMember`, `Reset()`, and `MemberStatus` ordinal pins. No external dependencies; runs instantly.
-- **Integration tests** (`tests/IgorBot.Tests/Integration/`) — exercise `TransitionToAsync` and `GuildMemberStatusMigration.RunAsync` against a real embedded MongoDB instance. [EphemeralMongo](https://github.com/asimmon/ephemeral-mongo) downloads the mongod binary automatically on first run (no Docker or separate MongoDB installation required).
+- **Pure unit tests** (`tests/IgorBot.Tests/Schema/`, `tests/IgorBot.Tests/Services/`) — exercise `MemberLifecycleClassifier`, `GuildMemberStatusMigration.DeriveStatus`, the derived flags on `GuildMember`, `Reset()`, `MemberStatus` ordinal pins, honeypot eligibility, and reconciliation checkpoint math. No external dependencies; runs instantly.
+- **Integration tests** (`tests/IgorBot.Tests/Integration/`) — exercise `TransitionToAsync`, `GuildMemberStatusMigration.RunAsync`, honeypot enforcement/rollback, and honeypot cursor persistence against a real embedded MongoDB instance. [EphemeralMongo](https://github.com/asimmon/ephemeral-mongo) downloads the mongod binary automatically on first run (no Docker or separate MongoDB installation required).
 
 ## How to build
 
