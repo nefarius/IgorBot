@@ -79,6 +79,56 @@ public sealed class HoneypotReconciliationEngineTests
     }
 
     [Fact]
+    public void ResolveAfterId_ExistingCheckpointOlderThanLookback_IsPreserved()
+    {
+        DateTime now = new(2026, 9, 28, 16, 0, 0, DateTimeKind.Utc);
+        ulong checkpoint = HoneypotReconciliationEngine.SnowflakeFromTimestamp(now.AddHours(-36));
+
+        HoneypotReconciliationEngine.ResolveAfterId(checkpoint, now)
+            .Should().Be(checkpoint);
+        HoneypotReconciliationEngine.ResolveAfterId(checkpoint, now)
+            .Should().BeLessThan(HoneypotReconciliationEngine.SnowflakeFromTimestamp(
+                now - HoneypotReconciliationEngine.InitialLookback));
+    }
+
+    [Fact]
+    public void IsConnectedToCursor_ReachedHistoryStart_IsConnected()
+    {
+        HoneypotReconciliationEngine.IsConnectedToCursor(10, 50, reachedHistoryStart: true)
+            .Should().BeTrue();
+    }
+
+    [Fact]
+    public void IsConnectedToCursor_OldestAtOrBeforeCursor_IsConnected()
+    {
+        HoneypotReconciliationEngine.IsConnectedToCursor(10, 10, reachedHistoryStart: false)
+            .Should().BeTrue();
+        HoneypotReconciliationEngine.IsConnectedToCursor(10, 9, reachedHistoryStart: false)
+            .Should().BeTrue();
+    }
+
+    [Fact]
+    public void IsConnectedToCursor_GapRemains_IsNotConnected()
+    {
+        HoneypotReconciliationEngine.IsConnectedToCursor(10, 50, reachedHistoryStart: false)
+            .Should().BeFalse();
+    }
+
+    [Fact]
+    public void ContinuationBeforeId_Disconnected_KeepsOldestFetched()
+    {
+        HoneypotReconciliationEngine.ContinuationBeforeId(connected: false, 50)
+            .Should().Be(50UL);
+    }
+
+    [Fact]
+    public void ContinuationBeforeId_Connected_ClearsContinuation()
+    {
+        HoneypotReconciliationEngine.ContinuationBeforeId(connected: true, 50)
+            .Should().BeNull();
+    }
+
+    [Fact]
     public void SnowflakeFromTimestamp_RoundTripsThroughDiscordUtilities()
     {
         DateTime utc = new(2026, 9, 27, 12, 0, 0, DateTimeKind.Utc);

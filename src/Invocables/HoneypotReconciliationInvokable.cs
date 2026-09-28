@@ -108,67 +108,142 @@ internal sealed class HoneypotReconciliationInvokable(
         HoneypotReconciliationState? state = await db.Find<HoneypotReconciliationState>()
             .OneAsync($"{guildId}-{channelId}");
 
-        ulong? previous = state?.LastProcessedMessageId;
-        ulong afterId = HoneypotReconciliationEngine.ResolveAfterId(
-            previous, DateTime.UtcNow, config.HoneypotChannelActivatedAt);
+        ulong cursor = HoneypotReconciliationEngine.ResolveAfterId(
+            state?.LastProcessedMessageId, DateTime.UtcNow, config.HoneypotChannelActivatedAt);
 
-        for (int page = 0; page < HoneypotReconciliationEngine.MaxPagesPerGuild; page++)
+        HistoryPageResult history = await FetchHistoryAsync(channel, guildId, channelId, cursor, state);
+        if (history.FetchFailed)
         {
-            if (page > 0)
+            return;
+        }
+
+        if (history.Messages.Count == 0)
+        {
+            await SaveStateAsync(state, guildId, channelId, cursor, continuationBefore: null);
+            return;
+        }
+
+        bool connected = HoneypotReconciliationEngine.IsConnectedToCursor(
+            cursor, history.OldestFetchedId, history.ReachedHistoryStart);
+        ulong? continuation = HoneypotReconciliationEngine.ContinuationBeforeId(
+            connected, history.OldestFetchedId);
+
+        IReadOnlyList<DiscordMessage> ordered = HoneypotReconciliationEngine.OrderOldestFirst(
+            history.Messages.Where(m => m.Id > cursor), static m => m.Id);
+
+        if (!connected)
+        {
+            foreach (DiscordMessage message in ordered)
+            {
+                await EvaluateMessageAsync(guild, config, message);
+            }
+
+            ulong committed = state?.LastProcessedMessageId ?? cursor;
+            await SaveStateAsync(state, guildId, channelId, committed, continuation);
+            return;
+        }
+
+        List<(ulong MessageId, bool Success)> evaluations = new(ordered.Count);
+        foreach (DiscordMessage message in ordered)
+        {
+            bool success = await EvaluateMessageAsync(guild, config, message);
+            evaluations.Add((message.Id, success));
+            if (!success)
+            {
+                break;
+            }
+        }
+
+        ulong? next = HoneypotReconciliationEngine.AdvanceCheckpoint(cursor, evaluations);
+        await SaveStateAsync(state, guildId, channelId, next ?? cursor, continuationBefore: null);
+    }
+
+    private async Task<HistoryPageResult> FetchHistoryAsync(
+        DiscordChannel channel,
+        ulong guildId,
+        ulong channelId,
+        ulong cursor,
+        HoneypotReconciliationState? state)
+    {
+        List<DiscordMessage> collected = [];
+        bool reachedHistoryStart = false;
+        int pagesFetched = 0;
+
+        try
+        {
+            if (state?.ContinuationBeforeMessageId is ulong continueBefore)
+            {
+                reachedHistoryStart = await WalkBackwardAsync(
+                    channel, continueBefore, cursor, collected, pagesFetched);
+            }
+            else
+            {
+                IReadOnlyList<DiscordMessage> afterPage =
+                    await channel.GetMessagesAfterAsync(cursor, HoneypotReconciliationEngine.PageSize);
+                pagesFetched++;
+
+                if (afterPage.Count == 0)
+                {
+                    return HistoryPageResult.EmptyConnected;
+                }
+
+                collected.AddRange(afterPage);
+                if (afterPage.Count < HoneypotReconciliationEngine.PageSize)
+                {
+                    reachedHistoryStart = true;
+                }
+                else
+                {
+                    ulong oldest = afterPage.Min(m => m.Id);
+                    reachedHistoryStart = await WalkBackwardAsync(
+                        channel, oldest, cursor, collected, pagesFetched);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex,
+                "Failed to fetch honeypot history for guild {GuildId} channel {ChannelId} after {AfterId}",
+                guildId, channelId, cursor);
+            return HistoryPageResult.Failed;
+        }
+
+        return new HistoryPageResult(collected, reachedHistoryStart, false);
+    }
+
+    private async Task<bool> WalkBackwardAsync(
+        DiscordChannel channel,
+        ulong beforeId,
+        ulong cursor,
+        List<DiscordMessage> collected,
+        int pagesAlreadyFetched)
+    {
+        ulong walkFrom = beforeId;
+        for (int page = pagesAlreadyFetched; page < HoneypotReconciliationEngine.MaxPagesPerGuild; page++)
+        {
+            if (page > 0 || collected.Count > 0)
             {
                 await Task.Delay(DiscordApiThrottleDelay);
             }
 
-            IReadOnlyList<DiscordMessage> raw;
-            try
+            IReadOnlyList<DiscordMessage> older =
+                await channel.GetMessagesBeforeAsync(walkFrom, HoneypotReconciliationEngine.PageSize);
+
+            if (older.Count == 0)
             {
-                raw = await channel.GetMessagesAfterAsync(afterId, HoneypotReconciliationEngine.PageSize);
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex,
-                    "Failed to fetch honeypot history for guild {GuildId} channel {ChannelId} after {AfterId}",
-                    guildId, channelId, afterId);
-                return;
+                return true;
             }
 
-            if (raw.Count == 0)
+            collected.AddRange(older);
+            walkFrom = older.Min(m => m.Id);
+
+            if (older.Count < HoneypotReconciliationEngine.PageSize || walkFrom <= cursor)
             {
-                await SaveCheckpointAsync(state, guildId, channelId, afterId);
-                return;
-            }
-
-            IReadOnlyList<DiscordMessage> ordered =
-                HoneypotReconciliationEngine.OrderOldestFirst(raw, static m => m.Id);
-
-            List<(ulong MessageId, bool Success)> evaluations = new(ordered.Count);
-            bool stoppedEarly = false;
-
-            foreach (DiscordMessage message in ordered)
-            {
-                bool success = await EvaluateMessageAsync(guild, config, message);
-                evaluations.Add((message.Id, success));
-                if (!success)
-                {
-                    stoppedEarly = true;
-                    break;
-                }
-            }
-
-            ulong? next = HoneypotReconciliationEngine.AdvanceCheckpoint(previous, evaluations);
-            if (next.HasValue)
-            {
-                await SaveCheckpointAsync(state, guildId, channelId, next.Value);
-                previous = next;
-                afterId = next.Value;
-                state ??= await db.Find<HoneypotReconciliationState>().OneAsync($"{guildId}-{channelId}");
-            }
-
-            if (stoppedEarly || raw.Count < HoneypotReconciliationEngine.PageSize)
-            {
-                return;
+                return true;
             }
         }
+
+        return false;
     }
 
     private async Task<bool> EvaluateMessageAsync(
@@ -262,11 +337,12 @@ internal sealed class HoneypotReconciliationInvokable(
         }
     }
 
-    private async Task SaveCheckpointAsync(
+    private async Task SaveStateAsync(
         HoneypotReconciliationState? existing,
         ulong guildId,
         ulong channelId,
-        ulong messageId)
+        ulong lastProcessedMessageId,
+        ulong? continuationBefore)
     {
         HoneypotReconciliationState state = existing ?? new HoneypotReconciliationState
         {
@@ -274,20 +350,36 @@ internal sealed class HoneypotReconciliationInvokable(
             ChannelId = channelId
         };
 
-        if (state.LastProcessedMessageId == messageId && existing is not null)
+        if (existing is not null
+            && state.LastProcessedMessageId == lastProcessedMessageId
+            && state.ContinuationBeforeMessageId == continuationBefore)
         {
             return;
         }
 
         state.GuildId = guildId;
         state.ChannelId = channelId;
-        state.LastProcessedMessageId = messageId;
+        state.LastProcessedMessageId = lastProcessedMessageId;
+        state.ContinuationBeforeMessageId = continuationBefore;
         state.LastReconciledAt = DateTime.UtcNow;
         state.ID = state.GenerateNewID();
         await db.SaveAsync(state);
 
         logger.LogDebug(
-            "Honeypot reconciliation checkpoint for guild {GuildId} channel {ChannelId} is now {MessageId}",
-            guildId, channelId, messageId);
+            "Honeypot reconciliation checkpoint for guild {GuildId} channel {ChannelId} is now {MessageId} (continuation {Continuation})",
+            guildId, channelId, lastProcessedMessageId, continuationBefore);
+    }
+
+    private readonly record struct HistoryPageResult(
+        IReadOnlyList<DiscordMessage> Messages,
+        bool ReachedHistoryStart,
+        bool FetchFailed)
+    {
+        public ulong? OldestFetchedId =>
+            Messages.Count == 0 ? null : Messages.Min(static m => m.Id);
+
+        public static HistoryPageResult EmptyConnected { get; } = new([], true, false);
+
+        public static HistoryPageResult Failed { get; } = new([], false, true);
     }
 }

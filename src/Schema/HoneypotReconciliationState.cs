@@ -26,6 +26,13 @@ internal sealed class HoneypotReconciliationState : IEntity
     public ulong LastProcessedMessageId { get; set; }
 
     /// <summary>
+    ///     Oldest message ID of a newer page that is not yet contiguous with
+    ///     <see cref="LastProcessedMessageId" />. The next tick continues
+    ///     <c>GetMessagesBeforeAsync</c> from this ID.
+    /// </summary>
+    public ulong? ContinuationBeforeMessageId { get; set; }
+
+    /// <summary>
     ///     UTC timestamp of the last successful checkpoint write.
     /// </summary>
     public DateTime LastReconciledAt { get; set; } = DateTime.UtcNow;

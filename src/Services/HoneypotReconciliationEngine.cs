@@ -33,29 +33,46 @@ internal static class HoneypotReconciliationEngine
     }
 
     /// <summary>
-    ///     Returns the message ID to pass to <c>GetMessagesAfterAsync</c>.
-    ///     The scan starts at the later of the activation/lookback boundary and
-    ///     <paramref name="lastProcessedMessageId" />, so a stale checkpoint cannot
-    ///     walk history from before the channel was (re)activated.
+    ///     Returns the message ID to pass to history fetches.
+    ///     The 24-hour lookback applies only when no checkpoint exists.
+    ///     An existing checkpoint is preserved unless it predates channel activation.
     /// </summary>
     public static ulong ResolveAfterId(
         ulong? lastProcessedMessageId,
         DateTime utcNow,
         DateTime? channelActivatedAt = null)
     {
-        DateTime lookbackStart = utcNow - InitialLookback;
-        DateTime boundary = channelActivatedAt is DateTime activated && activated > lookbackStart
-            ? activated
-            : lookbackStart;
-        ulong boundaryId = SnowflakeFromTimestamp(boundary);
-
-        if (lastProcessedMessageId is ulong checkpoint && checkpoint > boundaryId)
+        if (lastProcessedMessageId is ulong checkpoint)
         {
+            if (channelActivatedAt is DateTime activated)
+            {
+                ulong activationId = SnowflakeFromTimestamp(activated);
+                return checkpoint > activationId ? checkpoint : activationId;
+            }
+
             return checkpoint;
         }
 
-        return boundaryId;
+        DateTime lookbackStart = utcNow - InitialLookback;
+        DateTime start = channelActivatedAt is DateTime firstActivation && firstActivation > lookbackStart
+            ? firstActivation
+            : lookbackStart;
+        return SnowflakeFromTimestamp(start);
     }
+
+    /// <summary>
+    ///     A scan is connected when it reached the start of available history or
+    ///     crossed the committed cursor, so there is no unevaluated gap.
+    /// </summary>
+    public static bool IsConnectedToCursor(ulong cursor, ulong? oldestFetchedId, bool reachedHistoryStart) =>
+        reachedHistoryStart || oldestFetchedId is ulong oldest && oldest <= cursor;
+
+    /// <summary>
+    ///     When the scan has not reached the cursor, persist the oldest fetched ID
+    ///     so the next tick can continue walking backward.
+    /// </summary>
+    public static ulong? ContinuationBeforeId(bool connected, ulong? oldestFetchedId) =>
+        connected ? null : oldestFetchedId;
 
     /// <summary>
     ///     Advances the cursor through contiguous successful evaluations only.

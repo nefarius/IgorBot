@@ -119,4 +119,29 @@ public sealed class HoneypotReconciliationStateTests : IAsyncLifetime
         loaded!.LastProcessedMessageId.Should().Be(11UL);
         loaded.LastProcessedMessageId.Should().NotBe(12UL);
     }
+
+    [Fact]
+    public async Task DisconnectedScan_PersistsContinuationWithoutAdvancingCheckpoint()
+    {
+        await _db.SaveAsync(new HoneypotReconciliationState
+        {
+            GuildId = 3,
+            ChannelId = 4,
+            LastProcessedMessageId = 10,
+            ID = "3-4"
+        });
+
+        bool connected = HoneypotReconciliationEngine.IsConnectedToCursor(10, 500, reachedHistoryStart: false);
+        ulong? continuation = HoneypotReconciliationEngine.ContinuationBeforeId(connected, 500);
+        connected.Should().BeFalse();
+
+        HoneypotReconciliationState persisted =
+            (await _db.Find<HoneypotReconciliationState>().OneAsync("3-4"))!;
+        persisted.ContinuationBeforeMessageId = continuation;
+        await _db.SaveAsync(persisted);
+
+        HoneypotReconciliationState? loaded = await _db.Find<HoneypotReconciliationState>().OneAsync("3-4");
+        loaded!.LastProcessedMessageId.Should().Be(10UL);
+        loaded.ContinuationBeforeMessageId.Should().Be(500UL);
+    }
 }
