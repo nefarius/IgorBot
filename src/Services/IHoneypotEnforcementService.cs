@@ -8,7 +8,8 @@ internal enum HoneypotEnforcementOutcome
     Banned,
     AlreadyBanned,
     MemberGone,
-    Failed
+    Failed,
+    PermanentFailure
 }
 
 /// <summary>

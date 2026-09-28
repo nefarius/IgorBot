@@ -1,3 +1,7 @@
+using System.Runtime.CompilerServices;
+
+using DSharpPlus.Exceptions;
+
 using FluentAssertions;
 
 using IgorBot.Schema;
@@ -118,6 +122,49 @@ public sealed class HoneypotEnforcementServiceTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task EnforceAsync_PermanentForbidden_DoesNotRevertAndReturnsPermanentFailure()
+    {
+        _banClient.BanException = Uninitialized<UnauthorizedException>();
+
+        HoneypotEnforcementOutcome outcome = await _sut.EnforceAsync(
+            GuildId, MemberId, "user#0", "<@200>");
+
+        outcome.Should().Be(HoneypotEnforcementOutcome.PermanentFailure);
+
+        GuildMember? loaded = await _db.Find<GuildMember>().OneAsync($"{GuildId}-{MemberId}");
+        loaded!.Status.Should().Be(MemberStatus.BannedByHoneypot);
+        loaded.StatusHistory.Select(e => e.Reason).Should().Contain("honeypot")
+            .And.NotContain("revert-honeypot-ban");
+    }
+
+    [Fact]
+    public async Task EnforceAsync_PermanentUnknownUser_DoesNotRevertAndReturnsPermanentFailure()
+    {
+        _banClient.BanException = Uninitialized<NotFoundException>();
+
+        HoneypotEnforcementOutcome outcome = await _sut.EnforceAsync(
+            GuildId, MemberId, "user#0", "<@200>");
+
+        outcome.Should().Be(HoneypotEnforcementOutcome.PermanentFailure);
+        (await _db.Find<GuildMember>().OneAsync($"{GuildId}-{MemberId}"))!.Status
+            .Should().Be(MemberStatus.BannedByHoneypot);
+    }
+
+    [Fact]
+    public async Task EnforceAsync_AlreadyBannedByHoneypot_PermanentFailure_DoesNotAddHistory()
+    {
+        GuildMember member = await InsertMember(MemberStatus.BannedByHoneypot);
+        int historyBefore = member.StatusHistory.Count;
+        _banClient.BanException = Uninitialized<UnauthorizedException>();
+
+        HoneypotEnforcementOutcome outcome = await _sut.EnforceAsync(
+            GuildId, MemberId, "user#0", "<@200>");
+
+        outcome.Should().Be(HoneypotEnforcementOutcome.PermanentFailure);
+        (await _db.Find<GuildMember>().OneAsync(member.ID))!.StatusHistory.Should().HaveCount(historyBefore);
+    }
+
+    [Fact]
     public async Task EnforceAsync_AlreadyBannedByHoneypot_RetriesDiscordBanWithoutNewTransition()
     {
         GuildMember member = await InsertMember(MemberStatus.BannedByHoneypot);
@@ -164,6 +211,9 @@ public sealed class HoneypotEnforcementServiceTests : IAsyncLifetime
         (await _db.Find<GuildMember>().OneAsync($"{GuildId}-{MemberId}"))!.StatusHistory
             .Should().ContainSingle(e => e.To == MemberStatus.BannedByHoneypot);
     }
+
+    private static Exception Uninitialized<T>() where T : Exception =>
+        (Exception)RuntimeHelpers.GetUninitializedObject(typeof(T));
 
     private async Task<GuildMember> InsertMember(MemberStatus status)
     {

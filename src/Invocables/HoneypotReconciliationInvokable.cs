@@ -109,7 +109,8 @@ internal sealed class HoneypotReconciliationInvokable(
             .OneAsync($"{guildId}-{channelId}");
 
         ulong? previous = state?.LastProcessedMessageId;
-        ulong afterId = HoneypotReconciliationEngine.ResolveAfterId(previous, DateTime.UtcNow);
+        ulong afterId = HoneypotReconciliationEngine.ResolveAfterId(
+            previous, DateTime.UtcNow, config.HoneypotChannelActivatedAt);
 
         for (int page = 0; page < HoneypotReconciliationEngine.MaxPagesPerGuild; page++)
         {
@@ -233,6 +234,14 @@ internal sealed class HoneypotReconciliationInvokable(
                 message.Author.Id,
                 message.Author.ToString(),
                 message.Author.Mention);
+
+            if (outcome == HoneypotEnforcementOutcome.PermanentFailure)
+            {
+                logger.LogError(
+                    "Permanent honeypot enforcement failure for {Author} on message {MessageId}; advancing checkpoint",
+                    message.Author, message.Id);
+                return true;
+            }
 
             if (outcome == HoneypotEnforcementOutcome.Failed)
             {

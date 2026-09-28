@@ -86,6 +86,13 @@ internal sealed class HoneypotEnforcementService(
         }
         catch (Exception banEx)
         {
+            if (HoneypotRules.IsPermanentBanFailure(banEx))
+            {
+                logger.LogError(banEx,
+                    "Permanent honeypot ban failure for {Member}; not retrying", memberDisplay);
+                return HoneypotEnforcementOutcome.PermanentFailure;
+            }
+
             logger.LogError(banEx, "BanAsync failed for honeypot member {Member}", memberDisplay);
 
             bool? stillPresent = await banClient.IsMemberPresentAsync(guildId, memberId);
@@ -135,6 +142,14 @@ internal sealed class HoneypotEnforcementService(
         }
         catch (Exception banEx)
         {
+            if (HoneypotRules.IsPermanentBanFailure(banEx))
+            {
+                logger.LogError(banEx,
+                    "Permanent honeypot ban failure for already-marked member {Member}; not retrying",
+                    memberDisplay);
+                return HoneypotEnforcementOutcome.PermanentFailure;
+            }
+
             logger.LogError(banEx,
                 "Retry BanAsync failed for already-marked honeypot member {Member}", memberDisplay);
 

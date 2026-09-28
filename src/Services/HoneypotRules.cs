@@ -1,3 +1,5 @@
+using DSharpPlus.Exceptions;
+
 using IgorBot.Schema;
 
 namespace IgorBot.Services;
@@ -59,4 +61,10 @@ internal static class HoneypotRules
     /// </summary>
     public static bool ShouldSkipDiscordBan(MemberStatus status) =>
         status is MemberStatus.BannedByModerator or MemberStatus.BannedExternally;
+
+    /// <summary>
+    ///     403 (missing permission / hierarchy) and 404 (unknown user) will not succeed on retry.
+    /// </summary>
+    public static bool IsPermanentBanFailure(Exception ex) =>
+        ex is UnauthorizedException or NotFoundException;
 }

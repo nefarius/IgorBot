@@ -28,6 +28,17 @@ internal sealed class GuildConfigService(DB db) : IGuildConfigService
 
     public async Task SaveAsync(GuildConfig config, CancellationToken ct = default)
     {
+        GuildConfigEntity? previous = await db.Find<GuildConfigEntity>()
+            .OneAsync(config.GuildId.ToString(), ct);
+
+        DateTime? activation = previous?.HoneypotChannelActivatedAt;
+        if (previous?.HoneypotChannelId != config.HoneypotChannelId)
+        {
+            activation = config.HoneypotChannelId.HasValue ? DateTime.UtcNow : null;
+        }
+
+        config.HoneypotChannelActivatedAt = activation;
+
         GuildConfigEntity entity = GuildConfigEntity.FromGuildConfig(config);
         entity.ID = config.GuildId.ToString();
         await db.SaveAsync(entity, ct);

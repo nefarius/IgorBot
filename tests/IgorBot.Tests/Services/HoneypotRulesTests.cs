@@ -1,3 +1,7 @@
+using System.Runtime.CompilerServices;
+
+using DSharpPlus.Exceptions;
+
 using FluentAssertions;
 
 using IgorBot.Schema;
@@ -78,4 +82,25 @@ public sealed class HoneypotRulesTests
     {
         HoneypotRules.ShouldSkipDiscordBan(MemberStatus.BannedByHoneypot).Should().BeFalse();
     }
+
+    [Fact]
+    public void IsPermanentBanFailure_Unauthorized_ReturnsTrue()
+    {
+        HoneypotRules.IsPermanentBanFailure(Uninitialized<UnauthorizedException>()).Should().BeTrue();
+    }
+
+    [Fact]
+    public void IsPermanentBanFailure_NotFound_ReturnsTrue()
+    {
+        HoneypotRules.IsPermanentBanFailure(Uninitialized<NotFoundException>()).Should().BeTrue();
+    }
+
+    [Fact]
+    public void IsPermanentBanFailure_Transient_ReturnsFalse()
+    {
+        HoneypotRules.IsPermanentBanFailure(new InvalidOperationException("discord 503")).Should().BeFalse();
+    }
+
+    private static Exception Uninitialized<T>() where T : Exception =>
+        (Exception)RuntimeHelpers.GetUninitializedObject(typeof(T));
 }

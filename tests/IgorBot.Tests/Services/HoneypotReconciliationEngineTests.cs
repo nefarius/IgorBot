@@ -27,6 +27,40 @@ public sealed class HoneypotReconciliationEngineTests
     }
 
     [Fact]
+    public void ResolveAfterId_RecentActivation_StartsAtActivationNotFullLookback()
+    {
+        DateTime now = new(2026, 9, 28, 16, 0, 0, DateTimeKind.Utc);
+        DateTime activated = now.AddHours(-2);
+
+        ulong afterId = HoneypotReconciliationEngine.ResolveAfterId(null, now, activated);
+
+        afterId.Should().Be(HoneypotReconciliationEngine.SnowflakeFromTimestamp(activated));
+        afterId.Should().NotBe(HoneypotReconciliationEngine.SnowflakeFromTimestamp(
+            now - HoneypotReconciliationEngine.InitialLookback));
+    }
+
+    [Fact]
+    public void ResolveAfterId_OldActivation_UsesLookbackWindow()
+    {
+        DateTime now = new(2026, 9, 28, 16, 0, 0, DateTimeKind.Utc);
+        DateTime activated = now.AddDays(-3);
+
+        ulong afterId = HoneypotReconciliationEngine.ResolveAfterId(null, now, activated);
+
+        afterId.Should().Be(HoneypotReconciliationEngine.SnowflakeFromTimestamp(
+            now - HoneypotReconciliationEngine.InitialLookback));
+    }
+
+    [Fact]
+    public void ResolveAfterId_CheckpointTakesPrecedenceOverActivation()
+    {
+        DateTime now = new(2026, 9, 28, 16, 0, 0, DateTimeKind.Utc);
+
+        HoneypotReconciliationEngine.ResolveAfterId(999UL, now, now.AddHours(-1))
+            .Should().Be(999UL);
+    }
+
+    [Fact]
     public void SnowflakeFromTimestamp_RoundTripsThroughDiscordUtilities()
     {
         DateTime utc = new(2026, 9, 27, 12, 0, 0, DateTimeKind.Utc);
