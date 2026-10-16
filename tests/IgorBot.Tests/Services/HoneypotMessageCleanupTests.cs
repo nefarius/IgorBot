@@ -95,12 +95,44 @@ public sealed class HoneypotMessageCleanupTests
     }
 
     [Fact]
-    public async Task TryDeleteCheckpointedMessageAsync_DeletesWithoutEnforcementOutcome()
+    public void DecideCheckpointDeletion_ConfirmedBan_Deletes()
+    {
+        HoneypotMessageCleanup.DecideCheckpointDeletion(HoneypotEligibility.Enforce, banConfirmed: true)
+            .Should().Be(CheckpointDeletion.Delete);
+    }
+
+    [Fact]
+    public void DecideCheckpointDeletion_ExemptAuthor_LeavesMessage()
+    {
+        HoneypotMessageCleanup.DecideCheckpointDeletion(HoneypotEligibility.SkipOwner, banConfirmed: true)
+            .Should().Be(CheckpointDeletion.Leave);
+        HoneypotMessageCleanup.DecideCheckpointDeletion(HoneypotEligibility.SkipExcludedRole, banConfirmed: true)
+            .Should().Be(CheckpointDeletion.Leave);
+        HoneypotMessageCleanup.DecideCheckpointDeletion(HoneypotEligibility.SkipBot, banConfirmed: true)
+            .Should().Be(CheckpointDeletion.Leave);
+    }
+
+    [Fact]
+    public void DecideCheckpointDeletion_NoBan_LeavesMessage()
+    {
+        HoneypotMessageCleanup.DecideCheckpointDeletion(HoneypotEligibility.Enforce, banConfirmed: false)
+            .Should().Be(CheckpointDeletion.Leave);
+    }
+
+    [Fact]
+    public void DecideCheckpointDeletion_UnconfirmedBan_Retries()
+    {
+        HoneypotMessageCleanup.DecideCheckpointDeletion(HoneypotEligibility.Enforce, banConfirmed: null)
+            .Should().Be(CheckpointDeletion.Retry);
+    }
+
+    [Fact]
+    public async Task TryDeleteCheckpointedMessageAsync_ConfirmedDeletion_ReturnsTrue()
     {
         int deletes = 0;
         ulong messageId = MessageId(OlderThanLegacyPurgeWindow);
 
-        await HoneypotMessageCleanup.TryDeleteCheckpointedMessageAsync(
+        bool deleted = await HoneypotMessageCleanup.TryDeleteCheckpointedMessageAsync(
             () =>
             {
                 deletes++;
@@ -109,19 +141,31 @@ public sealed class HoneypotMessageCleanupTests
             NullLogger.Instance,
             messageId);
 
+        deleted.Should().BeTrue();
         deletes.Should().Be(1);
         messageId.Should().BeLessThan(MessageId(TimeSpan.FromDays(1)));
     }
 
     [Fact]
-    public async Task TryDeleteCheckpointedMessageAsync_DeleteFailure_DoesNotThrow()
+    public async Task TryDeleteCheckpointedMessageAsync_AlreadyDeleted_ReturnsTrue()
     {
-        Func<Task> act = () => HoneypotMessageCleanup.TryDeleteCheckpointedMessageAsync(
+        bool deleted = await HoneypotMessageCleanup.TryDeleteCheckpointedMessageAsync(
+            () => throw Uninitialized<NotFoundException>(),
+            NullLogger.Instance,
+            MessageId(OlderThanLegacyPurgeWindow));
+
+        deleted.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task TryDeleteCheckpointedMessageAsync_DeleteFailure_ReturnsFalse()
+    {
+        bool deleted = await HoneypotMessageCleanup.TryDeleteCheckpointedMessageAsync(
             () => throw new InvalidOperationException("missing manage messages"),
             NullLogger.Instance,
             MessageId(OlderThanLegacyPurgeWindow));
 
-        await act.Should().NotThrowAsync();
+        deleted.Should().BeFalse();
     }
 
     [Fact]

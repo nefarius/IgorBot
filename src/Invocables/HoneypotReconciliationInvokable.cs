@@ -341,7 +341,7 @@ internal sealed class HoneypotReconciliationInvokable(
 
     /// <summary>
     ///     Deletes one checkpointed honeypot message without calling enforcement.
-    ///     Returns <see langword="false" /> when author lookup fails and the message must be retried.
+    ///     Returns <see langword="false" /> when the message must be retried.
     /// </summary>
     private async Task<bool> DeleteCheckpointedMessageAsync(
         DiscordGuild guild,
@@ -382,25 +382,59 @@ internal sealed class HoneypotReconciliationInvokable(
             roleIds,
             config.HoneypotExclusionRoleIds);
 
-        switch (eligibility)
+        if (eligibility == HoneypotEligibility.SkipExcludedRole)
         {
-            case HoneypotEligibility.SkipOwner:
+            logger.LogWarning(
+                "Member {Member} posted in honeypot channel but has excluded role",
+                message.Author);
+        }
+
+        bool? banConfirmed = null;
+        if (eligibility == HoneypotEligibility.Enforce)
+        {
+            banConfirmed = await ConfirmBanAsync(guild, message.Author.Id);
+        }
+
+        switch (HoneypotMessageCleanup.DecideCheckpointDeletion(eligibility, banConfirmed))
+        {
+            case CheckpointDeletion.Leave:
                 return true;
-            case HoneypotEligibility.SkipExcludedRole:
+            case CheckpointDeletion.Retry:
                 logger.LogWarning(
-                    "Member {Member} posted in honeypot channel but has excluded role",
-                    message.Author);
-                return true;
-            case HoneypotEligibility.SkipBot:
-                return true;
-            case HoneypotEligibility.Enforce:
-                await HoneypotMessageCleanup.TryDeleteCheckpointedMessageAsync(
+                    "Honeypot backlog cleanup could not confirm a ban for {Author} on message {MessageId}; will retry",
+                    message.Author, message.Id);
+                return false;
+            case CheckpointDeletion.Delete:
+                return await HoneypotMessageCleanup.TryDeleteCheckpointedMessageAsync(
                     () => message.DeleteAsync(DiscordHoneypotBanClient.BanReason),
                     logger,
                     message.Id);
-                return true;
             default:
-                return true;
+                return false;
+        }
+    }
+
+    /// <summary>
+    ///     Returns whether Discord currently has a ban for <paramref name="userId" />.
+    ///     <see langword="null" /> means the ban could not be confirmed.
+    /// </summary>
+    private async Task<bool?> ConfirmBanAsync(DiscordGuild guild, ulong userId)
+    {
+        try
+        {
+            await guild.GetBanAsync(userId);
+            return true;
+        }
+        catch (NotFoundException)
+        {
+            return false;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex,
+                "Failed to confirm honeypot ban for {UserId} in guild {GuildId}",
+                userId, guild.Id);
+            return null;
         }
     }
 

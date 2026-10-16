@@ -66,10 +66,31 @@ internal static class HoneypotMessageCleanup
     }
 
     /// <summary>
-    ///     Deletes a message the checkpoint already passed. No ban is issued.
-    ///     Deletion errors are logged and swallowed so the backlog sweep can continue.
+    ///     Whether a checkpointed honeypot message may be deleted.
+    ///     Eligibility is not enough: deletion requires a confirmed Discord ban.
+    ///     <see cref="HoneypotEnforcementOutcome.PermanentFailure" /> leaves no ban, so the message stays.
     /// </summary>
-    public static async Task TryDeleteCheckpointedMessageAsync(
+    public static CheckpointDeletion DecideCheckpointDeletion(HoneypotEligibility eligibility, bool? banConfirmed)
+    {
+        if (eligibility != HoneypotEligibility.Enforce)
+        {
+            return CheckpointDeletion.Leave;
+        }
+
+        return banConfirmed switch
+        {
+            true => CheckpointDeletion.Delete,
+            false => CheckpointDeletion.Leave,
+            _ => CheckpointDeletion.Retry
+        };
+    }
+
+    /// <summary>
+    ///     Deletes a message the checkpoint already passed. No ban is issued.
+    ///     Returns <see langword="true" /> when the message is gone, including when it was already deleted.
+    ///     Any other deletion failure returns <see langword="false" /> so the caller can retry.
+    /// </summary>
+    public static async Task<bool> TryDeleteCheckpointedMessageAsync(
         Func<Task> deleteTrigger,
         ILogger logger,
         ulong messageId)
@@ -78,16 +99,40 @@ internal static class HoneypotMessageCleanup
         {
             await deleteTrigger();
             logger.LogInformation("Deleted checkpointed honeypot message {MessageId}", messageId);
+            return true;
         }
         catch (NotFoundException)
         {
             logger.LogDebug("Honeypot message {MessageId} was already deleted", messageId);
+            return true;
         }
         catch (Exception ex)
         {
             logger.LogError(ex,
                 "Failed to delete checkpointed honeypot message {MessageId}",
                 messageId);
+            return false;
         }
     }
+}
+
+/// <summary>
+///     Backlog decision for one checkpointed honeypot message.
+/// </summary>
+internal enum CheckpointDeletion
+{
+    /// <summary>
+    ///     The message may be deleted.
+    /// </summary>
+    Delete,
+
+    /// <summary>
+    ///     Leave the message and continue the sweep.
+    /// </summary>
+    Leave,
+
+    /// <summary>
+    ///     Stop so the same message is fetched again.
+    /// </summary>
+    Retry
 }
