@@ -33,6 +33,19 @@ internal sealed class HoneypotReconciliationState : IEntity
     public ulong? ContinuationBeforeMessageId { get; set; }
 
     /// <summary>
+    ///     Messages at or before <see cref="LastProcessedMessageId" /> were evaluated before
+    ///     trigger deletion existed, so they still need a cleanup pass. Missing values load
+    ///     as <see langword="false" /> and start that pass.
+    /// </summary>
+    public bool BacklogCleanupComplete { get; set; }
+
+    /// <summary>
+    ///     Exclusive upper bound for the next backlog page. Null starts at the committed
+    ///     checkpoint, which includes that message.
+    /// </summary>
+    public ulong? BacklogCleanupBeforeMessageId { get; set; }
+
+    /// <summary>
     ///     UTC timestamp of the last successful checkpoint write.
     /// </summary>
     public DateTime LastReconciledAt { get; set; } = DateTime.UtcNow;

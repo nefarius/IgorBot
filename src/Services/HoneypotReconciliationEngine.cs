@@ -102,4 +102,35 @@ internal static class HoneypotReconciliationEngine
     /// </summary>
     public static IReadOnlyList<T> OrderOldestFirst<T>(IEnumerable<T> items, Func<T, ulong> idSelector) =>
         items.OrderBy(idSelector).ToList();
+
+    /// <summary>
+    ///     Oldest message ID eligible for backlog cleanup. Activation is exclusive, matching
+    ///     forward scans. A missing activation leaves the whole checkpointed history eligible.
+    /// </summary>
+    public static ulong BacklogLowerBound(DateTime? channelActivatedAt) =>
+        channelActivatedAt is DateTime activated ? SnowflakeFromTimestamp(activated) : 0UL;
+
+    /// <summary>
+    ///     A checkpointed message still needs deletion when it is newer than activation.
+    ///     The committed checkpoint message itself is included.
+    /// </summary>
+    public static bool IsBacklogMessage(ulong messageId, ulong checkpoint, ulong lowerBound) =>
+        messageId > lowerBound && messageId <= checkpoint;
+
+    /// <summary>
+    ///     Exclusive Discord <c>before</c> ID that still returns <paramref name="messageId" />.
+    /// </summary>
+    public static ulong BeforeIdIncluding(ulong messageId) =>
+        messageId == ulong.MaxValue ? messageId : messageId + 1UL;
+
+    /// <summary>
+    ///     Checkpointed message IDs selected for backlog cleanup, newest first.
+    /// </summary>
+    public static IReadOnlyList<ulong> SelectBacklogMessageIds(
+        IEnumerable<ulong> messageIds,
+        ulong checkpoint,
+        ulong lowerBound) =>
+        messageIds.Where(id => IsBacklogMessage(id, checkpoint, lowerBound))
+            .OrderByDescending(id => id)
+            .ToList();
 }

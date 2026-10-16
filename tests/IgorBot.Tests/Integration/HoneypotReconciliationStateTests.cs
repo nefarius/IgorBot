@@ -144,4 +144,23 @@ public sealed class HoneypotReconciliationStateTests : IAsyncLifetime
         loaded!.LastProcessedMessageId.Should().Be(10UL);
         loaded.ContinuationBeforeMessageId.Should().Be(500UL);
     }
+
+    [Fact]
+    public async Task BacklogCleanup_PersistsWithoutMovingCheckpoint()
+    {
+        await _db.SaveAsync(new HoneypotReconciliationState
+        {
+            GuildId = 7,
+            ChannelId = 8,
+            LastProcessedMessageId = 1559668871739478132UL,
+            BacklogCleanupComplete = false,
+            BacklogCleanupBeforeMessageId = 1559668871739478132UL,
+            ID = "7-8"
+        });
+
+        HoneypotReconciliationState? loaded = await _db.Find<HoneypotReconciliationState>().OneAsync("7-8");
+        loaded!.LastProcessedMessageId.Should().Be(1559668871739478132UL);
+        loaded.BacklogCleanupComplete.Should().BeFalse();
+        loaded.BacklogCleanupBeforeMessageId.Should().Be(1559668871739478132UL);
+    }
 }

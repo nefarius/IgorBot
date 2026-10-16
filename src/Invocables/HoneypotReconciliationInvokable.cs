@@ -119,7 +119,8 @@ internal sealed class HoneypotReconciliationInvokable(
 
         if (history.Messages.Count == 0)
         {
-            await SaveStateAsync(state, guildId, channelId, cursor, continuationBefore: null);
+            state = await SaveStateAsync(state, guildId, channelId, cursor, continuationBefore: null);
+            await CleanupProcessedHistoryAsync(guild, channel, config, state);
             return;
         }
 
@@ -155,7 +156,98 @@ internal sealed class HoneypotReconciliationInvokable(
         }
 
         ulong? next = HoneypotReconciliationEngine.AdvanceCheckpoint(cursor, evaluations);
-        await SaveStateAsync(state, guildId, channelId, next ?? cursor, continuationBefore: null);
+        state = await SaveStateAsync(state, guildId, channelId, next ?? cursor, continuationBefore: null);
+        await CleanupProcessedHistoryAsync(guild, channel, config, state);
+    }
+
+    /// <summary>
+    ///     Deletes enforceable messages the checkpoint already passed. Those messages were
+    ///     banned before trigger deletion existed, so a forward scan never fetches them again.
+    /// </summary>
+    private async Task CleanupProcessedHistoryAsync(
+        DiscordGuild guild,
+        DiscordChannel channel,
+        GuildConfig config,
+        HoneypotReconciliationState state)
+    {
+        if (state.BacklogCleanupComplete)
+        {
+            return;
+        }
+
+        ulong checkpoint = state.LastProcessedMessageId;
+        ulong lowerBound = HoneypotReconciliationEngine.BacklogLowerBound(config.HoneypotChannelActivatedAt);
+        if (checkpoint <= lowerBound)
+        {
+            await SaveBacklogAsync(state, complete: true, beforeMessageId: null);
+            return;
+        }
+
+        ulong before = state.BacklogCleanupBeforeMessageId
+                       ?? HoneypotReconciliationEngine.BeforeIdIncluding(checkpoint);
+        if (before <= lowerBound)
+        {
+            await SaveBacklogAsync(state, complete: true, beforeMessageId: null);
+            return;
+        }
+
+        try
+        {
+            for (int page = 0; page < HoneypotReconciliationEngine.MaxPagesPerGuild; page++)
+            {
+                await Task.Delay(DiscordApiThrottleDelay);
+
+                IReadOnlyList<DiscordMessage> older =
+                    await channel.GetMessagesBeforeAsync(before, HoneypotReconciliationEngine.PageSize);
+                if (older.Count == 0)
+                {
+                    await SaveBacklogAsync(state, complete: true, beforeMessageId: null);
+                    return;
+                }
+
+                bool reachedFloor = false;
+                foreach (DiscordMessage message in older.OrderByDescending(static m => m.Id))
+                {
+                    if (!HoneypotReconciliationEngine.IsBacklogMessage(message.Id, checkpoint, lowerBound))
+                    {
+                        if (message.Id <= lowerBound)
+                        {
+                            reachedFloor = true;
+                            break;
+                        }
+
+                        continue;
+                    }
+
+                    bool success = await EvaluateMessageAsync(guild, config, message);
+                    if (!success)
+                    {
+                        await SaveBacklogAsync(
+                            state,
+                            complete: false,
+                            beforeMessageId: HoneypotReconciliationEngine.BeforeIdIncluding(message.Id));
+                        return;
+                    }
+                }
+
+                ulong oldest = older.Min(static m => m.Id);
+                if (reachedFloor || older.Count < HoneypotReconciliationEngine.PageSize || oldest <= lowerBound)
+                {
+                    await SaveBacklogAsync(state, complete: true, beforeMessageId: null);
+                    return;
+                }
+
+                before = oldest;
+            }
+
+            await SaveBacklogAsync(state, complete: false, beforeMessageId: before);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex,
+                "Failed honeypot backlog cleanup for guild {GuildId} channel {ChannelId} before {BeforeId}",
+                guild.Id, channel.Id, before);
+        }
     }
 
     private async Task<HistoryPageResult> FetchHistoryAsync(
@@ -343,7 +435,7 @@ internal sealed class HoneypotReconciliationInvokable(
         }
     }
 
-    private async Task SaveStateAsync(
+    private async Task<HoneypotReconciliationState> SaveStateAsync(
         HoneypotReconciliationState? existing,
         ulong guildId,
         ulong channelId,
@@ -360,7 +452,7 @@ internal sealed class HoneypotReconciliationInvokable(
             && state.LastProcessedMessageId == lastProcessedMessageId
             && state.ContinuationBeforeMessageId == continuationBefore)
         {
-            return;
+            return state;
         }
 
         state.GuildId = guildId;
@@ -374,6 +466,30 @@ internal sealed class HoneypotReconciliationInvokable(
         logger.LogDebug(
             "Honeypot reconciliation checkpoint for guild {GuildId} channel {ChannelId} is now {MessageId} (continuation {Continuation})",
             guildId, channelId, lastProcessedMessageId, continuationBefore);
+        return state;
+    }
+
+    private async Task SaveBacklogAsync(
+        HoneypotReconciliationState state,
+        bool complete,
+        ulong? beforeMessageId)
+    {
+        ulong? before = complete ? null : beforeMessageId;
+        if (state.BacklogCleanupComplete == complete
+            && state.BacklogCleanupBeforeMessageId == before)
+        {
+            return;
+        }
+
+        state.BacklogCleanupComplete = complete;
+        state.BacklogCleanupBeforeMessageId = before;
+        state.LastReconciledAt = DateTime.UtcNow;
+        state.ID = state.GenerateNewID();
+        await db.SaveAsync(state);
+
+        logger.LogDebug(
+            "Honeypot backlog cleanup for guild {GuildId} channel {ChannelId} complete={Complete} before {BeforeId}",
+            state.GuildId, state.ChannelId, complete, before);
     }
 
     private readonly record struct HistoryPageResult(

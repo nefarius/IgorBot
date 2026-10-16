@@ -206,4 +206,67 @@ public sealed class HoneypotReconciliationEngineTests
 
         ordered.Select(x => x.Id).Should().Equal(10UL, 20UL, 30UL);
     }
+
+    [Fact]
+    public void SelectBacklogMessageIds_IncludesAgedMessageBehindCheckpoint()
+    {
+        const ulong agedMessageId = 1559668871739478132UL;
+        ulong ownerEraMessageId = HoneypotReconciliationEngine.SnowflakeFromTimestamp(
+            new DateTime(2024, 6, 24, 19, 48, 0, DateTimeKind.Utc));
+        ulong checkpoint = agedMessageId;
+
+        IReadOnlyList<ulong> selected = HoneypotReconciliationEngine.SelectBacklogMessageIds(
+            [ownerEraMessageId, agedMessageId, checkpoint + 10UL],
+            checkpoint,
+            lowerBound: 0);
+
+        selected.Should().Equal(agedMessageId, ownerEraMessageId);
+        HoneypotReconciliationEngine.BeforeIdIncluding(checkpoint).Should().BeGreaterThan(agedMessageId);
+    }
+
+    [Fact]
+    public void SelectBacklogMessageIds_ActivationExcludesOlderMessages()
+    {
+        const ulong agedMessageId = 1559668871739478132UL;
+        ulong ownerEraMessageId = HoneypotReconciliationEngine.SnowflakeFromTimestamp(
+            new DateTime(2024, 6, 24, 19, 48, 0, DateTimeKind.Utc));
+        ulong lowerBound = HoneypotReconciliationEngine.BacklogLowerBound(
+            new DateTime(2026, 9, 28, 16, 55, 0, DateTimeKind.Utc));
+
+        IReadOnlyList<ulong> selected = HoneypotReconciliationEngine.SelectBacklogMessageIds(
+            [ownerEraMessageId, agedMessageId],
+            checkpoint: agedMessageId,
+            lowerBound);
+
+        selected.Should().Equal(agedMessageId);
+        HoneypotReconciliationEngine.IsBacklogMessage(ownerEraMessageId, agedMessageId, lowerBound)
+            .Should().BeFalse();
+    }
+
+    [Fact]
+    public void IsBacklogMessage_CheckpointMessage_IsIncluded()
+    {
+        HoneypotReconciliationEngine.IsBacklogMessage(40, checkpoint: 40, lowerBound: 10)
+            .Should().BeTrue();
+    }
+
+    [Fact]
+    public void IsBacklogMessage_AtLowerBound_IsExcluded()
+    {
+        HoneypotReconciliationEngine.IsBacklogMessage(10, checkpoint: 40, lowerBound: 10)
+            .Should().BeFalse();
+    }
+
+    [Fact]
+    public void BeforeIdIncluding_RetriesTheSameMessage()
+    {
+        HoneypotReconciliationEngine.BeforeIdIncluding(40).Should().Be(41UL);
+        HoneypotReconciliationEngine.BeforeIdIncluding(ulong.MaxValue).Should().Be(ulong.MaxValue);
+    }
+
+    [Fact]
+    public void BacklogLowerBound_MissingActivation_IncludesEntireHistory()
+    {
+        HoneypotReconciliationEngine.BacklogLowerBound(null).Should().Be(0UL);
+    }
 }
