@@ -64,4 +64,30 @@ internal static class HoneypotMessageCleanup
                 messageId, outcome);
         }
     }
+
+    /// <summary>
+    ///     Deletes a message the checkpoint already passed. No ban is issued.
+    ///     Deletion errors are logged and swallowed so the backlog sweep can continue.
+    /// </summary>
+    public static async Task TryDeleteCheckpointedMessageAsync(
+        Func<Task> deleteTrigger,
+        ILogger logger,
+        ulong messageId)
+    {
+        try
+        {
+            await deleteTrigger();
+            logger.LogInformation("Deleted checkpointed honeypot message {MessageId}", messageId);
+        }
+        catch (NotFoundException)
+        {
+            logger.LogDebug("Honeypot message {MessageId} was already deleted", messageId);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex,
+                "Failed to delete checkpointed honeypot message {MessageId}",
+                messageId);
+        }
+    }
 }

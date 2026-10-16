@@ -163,6 +163,7 @@ internal sealed class HoneypotReconciliationInvokable(
     /// <summary>
     ///     Deletes enforceable messages the checkpoint already passed. Those messages were
     ///     banned before trigger deletion existed, so a forward scan never fetches them again.
+    ///     This pass does not ban; bots, owners, and excluded roles keep their messages.
     /// </summary>
     private async Task CleanupProcessedHistoryAsync(
         DiscordGuild guild,
@@ -219,7 +220,7 @@ internal sealed class HoneypotReconciliationInvokable(
                         continue;
                     }
 
-                    bool success = await EvaluateMessageAsync(guild, config, message);
+                    bool success = await DeleteCheckpointedMessageAsync(guild, config, message);
                     if (!success)
                     {
                         await SaveBacklogAsync(
@@ -336,6 +337,71 @@ internal sealed class HoneypotReconciliationInvokable(
         }
 
         return false;
+    }
+
+    /// <summary>
+    ///     Deletes one checkpointed honeypot message without calling enforcement.
+    ///     Returns <see langword="false" /> when author lookup fails and the message must be retried.
+    /// </summary>
+    private async Task<bool> DeleteCheckpointedMessageAsync(
+        DiscordGuild guild,
+        GuildConfig config,
+        DiscordMessage message)
+    {
+        if (message.Author is null || message.Author.IsBot)
+        {
+            return true;
+        }
+
+        bool isOwner = false;
+        IReadOnlyList<ulong> roleIds = [];
+
+        try
+        {
+            DiscordMember member = await guild.GetMemberAsync(message.Author.Id);
+            isOwner = member.IsOwner;
+            roleIds = member.Roles.Select(r => r.Id).ToList();
+        }
+        catch (NotFoundException)
+        {
+            logger.LogDebug(
+                "Honeypot backlog cleanup: author {AuthorId} is no longer in guild {GuildId}",
+                message.Author.Id, guild.Id);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex,
+                "Failed to resolve honeypot author {AuthorId} in guild {GuildId}; will retry message {MessageId}",
+                message.Author.Id, guild.Id, message.Id);
+            return false;
+        }
+
+        HoneypotEligibility eligibility = HoneypotRules.Evaluate(
+            message.Author.IsBot,
+            isOwner,
+            roleIds,
+            config.HoneypotExclusionRoleIds);
+
+        switch (eligibility)
+        {
+            case HoneypotEligibility.SkipOwner:
+                return true;
+            case HoneypotEligibility.SkipExcludedRole:
+                logger.LogWarning(
+                    "Member {Member} posted in honeypot channel but has excluded role",
+                    message.Author);
+                return true;
+            case HoneypotEligibility.SkipBot:
+                return true;
+            case HoneypotEligibility.Enforce:
+                await HoneypotMessageCleanup.TryDeleteCheckpointedMessageAsync(
+                    () => message.DeleteAsync(DiscordHoneypotBanClient.BanReason),
+                    logger,
+                    message.Id);
+                return true;
+            default:
+                return true;
+        }
     }
 
     private async Task<bool> EvaluateMessageAsync(

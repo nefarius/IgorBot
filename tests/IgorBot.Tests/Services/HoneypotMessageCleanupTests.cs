@@ -95,6 +95,36 @@ public sealed class HoneypotMessageCleanupTests
     }
 
     [Fact]
+    public async Task TryDeleteCheckpointedMessageAsync_DeletesWithoutEnforcementOutcome()
+    {
+        int deletes = 0;
+        ulong messageId = MessageId(OlderThanLegacyPurgeWindow);
+
+        await HoneypotMessageCleanup.TryDeleteCheckpointedMessageAsync(
+            () =>
+            {
+                deletes++;
+                return Task.CompletedTask;
+            },
+            NullLogger.Instance,
+            messageId);
+
+        deletes.Should().Be(1);
+        messageId.Should().BeLessThan(MessageId(TimeSpan.FromDays(1)));
+    }
+
+    [Fact]
+    public async Task TryDeleteCheckpointedMessageAsync_DeleteFailure_DoesNotThrow()
+    {
+        Func<Task> act = () => HoneypotMessageCleanup.TryDeleteCheckpointedMessageAsync(
+            () => throw new InvalidOperationException("missing manage messages"),
+            NullLogger.Instance,
+            MessageId(OlderThanLegacyPurgeWindow));
+
+        await act.Should().NotThrowAsync();
+    }
+
+    [Fact]
     public async Task TryDeleteTriggerAsync_AlreadyDeleted_DoesNotThrow()
     {
         Func<Task> act = () => HoneypotMessageCleanup.TryDeleteTriggerAsync(
