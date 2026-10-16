@@ -119,7 +119,8 @@ internal sealed class HoneypotReconciliationInvokable(
 
         if (history.Messages.Count == 0)
         {
-            await SaveStateAsync(state, guildId, channelId, cursor, continuationBefore: null);
+            state = await SaveStateAsync(state, guildId, channelId, cursor, continuationBefore: null);
+            await CleanupProcessedHistoryAsync(guild, channel, config, state);
             return;
         }
 
@@ -155,7 +156,99 @@ internal sealed class HoneypotReconciliationInvokable(
         }
 
         ulong? next = HoneypotReconciliationEngine.AdvanceCheckpoint(cursor, evaluations);
-        await SaveStateAsync(state, guildId, channelId, next ?? cursor, continuationBefore: null);
+        state = await SaveStateAsync(state, guildId, channelId, next ?? cursor, continuationBefore: null);
+        await CleanupProcessedHistoryAsync(guild, channel, config, state);
+    }
+
+    /// <summary>
+    ///     Deletes enforceable messages the checkpoint already passed. Those messages were
+    ///     banned before trigger deletion existed, so a forward scan never fetches them again.
+    ///     This pass does not ban; bots, owners, and excluded roles keep their messages.
+    /// </summary>
+    private async Task CleanupProcessedHistoryAsync(
+        DiscordGuild guild,
+        DiscordChannel channel,
+        GuildConfig config,
+        HoneypotReconciliationState state)
+    {
+        if (state.BacklogCleanupComplete)
+        {
+            return;
+        }
+
+        ulong checkpoint = state.LastProcessedMessageId;
+        ulong lowerBound = HoneypotReconciliationEngine.BacklogLowerBound(config.HoneypotChannelActivatedAt);
+        if (checkpoint <= lowerBound)
+        {
+            await SaveBacklogAsync(state, complete: true, beforeMessageId: null);
+            return;
+        }
+
+        ulong before = state.BacklogCleanupBeforeMessageId
+                       ?? HoneypotReconciliationEngine.BeforeIdIncluding(checkpoint);
+        if (before <= lowerBound)
+        {
+            await SaveBacklogAsync(state, complete: true, beforeMessageId: null);
+            return;
+        }
+
+        try
+        {
+            for (int page = 0; page < HoneypotReconciliationEngine.MaxPagesPerGuild; page++)
+            {
+                await Task.Delay(DiscordApiThrottleDelay);
+
+                IReadOnlyList<DiscordMessage> older =
+                    await channel.GetMessagesBeforeAsync(before, HoneypotReconciliationEngine.PageSize);
+                if (older.Count == 0)
+                {
+                    await SaveBacklogAsync(state, complete: true, beforeMessageId: null);
+                    return;
+                }
+
+                bool reachedFloor = false;
+                foreach (DiscordMessage message in older.OrderByDescending(static m => m.Id))
+                {
+                    if (!HoneypotReconciliationEngine.IsBacklogMessage(message.Id, checkpoint, lowerBound))
+                    {
+                        if (message.Id <= lowerBound)
+                        {
+                            reachedFloor = true;
+                            break;
+                        }
+
+                        continue;
+                    }
+
+                    bool success = await DeleteCheckpointedMessageAsync(guild, config, message);
+                    if (!success)
+                    {
+                        await SaveBacklogAsync(
+                            state,
+                            complete: false,
+                            beforeMessageId: HoneypotReconciliationEngine.BeforeIdIncluding(message.Id));
+                        return;
+                    }
+                }
+
+                ulong oldest = older.Min(static m => m.Id);
+                if (reachedFloor || older.Count < HoneypotReconciliationEngine.PageSize || oldest <= lowerBound)
+                {
+                    await SaveBacklogAsync(state, complete: true, beforeMessageId: null);
+                    return;
+                }
+
+                before = oldest;
+            }
+
+            await SaveBacklogAsync(state, complete: false, beforeMessageId: before);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex,
+                "Failed honeypot backlog cleanup for guild {GuildId} channel {ChannelId} before {BeforeId}",
+                guild.Id, channel.Id, before);
+        }
     }
 
     private async Task<HistoryPageResult> FetchHistoryAsync(
@@ -246,6 +339,105 @@ internal sealed class HoneypotReconciliationInvokable(
         return false;
     }
 
+    /// <summary>
+    ///     Deletes one checkpointed honeypot message without calling enforcement.
+    ///     Returns <see langword="false" /> when the message must be retried.
+    /// </summary>
+    private async Task<bool> DeleteCheckpointedMessageAsync(
+        DiscordGuild guild,
+        GuildConfig config,
+        DiscordMessage message)
+    {
+        if (message.Author is null || message.Author.IsBot)
+        {
+            return true;
+        }
+
+        bool isOwner = false;
+        IReadOnlyList<ulong> roleIds = [];
+
+        try
+        {
+            DiscordMember member = await guild.GetMemberAsync(message.Author.Id);
+            isOwner = member.IsOwner;
+            roleIds = member.Roles.Select(r => r.Id).ToList();
+        }
+        catch (NotFoundException)
+        {
+            logger.LogDebug(
+                "Honeypot backlog cleanup: author {AuthorId} is no longer in guild {GuildId}",
+                message.Author.Id, guild.Id);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex,
+                "Failed to resolve honeypot author {AuthorId} in guild {GuildId}; will retry message {MessageId}",
+                message.Author.Id, guild.Id, message.Id);
+            return false;
+        }
+
+        HoneypotEligibility eligibility = HoneypotRules.Evaluate(
+            message.Author.IsBot,
+            isOwner,
+            roleIds,
+            config.HoneypotExclusionRoleIds);
+
+        if (eligibility == HoneypotEligibility.SkipExcludedRole)
+        {
+            logger.LogWarning(
+                "Member {Member} posted in honeypot channel but has excluded role",
+                message.Author);
+        }
+
+        bool? banConfirmed = null;
+        if (eligibility == HoneypotEligibility.Enforce)
+        {
+            banConfirmed = await ConfirmBanAsync(guild, message.Author.Id);
+        }
+
+        switch (HoneypotMessageCleanup.DecideCheckpointDeletion(eligibility, banConfirmed))
+        {
+            case CheckpointDeletion.Leave:
+                return true;
+            case CheckpointDeletion.Retry:
+                logger.LogWarning(
+                    "Honeypot backlog cleanup could not confirm a ban for {Author} on message {MessageId}; will retry",
+                    message.Author, message.Id);
+                return false;
+            case CheckpointDeletion.Delete:
+                return await HoneypotMessageCleanup.TryDeleteCheckpointedMessageAsync(
+                    () => message.DeleteAsync(DiscordHoneypotBanClient.BanReason),
+                    logger,
+                    message.Id);
+            default:
+                return false;
+        }
+    }
+
+    /// <summary>
+    ///     Returns whether Discord currently has a ban for <paramref name="userId" />.
+    ///     <see langword="null" /> means the ban could not be confirmed.
+    /// </summary>
+    private async Task<bool?> ConfirmBanAsync(DiscordGuild guild, ulong userId)
+    {
+        try
+        {
+            await guild.GetBanAsync(userId);
+            return true;
+        }
+        catch (NotFoundException)
+        {
+            return false;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex,
+                "Failed to confirm honeypot ban for {UserId} in guild {GuildId}",
+                userId, guild.Id);
+            return null;
+        }
+    }
+
     private async Task<bool> EvaluateMessageAsync(
         DiscordGuild guild,
         GuildConfig config,
@@ -326,6 +518,12 @@ internal sealed class HoneypotReconciliationInvokable(
                 return false;
             }
 
+            await HoneypotMessageCleanup.TryDeleteTriggerAsync(
+                outcome,
+                DateTimeOffset.UtcNow - message.Timestamp,
+                () => message.DeleteAsync(DiscordHoneypotBanClient.BanReason),
+                logger,
+                message.Id);
             return true;
         }
         catch (Exception ex)
@@ -337,7 +535,7 @@ internal sealed class HoneypotReconciliationInvokable(
         }
     }
 
-    private async Task SaveStateAsync(
+    private async Task<HoneypotReconciliationState> SaveStateAsync(
         HoneypotReconciliationState? existing,
         ulong guildId,
         ulong channelId,
@@ -354,7 +552,7 @@ internal sealed class HoneypotReconciliationInvokable(
             && state.LastProcessedMessageId == lastProcessedMessageId
             && state.ContinuationBeforeMessageId == continuationBefore)
         {
-            return;
+            return state;
         }
 
         state.GuildId = guildId;
@@ -368,6 +566,30 @@ internal sealed class HoneypotReconciliationInvokable(
         logger.LogDebug(
             "Honeypot reconciliation checkpoint for guild {GuildId} channel {ChannelId} is now {MessageId} (continuation {Continuation})",
             guildId, channelId, lastProcessedMessageId, continuationBefore);
+        return state;
+    }
+
+    private async Task SaveBacklogAsync(
+        HoneypotReconciliationState state,
+        bool complete,
+        ulong? beforeMessageId)
+    {
+        ulong? before = complete ? null : beforeMessageId;
+        if (state.BacklogCleanupComplete == complete
+            && state.BacklogCleanupBeforeMessageId == before)
+        {
+            return;
+        }
+
+        state.BacklogCleanupComplete = complete;
+        state.BacklogCleanupBeforeMessageId = before;
+        state.LastReconciledAt = DateTime.UtcNow;
+        state.ID = state.GenerateNewID();
+        await db.SaveAsync(state);
+
+        logger.LogDebug(
+            "Honeypot backlog cleanup for guild {GuildId} channel {ChannelId} complete={Complete} before {BeforeId}",
+            state.GuildId, state.ChannelId, complete, before);
     }
 
     private readonly record struct HistoryPageResult(

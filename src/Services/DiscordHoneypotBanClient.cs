@@ -19,7 +19,10 @@ internal sealed class DiscordHoneypotBanClient(IDiscordClientService discord) : 
             throw new InvalidOperationException($"Guild {guildId} is not present in the Discord client cache.");
         }
 
-        await guild.BanMemberAsync(userId, 1, BanReason);
+        // DSharpPlus 4.5.1 places delete_message_days in the query string and sends no JSON body.
+        // Discord ignores that deprecated field, so a non-zero value does not purge history.
+        // HoneypotMessageCleanup deletes the triggering message instead.
+        await guild.BanMemberAsync(userId, 0, BanReason);
     }
 
     public async Task<bool?> IsMemberPresentAsync(ulong guildId, ulong userId)
