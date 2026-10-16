@@ -326,6 +326,12 @@ internal sealed class HoneypotReconciliationInvokable(
                 return false;
             }
 
+            await HoneypotMessageCleanup.TryDeleteTriggerAsync(
+                outcome,
+                DateTimeOffset.UtcNow - message.Timestamp,
+                () => message.DeleteAsync(DiscordHoneypotBanClient.BanReason),
+                logger,
+                message.Id);
             return true;
         }
         catch (Exception ex)

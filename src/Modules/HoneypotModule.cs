@@ -82,7 +82,14 @@ internal sealed class HoneypotModule(
                 return;
             }
 
-            await enforcement.EnforceAsync(args.Guild.Id, member.Id, member.ToString(), member.Mention);
+            HoneypotEnforcementOutcome outcome = await enforcement.EnforceAsync(
+                args.Guild.Id, member.Id, member.ToString(), member.Mention);
+            await HoneypotMessageCleanup.TryDeleteTriggerAsync(
+                outcome,
+                DateTimeOffset.UtcNow - args.Message.Timestamp,
+                () => args.Message.DeleteAsync(DiscordHoneypotBanClient.BanReason),
+                logger,
+                args.Message.Id);
         }
         catch (Exception ex)
         {
