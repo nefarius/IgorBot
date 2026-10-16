@@ -129,11 +129,9 @@ The test suite has two layers:
 docker build -t igor-bot:local .
 ```
 
-Maintainers publishing the official image use:
+Every push to `master` publishes `containinger/igor-bot:latest` through the Docker Image CI workflow. Pull requests build the same `linux/amd64` image without pushing it.
 
-```bash
-docker buildx build --platform linux/amd64 --push -t containinger/igor-bot:latest .
-```
+Maintainers must add a repository secret named `DOCKERHUB_TOKEN` containing a Docker Hub access token for the `containinger` account. The workflow uses that token to authenticate before publishing.
 
 ## 3rd party credits
 
