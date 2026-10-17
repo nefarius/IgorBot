@@ -7,7 +7,8 @@ internal enum GuildEntityKind
     Missing,
     Role,
     Category,
-    Channel
+    TextChannel,
+    OtherChannel
 }
 
 internal readonly record struct GuildEntityFacts(GuildEntityKind Kind);
@@ -139,9 +140,11 @@ internal static class ConfigOptionApplicator
         }
 
         GuildEntityKind kind = resolve(parsedId.Value).Kind;
-        if (kind is not (GuildEntityKind.Channel or GuildEntityKind.Category))
+        if (kind != GuildEntityKind.TextChannel)
         {
-            return "Channel not found in this server.";
+            return kind == GuildEntityKind.Missing
+                ? "Channel not found in this server."
+                : "Channel must be a text channel.";
         }
 
         apply(parsedId.Value);
@@ -175,12 +178,12 @@ internal static class ConfigOptionApplicator
 
     private static string? AssignIdleKick(GuildConfig config, string value)
     {
-        if (!long.TryParse(value, out long minutes) || minutes <= 0)
+        if (!long.TryParse(value, out long minutes) || minutes < 0)
         {
-            return "Value must be a positive number (minutes). Use 0 or omit to disable idle kick.";
+            return "Value must be zero or a positive number of minutes. Zero disables idle kick.";
         }
 
-        config.IdleKickTimeSpan = TimeSpan.FromMinutes(minutes);
+        config.IdleKickTimeSpan = minutes == 0 ? null : TimeSpan.FromMinutes(minutes);
         return null;
     }
 

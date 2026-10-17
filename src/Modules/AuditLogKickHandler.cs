@@ -23,15 +23,16 @@ internal sealed class AuditLogKickHandler(
 {
     public async Task HandleEventAsync(DiscordClient sender, GuildAuditLogCreatedEventArgs args)
     {
-        if (args.AuditLogEntry is not DiscordAuditLogKickEntry kick || kick.Target is null)
+        if (args.AuditLogEntry is not DiscordAuditLogKickEntry kick ||
+            !ExternalKickPolicy.TryRead(kick, out ExternalKickObservation observed))
         {
             return;
         }
 
         ulong guildId = args.Guild.Id;
-        ulong targetId = kick.Target.Id;
-        ulong? actorId = kick.UserResponsible?.Id;
-        string? reason = kick.Reason;
+        ulong targetId = observed.TargetId;
+        ulong? actorId = observed.ActorId;
+        string? reason = observed.Reason;
 
         if (await guildConfigService.GetAsync(guildId) is null)
         {

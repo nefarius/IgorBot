@@ -69,7 +69,10 @@ internal partial class ApplicationWorkflow
         await db.SaveAsync(member);
 
         logger.LogInformation("{Member} updated in DB", e.Member);
-        DiscordRole strangerRole = e.Guild.Roles[guildConfig.StrangerRoleId];
+        if (!e.Guild.Roles.TryGetValue(guildConfig.StrangerRoleId, out DiscordRole? strangerRole))
+        {
+            return;
+        }
 
         if (guildConfig.AutoAssignStrangerRoleOnJoin && !e.Member.Roles.Contains(strangerRole))
         {

@@ -60,7 +60,7 @@ public sealed class ConfigOptionApplicatorTests
     {
         GuildConfig config = new();
         ConfigOptionApplicator.TryApply(
-                config, ConfigOption.ApplicationCategory, "<#8>", _ => new GuildEntityFacts(GuildEntityKind.Channel))
+                config, ConfigOption.ApplicationCategory, "<#8>", _ => new GuildEntityFacts(GuildEntityKind.TextChannel))
             .Should().Be("Category channel not found or not a category.");
     }
 
@@ -92,14 +92,21 @@ public sealed class ConfigOptionApplicatorTests
     }
 
     [Theory]
-    [InlineData("0")]
     [InlineData("-1")]
     [InlineData("soon")]
-    public void TryApply_IdleKick_RejectsNonPositive(string value)
+    public void TryApply_IdleKick_RejectsInvalid(string value)
     {
         GuildConfig config = new();
         ConfigOptionApplicator.TryApply(config, ConfigOption.IdleKickMinutes, value, _ => default)
-            .Should().Be("Value must be a positive number (minutes). Use 0 or omit to disable idle kick.");
+            .Should().Be("Value must be zero or a positive number of minutes. Zero disables idle kick.");
+    }
+
+    [Fact]
+    public void TryApply_IdleKick_ZeroDisables()
+    {
+        GuildConfig config = new() { IdleKickTimeSpan = TimeSpan.FromMinutes(15) };
+        ConfigOptionApplicator.TryApply(config, ConfigOption.IdleKickMinutes, "0", _ => default).Should().BeNull();
+        config.IdleKickTimeSpan.Should().BeNull();
     }
 
     [Fact]
@@ -108,6 +115,44 @@ public sealed class ConfigOptionApplicatorTests
         GuildConfig config = new();
         ConfigOptionApplicator.TryApply(config, ConfigOption.IdleKickMinutes, "15", _ => default).Should().BeNull();
         config.IdleKickTimeSpan.Should().Be(TimeSpan.FromMinutes(15));
+    }
+
+    [Theory]
+    [InlineData(ConfigOption.StrangerStatusChannel)]
+    [InlineData(ConfigOption.MemberWelcomeChannel)]
+    [InlineData(ConfigOption.HoneypotChannel)]
+    public void TryApply_TextChannel_Assigns(ConfigOption option)
+    {
+        GuildConfig config = new();
+        ConfigOptionApplicator.TryApply(
+                config, option, "<#9>", _ => new GuildEntityFacts(GuildEntityKind.TextChannel))
+            .Should().BeNull();
+
+        ulong assigned = option switch
+        {
+            ConfigOption.StrangerStatusChannel => config.StrangerStatusChannelId,
+            ConfigOption.MemberWelcomeChannel => config.MemberWelcomeMessageChannelId,
+            ConfigOption.HoneypotChannel => config.HoneypotChannelId ?? 0,
+            _ => 0
+        };
+        assigned.Should().Be(9UL);
+    }
+
+    [Theory]
+    [InlineData(nameof(GuildEntityKind.Category))]
+    [InlineData(nameof(GuildEntityKind.OtherChannel))]
+    public void TryApply_NonTextChannel_RejectsStatusWelcomeAndHoneypot(string kindName)
+    {
+        GuildEntityKind kind = Enum.Parse<GuildEntityKind>(kindName);
+        GuildConfig config = new();
+        foreach (ConfigOption option in new[]
+                 {
+                     ConfigOption.StrangerStatusChannel, ConfigOption.MemberWelcomeChannel, ConfigOption.HoneypotChannel
+                 })
+        {
+            ConfigOptionApplicator.TryApply(config, option, "<#9>", _ => new GuildEntityFacts(kind))
+                .Should().Be("Channel must be a text channel.");
+        }
     }
 
     [Fact]

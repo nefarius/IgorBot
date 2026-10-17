@@ -1,7 +1,13 @@
+using System.Reflection;
+
+using DSharpPlus.Entities;
+using DSharpPlus.Entities.AuditLogs;
+
 using FluentAssertions;
 
 using IgorBot.Modules;
 using IgorBot.Schema;
+using IgorBot.Services;
 
 namespace IgorBot.Tests.Modules;
 
@@ -31,61 +37,61 @@ public sealed class ComponentInteractionParserTests
     }
 }
 
-public sealed class AuditLogKickParserTests
+public sealed class ExternalKickPolicyTests
 {
     [Fact]
-    public void Parse_MatchingKick_ReturnsIds()
+    public void TryRead_MapsKickEntry()
     {
-        const string json = """
-            {"action_type":20,"guild_id":"10","target_id":"20","user_id":"30","reason":"spam"}
-            """;
+        DiscordAuditLogKickEntry kick = Create<DiscordAuditLogKickEntry>();
+        DiscordMember target = Create<DiscordMember>();
+        Set(target, nameof(DiscordMember.Id), 20UL);
+        DiscordUser actor = Create<DiscordUser>();
+        Set(actor, nameof(DiscordUser.Id), 30UL);
+        Set(kick, nameof(DiscordAuditLogKickEntry.Target), target);
+        Set(kick, nameof(DiscordAuditLogKickEntry.UserResponsible), actor);
+        Set(kick, nameof(DiscordAuditLogKickEntry.Reason), "spam");
 
-        AuditLogKickDecision decision = AuditLogKickParser.Parse(AuditLogKickParser.EventName, json);
-
-        decision.Status.Should().Be(AuditLogKickParseStatus.Kick);
-        decision.GuildId.Should().Be(10UL);
-        decision.TargetId.Should().Be(20UL);
-        decision.ActorId.Should().Be(30UL);
-        decision.Reason.Should().Be("spam");
+        ExternalKickPolicy.TryRead(kick, out ExternalKickObservation observed).Should().BeTrue();
+        observed.TargetId.Should().Be(20UL);
+        observed.ActorId.Should().Be(30UL);
+        observed.Reason.Should().Be("spam");
     }
 
     [Fact]
-    public void Parse_UnrelatedAction_IsNotKick()
+    public void TryRead_MissingTarget_Rejects()
     {
-        AuditLogKickParser.Parse(AuditLogKickParser.EventName, """{"action_type":22,"guild_id":"1","target_id":"2"}""")
-            .Status.Should().Be(AuditLogKickParseStatus.NotKick);
+        ExternalKickPolicy.TryRead(Create<DiscordAuditLogKickEntry>(), out _).Should().BeFalse();
     }
 
     [Fact]
-    public void Parse_OtherEvent_IsIgnored()
+    public void TryRead_MissingActor_LeavesActorEmpty()
     {
-        AuditLogKickParser.Parse("MESSAGE_CREATE", """{"action_type":20}""")
-            .Status.Should().Be(AuditLogKickParseStatus.IgnoredEvent);
-    }
+        DiscordAuditLogKickEntry kick = Create<DiscordAuditLogKickEntry>();
+        DiscordMember target = Create<DiscordMember>();
+        Set(target, nameof(DiscordMember.Id), 20UL);
+        Set(kick, nameof(DiscordAuditLogKickEntry.Target), target);
 
-    [Theory]
-    [InlineData(null)]
-    [InlineData("")]
-    [InlineData("{")]
-    [InlineData("""{"action_type":"kick"}""")]
-    public void Parse_MalformedPayload_IsMalformed(string? json)
-    {
-        AuditLogKickParser.Parse(AuditLogKickParser.EventName, json)
-            .Status.Should().Be(AuditLogKickParseStatus.Malformed);
+        ExternalKickPolicy.TryRead(kick, out ExternalKickObservation observed).Should().BeTrue();
+        observed.TargetId.Should().Be(20UL);
+        observed.ActorId.Should().BeNull();
+        observed.Reason.Should().BeNull();
     }
 
     [Fact]
-    public void Parse_MissingGuild_ReportsMissingGuild()
+    public void GatewayIntents_IncludeGuildModeration()
     {
-        AuditLogKickParser.Parse(AuditLogKickParser.EventName, """{"action_type":20,"target_id":"2"}""")
-            .Status.Should().Be(AuditLogKickParseStatus.MissingGuildId);
+        IgorDiscordRegistration.GatewayIntents.HasFlag(DSharpPlus.DiscordIntents.GuildModeration).Should().BeTrue();
     }
 
-    [Fact]
-    public void Parse_MissingTarget_ReportsMissingTarget()
+    private static T Create<T>() where T : class =>
+        (T)Activator.CreateInstance(typeof(T), nonPublic: true)!;
+
+    private static void Set(object target, string propertyName, object? value)
     {
-        AuditLogKickParser.Parse(AuditLogKickParser.EventName, """{"action_type":20,"guild_id":"1"}""")
-            .Status.Should().Be(AuditLogKickParseStatus.MissingTargetId);
+        PropertyInfo property = target.GetType().GetProperty(
+            propertyName,
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)!;
+        property.SetValue(target, value);
     }
 
     [Theory]

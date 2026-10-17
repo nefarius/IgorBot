@@ -18,6 +18,7 @@ internal static class IgorDiscordRegistration
     public static readonly DiscordIntents GatewayIntents =
         DiscordIntents.Guilds |
         DiscordIntents.GuildMembers |
+        DiscordIntents.GuildModeration |
         DiscordIntents.GuildMessages |
         DiscordIntents.DirectMessages |
         DiscordIntents.MessageContents;

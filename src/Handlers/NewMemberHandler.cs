@@ -91,6 +91,7 @@ internal sealed class NewMemberHandler(
             //
             // Add channel permissions for moderators
             // 
+            bool resolvedModeratorRole = false;
             foreach (ulong moderatorRoleId in guildConfig.ApplicationModeratorRoleIds)
             {
                 if (!guild.Roles.TryGetValue(moderatorRoleId, out DiscordRole? role))
@@ -100,9 +101,18 @@ internal sealed class NewMemberHandler(
                     continue;
                 }
 
+                resolvedModeratorRole = true;
                 DiscordOverwriteBuilder overwrite = new(role);
                 overwrite.Allow(NewbieChannelAccessPolicy.ToPermissions(NewbieChannelAccessPolicy.ModeratorAllowed));
                 overwrites.Add(overwrite);
+            }
+
+            if (guildConfig.ApplicationModeratorRoleIds.Count > 0 && !resolvedModeratorRole)
+            {
+                logger.LogWarning(
+                    "Guild {GuildId} has no resolvable moderator role, skipping channel creation",
+                    guildConfig.GuildId);
+                return;
             }
 
             //

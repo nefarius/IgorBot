@@ -254,8 +254,13 @@ public sealed class ConfigCommands(IGuildConfigService guildConfigService)
             return new GuildEntityFacts(GuildEntityKind.Missing);
         }
 
-        return new GuildEntityFacts(
-            channel.Type == DiscordChannelType.Category ? GuildEntityKind.Category : GuildEntityKind.Channel);
+        GuildEntityKind kind = channel.Type switch
+        {
+            DiscordChannelType.Category => GuildEntityKind.Category,
+            DiscordChannelType.Text => GuildEntityKind.TextChannel,
+            _ => GuildEntityKind.OtherChannel
+        };
+        return new GuildEntityFacts(kind);
     }
 }
 

@@ -65,7 +65,10 @@ internal partial class ApplicationWorkflow
                 return;
             }
 
-            DiscordRole strangerRole = e.Guild.Roles[guildConfig.StrangerRoleId];
+            if (!e.Guild.Roles.TryGetValue(guildConfig.StrangerRoleId, out DiscordRole? strangerRole))
+            {
+                return;
+            }
 
             //
             // Bail without generating log noise
