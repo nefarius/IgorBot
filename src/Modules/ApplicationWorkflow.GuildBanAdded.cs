@@ -4,18 +4,16 @@ using DSharpPlus.EventArgs;
 using IgorBot.Schema;
 using IgorBot.Util;
 
-using Nefarius.DSharpPlus.Extensions.Hosting.Events;
-
 namespace IgorBot.Modules;
 
-internal partial class ApplicationWorkflow : IDiscordGuildBanAddedEventSubscriber
+internal partial class ApplicationWorkflow
 {
     //
     // Called when ANY ban is issued in the guild (Discord UI, another bot, or this bot).
     // We use this to catch external bans that go through GuildMemberRemoved without a
     // more-specific cause already set.
     //
-    public async Task DiscordOnGuildBanAdded(DiscordClient sender, GuildBanAddEventArgs e)
+    public async Task HandleEventAsync(DiscordClient sender, GuildBanAddedEventArgs e)
     {
         if (e.Member.IsBot)
         {

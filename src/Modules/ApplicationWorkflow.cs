@@ -6,63 +6,37 @@ using DSharpPlus.Exceptions;
 using IgorBot.Core;
 using IgorBot.Schema;
 using IgorBot.Services;
-
-using JetBrains.Annotations;
+using IgorBot.Util;
 
 using MongoDB.Entities;
 
-using Nefarius.DSharpPlus.Extensions.Hosting.Events;
-
 namespace IgorBot.Modules;
 
-[DiscordGuildMemberAddedEventSubscriber]
-[DiscordGuildMemberUpdatedEventSubscriber]
-[DiscordGuildMemberRemovedEventSubscriber]
-[DiscordGuildBanAddedEventSubscriber]
-[DiscordComponentInteractionCreatedEventSubscriber]
-[UsedImplicitly]
 internal partial class ApplicationWorkflow(
     DB db,
     ILogger<ApplicationWorkflow> logger,
     IGuildConfigService guildConfigService,
-    IOnboardingQueue onboardingQueue)
+    IOnboardingQueue onboardingQueue,
+    IHostApplicationLifetime lifetime)
     :
-        IDiscordGuildMemberAddedEventSubscriber,
-        IDiscordGuildMemberUpdatedEventSubscriber,
-        IDiscordGuildMemberRemovedEventSubscriber,
-        IDiscordGuildBanAddedEventSubscriber,
-        IDiscordComponentInteractionCreatedEventSubscriber
+        IEventHandler<GuildMemberAddedEventArgs>,
+        IEventHandler<GuildMemberUpdatedEventArgs>,
+        IEventHandler<GuildMemberRemovedEventArgs>,
+        IEventHandler<GuildBanAddedEventArgs>,
+        IEventHandler<ComponentInteractionCreatedEventArgs>
 {
-    public async Task DiscordOnComponentInteractionCreated(DiscordClient sender,
-        ComponentInteractionCreateEventArgs args)
+    public async Task HandleEventAsync(DiscordClient sender, ComponentInteractionCreatedEventArgs args)
     {
-        string category;
-        string dbId;
-        string action;
-
-        try
+        if (!ComponentInteractionParser.TryParse(args.Id, out ComponentInteractionRoute route))
         {
-            string[] fields = args.Id.Split("|");
-            category = fields[0];
-            dbId = fields[1];
-            action = fields[2];
-        }
-        catch (IndexOutOfRangeException ex)
-        {
-            logger.LogError(ex, "Failed to parse custom ID");
-
-            _ = Task.Run(async () => await args.Interaction.CreateResponseAsync(
-                    InteractionResponseType.UpdateMessage,
-                    new DiscordInteractionResponseBuilder(
-                        new DiscordMessageBuilder().WithContent($"Exception: {ex.Message}"))))
-                .ContinueWith(t =>
-                {
-                    if (t.IsFaulted && t.Exception is not null)
-                    {
-                        logger.LogError(t.Exception.GetBaseException(),
-                            "Failed to send parse-error response to interaction");
-                    }
-                }, TaskContinuationOptions.OnlyOnFaulted);
+            logger.LogError("Failed to parse custom ID {CustomId}", args.Id);
+            ObservableBackgroundWork.Run(
+                _ => args.Interaction.CreateResponseAsync(
+                    DiscordInteractionResponseType.UpdateMessage,
+                    new DiscordInteractionResponseBuilder().WithContent($"Exception: invalid custom ID '{args.Id}'")),
+                lifetime.ApplicationStopping,
+                logger,
+                "component parse-error response");
             return;
         }
 
@@ -71,36 +45,37 @@ internal partial class ApplicationWorkflow(
         {
             logger.LogWarning("Guild {GuildId} not configured, ignoring component interaction", args.Guild.Id);
             await args.Interaction.CreateResponseAsync(
-                InteractionResponseType.ChannelMessageWithSource,
+                DiscordInteractionResponseType.ChannelMessageWithSource,
                 new DiscordInteractionResponseBuilder()
                     .WithContent("This server is not configured yet.")
-                    .AsEphemeral());
+                    .AsEphemeral(true));
             return;
         }
 
-        logger.LogDebug("Got {Collection} - {Id} with action {Action}", category, dbId, action);
+        logger.LogDebug("Got {Collection} - {Id} with action {Action}", route.Category, route.DatabaseId, route.Action);
 
         await args.Interaction.CreateResponseAsync(
-            InteractionResponseType.UpdateMessage,
+            DiscordInteractionResponseType.UpdateMessage,
             BuildBusyMirror(args.Message));
 
-        _ = Task.Run(async () =>
+        ObservableBackgroundWork.Run(async cancellationToken =>
         {
             try
             {
-                switch (category)
+                cancellationToken.ThrowIfCancellationRequested();
+                switch (route.Category)
                 {
                     case "strangers":
 
-                        logger.LogDebug("Database ID: {Id}", dbId);
+                        logger.LogDebug("Database ID: {Id}", route.DatabaseId);
 
                         GuildMember? dbMember = (await db.Find<GuildMember>()
-                                .ManyAsync(m => m.Eq(f => f.Application!.ID, dbId)))
+                                .ManyAsync(m => m.Eq(f => f.Application!.ID, route.DatabaseId)))
                             .FirstOrDefault();
 
                         if (dbMember is null)
                         {
-                            dbMember = await db.Find<GuildMember>().OneAsync(dbId);
+                            dbMember = await db.Find<GuildMember>().OneAsync(route.DatabaseId);
 
                             if (dbMember is null)
                             {
@@ -115,7 +90,7 @@ internal partial class ApplicationWorkflow(
 
                         if (application is null)
                         {
-                            logger.LogError("DB Entry with {Id} not found", dbId);
+                            logger.LogError("DB Entry with {Id} not found", route.DatabaseId);
                             await args.Interaction.EditOriginalResponseAsync(
                                 new DiscordWebhookBuilder().WithContent("Application entry not found in database!"));
                             break;
@@ -134,7 +109,7 @@ internal partial class ApplicationWorkflow(
                             break;
                         }
 
-                        switch (action)
+                        switch (route.Action)
                         {
                             case GuildMember.StrangerCommandKick:
 
@@ -171,6 +146,10 @@ internal partial class ApplicationWorkflow(
                         break;
                 }
             }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 logger.LogError(ex, "Unhandled exception in interaction processing");
@@ -185,22 +164,15 @@ internal partial class ApplicationWorkflow(
                     logger.LogError(editEx, "Failed to restore widget after interaction error");
                 }
             }
-        }).ContinueWith(t =>
-        {
-            if (t.IsFaulted && t.Exception is not null)
-            {
-                logger.LogError(t.Exception.GetBaseException(),
-                    "Unhandled exception in component interaction background task");
-            }
-        }, TaskContinuationOptions.OnlyOnFaulted);
+        }, lifetime.ApplicationStopping, logger, "component interaction");
     }
 
-    private async Task HandleStrangerPromote(ComponentInteractionCreateEventArgs args, DiscordClient client,
+    private async Task HandleStrangerPromote(ComponentInteractionCreatedEventArgs args, DiscordClient client,
         GuildMember entry,
         DiscordMember member, GuildConfig guildConfig)
     {
-        DiscordRole strangerRole = args.Guild.GetRole(guildConfig.StrangerRoleId);
-        DiscordRole memberRole = args.Guild.GetRole(guildConfig.MemberRoleId);
+        DiscordRole strangerRole = args.Guild.Roles[guildConfig.StrangerRoleId];
+        DiscordRole memberRole = args.Guild.Roles[guildConfig.MemberRoleId];
 
         // Perform Discord mutations before persisting so the DB is only updated
         // when both role operations have actually succeeded.
@@ -233,10 +205,18 @@ internal partial class ApplicationWorkflow(
         {
             try
             {
-                DiscordChannel welcomeChannel = args.Guild.GetChannel(guildConfig.MemberWelcomeMessageChannelId);
-
-                await welcomeChannel
-                    .SendMessageAsync(string.Format(guildConfig.MemberWelcomeTemplate, member.Mention));
+                DiscordChannel? welcomeChannel = args.Guild.FindChannel(guildConfig.MemberWelcomeMessageChannelId);
+                if (welcomeChannel is null)
+                {
+                    logger.LogWarning(
+                        "Member welcome channel {ChannelId} is not cached for guild {GuildId}",
+                        guildConfig.MemberWelcomeMessageChannelId, args.Guild.Id);
+                }
+                else
+                {
+                    await welcomeChannel
+                        .SendMessageAsync(string.Format(guildConfig.MemberWelcomeTemplate, member.Mention));
+                }
             }
             catch (Exception ex)
             {
@@ -250,7 +230,7 @@ internal partial class ApplicationWorkflow(
         }
     }
 
-    private async Task HandleStrangerBan(ComponentInteractionCreateEventArgs args, DiscordClient client,
+    private async Task HandleStrangerBan(ComponentInteractionCreatedEventArgs args, DiscordClient client,
         GuildMember entry,
         DiscordMember member)
     {
@@ -265,7 +245,7 @@ internal partial class ApplicationWorkflow(
 
         try
         {
-            await member.BanAsync();
+            await member.BanAsync(TimeSpan.Zero);
 
             logger.LogInformation("{Member} ban completed by {User}", member, args.User);
         }
@@ -291,7 +271,7 @@ internal partial class ApplicationWorkflow(
         await entry.RespondToInteraction(args, client);
     }
 
-    private async Task HandleStrangerKick(ComponentInteractionCreateEventArgs args, DiscordClient client,
+    private async Task HandleStrangerKick(ComponentInteractionCreatedEventArgs args, DiscordClient client,
         GuildMember entry,
         DiscordMember member)
     {
@@ -333,7 +313,7 @@ internal partial class ApplicationWorkflow(
     }
 
     private async Task HandleStrangerDisableAutoKick(
-        ComponentInteractionCreateEventArgs args,
+        ComponentInteractionCreatedEventArgs args,
         DiscordClient client,
         GuildMember entry)
     {
@@ -360,22 +340,21 @@ internal partial class ApplicationWorkflow(
             builder.AddEmbed(embed);
         }
 
-        foreach (DiscordActionRowComponent row in message.Components)
+        foreach (DiscordActionRowComponent row in message.ComponentActionRows ?? [])
         {
-            List<DiscordComponent> cloned = new();
+            List<DiscordButtonComponent> cloned = [];
             foreach (DiscordComponent component in row.Components)
             {
                 if (component is DiscordButtonComponent button)
                 {
                     cloned.Add(new DiscordButtonComponent(button).Disable());
                 }
-                else
-                {
-                    cloned.Add(component);
-                }
             }
 
-            builder.AddComponents(cloned);
+            if (cloned.Count > 0)
+            {
+                builder.AddActionRowComponent(cloned);
+            }
         }
 
         return builder;
@@ -394,22 +373,21 @@ internal partial class ApplicationWorkflow(
             builder.AddEmbed(embed);
         }
 
-        foreach (DiscordActionRowComponent row in message.Components)
+        foreach (DiscordActionRowComponent row in message.ComponentActionRows ?? [])
         {
-            List<DiscordComponent> cloned = new();
+            List<DiscordButtonComponent> cloned = [];
             foreach (DiscordComponent component in row.Components)
             {
                 if (component is DiscordButtonComponent button)
                 {
                     cloned.Add(new DiscordButtonComponent(button).Enable());
                 }
-                else
-                {
-                    cloned.Add(component);
-                }
             }
 
-            builder.AddComponents(cloned);
+            if (cloned.Count > 0)
+            {
+                builder.AddActionRowComponent(cloned);
+            }
         }
 
         return builder;

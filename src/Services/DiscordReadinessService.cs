@@ -12,4 +12,7 @@ internal sealed class DiscordReadinessService : IDiscordReadinessService
 
     /// <inheritdoc />
     public bool IsGuildReady(ulong guildId) => _readyGuilds.ContainsKey(guildId);
+
+    /// <inheritdoc />
+    public void Reset() => _readyGuilds.Clear();
 }

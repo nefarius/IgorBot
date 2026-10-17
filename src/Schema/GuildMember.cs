@@ -21,27 +21,8 @@ internal sealed partial class GuildMember : IEntity
     /// <summary>
     ///     Gets a list of button components for actions on this embed.
     /// </summary>
-    private IEnumerable<DiscordButtonComponent> ButtonComponents
-    {
-        get
-        {
-            List<DiscordButtonComponent> components = new()
-            {
-                new DiscordButtonComponent(
-                    ButtonStyle.Secondary,
-                    $"strangers|{ID}|{StrangerCommandKick}",
-                    "Kick"
-                ),
-                new DiscordButtonComponent(
-                    ButtonStyle.Danger,
-                    $"strangers|{ID}|{StrangerCommandBan}",
-                    "Ban"
-                )
-            };
-
-            return components;
-        }
-    }
+    private IEnumerable<DiscordButtonComponent> ButtonComponents =>
+        ModerationWidgetSpec.MemberActions(ID).Select(ToDiscordButton);
 
     /// <summary>
     ///     The embed color depending on member state.
@@ -66,6 +47,18 @@ internal sealed partial class GuildMember : IEntity
              IsBanned ? DiscordColor.Red :
              IsFullMember ? DiscordColor.Green : DiscordColor.None
     };
+
+    internal static DiscordButtonComponent ToDiscordButton(ModerationButton button) =>
+        new(
+            button.Style switch
+            {
+                ModerationButtonStyle.Danger => DiscordButtonStyle.Danger,
+                ModerationButtonStyle.Success => DiscordButtonStyle.Success,
+                _ => DiscordButtonStyle.Secondary
+            },
+            button.CustomId,
+            button.Label,
+            !button.Enabled);
 
     object IEntity.GenerateNewID()
     {
@@ -96,12 +89,12 @@ internal sealed partial class GuildMember : IEntity
 
         if (!HasLeftGuild && ButtonComponents.Any())
         {
-            builder.AddComponents(ButtonComponents);
+            builder.AddActionRowComponent(ButtonComponents);
         }
 
         if (Application is not null && Application.ButtonComponents.Any())
         {
-            builder.AddComponents(Application.ButtonComponents);
+            builder.AddActionRowComponent(Application.ButtonComponents);
         }
 
         return builder;

@@ -1,25 +1,21 @@
-using System.Diagnostics.CodeAnalysis;
-
 using DSharpPlus;
 using DSharpPlus.Entities;
 using DSharpPlus.Exceptions;
 
 using IgorBot.Core;
 using IgorBot.Schema;
+using IgorBot.Util;
 
 using MongoDB.Entities;
-
-using Nefarius.DSharpPlus.Extensions.Hosting;
 
 namespace IgorBot.Handlers;
 
 /// <summary>
 ///     Handles new stranger appeared workflow.
 /// </summary>
-[SuppressMessage("ReSharper", "ClassNeverInstantiated.Global")]
 internal sealed class NewMemberHandler(
     DB db,
-    IDiscordClientService clientService,
+    DiscordClient client,
     ILogger<NewMemberHandler> logger)
 {
     public async Task ProcessAsync(NewMemberMessage message)
@@ -49,7 +45,6 @@ internal sealed class NewMemberHandler(
         try
         {
             GuildProperties guildProperties = message.GuildProperties;
-            DiscordClient client = clientService.Client;
             GuildConfig guildConfig = message.GuildConfig;
 
             if (guildConfig.StrangerStatusChannelId == 0 || guildConfig.ApplicationCategoryId == 0)
@@ -69,8 +64,8 @@ internal sealed class NewMemberHandler(
 
             DiscordGuild guild = client.Guilds[guildConfig.GuildId];
             DiscordMember guildMember = await guild.GetMemberAsync(dbMember.MemberId);
-            DiscordChannel strangerStatusChannel = guild.GetChannel(guildConfig.StrangerStatusChannelId);
-            DiscordChannel parentCategory = guild.GetChannel(guildConfig.ApplicationCategoryId);
+            DiscordChannel? strangerStatusChannel = guild.FindChannel(guildConfig.StrangerStatusChannelId);
+            DiscordChannel? parentCategory = guild.FindChannel(guildConfig.ApplicationCategoryId);
 
             if (strangerStatusChannel is null || parentCategory is null)
             {
@@ -90,45 +85,31 @@ internal sealed class NewMemberHandler(
 
             DiscordRole everyoneRole = guild.EveryoneRole;
 
-            overwrites.Add(new DiscordOverwriteBuilder(everyoneRole).Deny(Permissions.AccessChannels));
+            overwrites.Add(new DiscordOverwriteBuilder(everyoneRole)
+                .Deny(NewbieChannelAccessPolicy.ToPermissions(NewbieChannelAccessPolicy.EveryoneDenied)));
 
             //
             // Add channel permissions for moderators
             // 
             foreach (ulong moderatorRoleId in guildConfig.ApplicationModeratorRoleIds)
             {
-                try
-                {
-                    DiscordRole role = guild.GetRole(moderatorRoleId);
-                    DiscordOverwriteBuilder overwrite = new(role);
-
-                    overwrite.Allow(Permissions.AccessChannels);
-                    overwrite.Allow(Permissions.ReadMessageHistory);
-                    overwrite.Allow(Permissions.ManageMessages);
-                    overwrite.Allow(Permissions.SendMessages);
-                    overwrite.Allow(Permissions.EmbedLinks);
-                    overwrite.Allow(Permissions.AddReactions);
-
-                    overwrites.Add(overwrite);
-                }
-                catch (ServerErrorException)
+                if (!guild.Roles.TryGetValue(moderatorRoleId, out DiscordRole? role))
                 {
                     logger.LogWarning("Role with ID {Id} wasn't found in the Discord universe, skipping",
                         moderatorRoleId);
+                    continue;
                 }
+
+                DiscordOverwriteBuilder overwrite = new(role);
+                overwrite.Allow(NewbieChannelAccessPolicy.ToPermissions(NewbieChannelAccessPolicy.ModeratorAllowed));
+                overwrites.Add(overwrite);
             }
 
             //
             // Add channel permissions for the affected member
             // 
             DiscordOverwriteBuilder memberOverwrite = new(guildMember);
-
-            memberOverwrite.Allow(Permissions.AccessChannels);
-            memberOverwrite.Allow(Permissions.ReadMessageHistory);
-            memberOverwrite.Allow(Permissions.SendMessages);
-            memberOverwrite.Allow(Permissions.AttachFiles);
-            memberOverwrite.Allow(Permissions.EmbedLinks);
-            memberOverwrite.Allow(Permissions.AddReactions);
+            memberOverwrite.Allow(NewbieChannelAccessPolicy.ToPermissions(NewbieChannelAccessPolicy.MemberAllowed));
 
             overwrites.Add(memberOverwrite);
 
@@ -145,7 +126,7 @@ internal sealed class NewMemberHandler(
                 // 
                 channel = await guild.CreateChannelAsync(
                     applicationChannelName,
-                    ChannelType.Text,
+                    DiscordChannelType.Text,
                     parentCategory,
                     overwrites: overwrites
                 );

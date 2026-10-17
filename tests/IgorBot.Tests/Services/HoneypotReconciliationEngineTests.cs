@@ -134,7 +134,7 @@ public sealed class HoneypotReconciliationEngineTests
         DateTime utc = new(2026, 9, 27, 12, 0, 0, DateTimeKind.Utc);
 
         ulong snowflake = HoneypotReconciliationEngine.SnowflakeFromTimestamp(utc);
-        DateTimeOffset recovered = DSharpPlus.Utilities.GetSnowflakeTime(snowflake);
+        DateTimeOffset recovered = HoneypotReconciliationEngine.TimestampFromSnowflake(snowflake);
 
         recovered.UtcDateTime.Should().BeCloseTo(utc, TimeSpan.FromMilliseconds(2));
     }
@@ -255,6 +255,19 @@ public sealed class HoneypotReconciliationEngineTests
     {
         HoneypotReconciliationEngine.IsBacklogMessage(10, checkpoint: 40, lowerBound: 10)
             .Should().BeFalse();
+    }
+
+    [Fact]
+    public void IsFinalHistoryPage_ShortPage_IsFinal()
+    {
+        HoneypotReconciliationEngine.IsFinalHistoryPage(0).Should().BeTrue();
+        HoneypotReconciliationEngine.IsFinalHistoryPage(HoneypotReconciliationEngine.PageSize - 1).Should().BeTrue();
+    }
+
+    [Fact]
+    public void IsFinalHistoryPage_FullPage_Continues()
+    {
+        HoneypotReconciliationEngine.IsFinalHistoryPage(HoneypotReconciliationEngine.PageSize).Should().BeFalse();
     }
 
     [Fact]

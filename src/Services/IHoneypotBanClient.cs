@@ -8,8 +8,8 @@ internal interface IHoneypotBanClient
 {
     /// <summary>
     ///     Bans <paramref name="userId" /> from <paramref name="guildId" />.
-    ///     Does not remove the triggering message. DSharpPlus 4.5.1 cannot send a purge Discord
-    ///     honors, so <see cref="HoneypotMessageCleanup" /> deletes that message explicitly.
+    ///     Does not remove the triggering message. Discord's ban purge window misses older
+    ///     honeypot posts, so <see cref="HoneypotMessageCleanup" /> deletes that message explicitly.
     /// </summary>
     Task BanAsync(ulong guildId, ulong userId);
 

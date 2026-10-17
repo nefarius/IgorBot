@@ -1,15 +1,15 @@
 using Coravel.Invocable;
 
+using DSharpPlus;
 using DSharpPlus.Entities;
 using DSharpPlus.Exceptions;
 
 using IgorBot.Core;
 using IgorBot.Schema;
 using IgorBot.Services;
+using IgorBot.Util;
 
 using MongoDB.Entities;
-
-using Nefarius.DSharpPlus.Extensions.Hosting;
 
 namespace IgorBot.Invocables;
 
@@ -20,7 +20,7 @@ namespace IgorBot.Invocables;
 internal class OrphanEmbedReconciliationInvokable(
     DB db,
     IGuildConfigService guildConfigService,
-    IDiscordClientService discord,
+    DiscordClient discord,
     ILogger<OrphanEmbedReconciliationInvokable> logger)
     : IInvocable
 {
@@ -46,7 +46,7 @@ internal class OrphanEmbedReconciliationInvokable(
 
             foreach (GuildConfig guildConfig in guildConfigs)
             {
-                if (!discord.Client.Guilds.TryGetValue(guildConfig.GuildId, out DiscordGuild? guild))
+                if (!discord.Guilds.TryGetValue(guildConfig.GuildId, out DiscordGuild? guild))
                 {
                     continue;
                 }
@@ -115,7 +115,7 @@ internal class OrphanEmbedReconciliationInvokable(
 
             try
             {
-                DiscordChannel? channel = guild.GetChannel(guildMember.Application.ChannelId);
+                DiscordChannel? channel = guild.FindChannel(guildMember.Application.ChannelId);
                 if (channel is null)
                 {
                     logger.LogInformation(

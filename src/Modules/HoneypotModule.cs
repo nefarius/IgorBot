@@ -6,25 +6,19 @@ using DSharpPlus.Exceptions;
 using IgorBot.Core;
 using IgorBot.Services;
 
-using JetBrains.Annotations;
-
-using Nefarius.DSharpPlus.Extensions.Hosting.Events;
-
 namespace IgorBot.Modules;
 
 /// <summary>
 ///     Simple but effective anti-spambot feature that bans a server member if they post in a forbidden all-user writable
 ///     honeypot channel.
 /// </summary>
-[DiscordMessageCreatedEventSubscriber]
-[UsedImplicitly]
 internal sealed class HoneypotModule(
     IGuildConfigService guildConfigService,
     IHoneypotEnforcementService enforcement,
     ILogger<HoneypotModule> logger)
-    : IDiscordMessageCreatedEventSubscriber
+    : IEventHandler<MessageCreatedEventArgs>
 {
-    public async Task DiscordOnMessageCreated(DiscordClient sender, MessageCreateEventArgs args)
+    public async Task HandleEventAsync(DiscordClient sender, MessageCreatedEventArgs args)
     {
         try
         {
@@ -93,7 +87,7 @@ internal sealed class HoneypotModule(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, $"Unexpected error in {nameof(DiscordOnMessageCreated)}");
+            logger.LogError(ex, $"Unexpected error in {nameof(HandleEventAsync)}");
         }
     }
 }

@@ -14,7 +14,7 @@ internal partial class ApplicationWorkflow
     //
     // Called when a member was modified
     //
-    public async Task DiscordOnGuildMemberUpdated(DiscordClient sender, GuildMemberUpdateEventArgs e)
+    public async Task HandleEventAsync(DiscordClient sender, GuildMemberUpdatedEventArgs e)
     {
         if (e.Member.IsBot)
         {
@@ -38,8 +38,9 @@ internal partial class ApplicationWorkflow
 
         GuildMember member = memberOrNull;
 
-        _ = Task.Run(async () =>
+        ObservableBackgroundWork.Run(async cancellationToken =>
         {
+            cancellationToken.ThrowIfCancellationRequested();
             // Full member role added
             if (e.RolesBefore.All(role => role.Id != guildConfig.MemberRoleId) &&
                 e.RolesAfter.Any(role => role.Id == guildConfig.MemberRoleId))
@@ -64,7 +65,7 @@ internal partial class ApplicationWorkflow
                 return;
             }
 
-            DiscordRole strangerRole = e.Guild.GetRole(guildConfig.StrangerRoleId);
+            DiscordRole strangerRole = e.Guild.Roles[guildConfig.StrangerRoleId];
 
             //
             // Bail without generating log noise
@@ -96,7 +97,7 @@ internal partial class ApplicationWorkflow
                 return;
             }
 
-            if (e.Guild.GetChannel(guildConfig.StrangerStatusChannelId) is null)
+            if (e.Guild.FindChannel(guildConfig.StrangerStatusChannelId) is null)
             {
                 logger.LogWarning("Stranger status channel not found for guild {GuildId}, skipping ProcessStrangerAssignment",
                     e.Guild.Id);
@@ -104,14 +105,7 @@ internal partial class ApplicationWorkflow
             }
 
             await ProcessStrangerAssignment(e.Guild, guildConfig, member);
-        }).ContinueWith(t =>
-        {
-            if (t.IsFaulted && t.Exception is not null)
-            {
-                logger.LogError(t.Exception.GetBaseException(),
-                    "Unhandled exception in member-updated background task");
-            }
-        }, TaskContinuationOptions.OnlyOnFaulted);
+        }, lifetime.ApplicationStopping, logger, "member-updated");
     }
 
     /// <summary>
@@ -146,7 +140,7 @@ internal partial class ApplicationWorkflow
     /// </summary>
     private async Task ProcessStrangerRoleRemoved(
         DiscordClient client,
-        GuildMemberUpdateEventArgs e,
+        GuildMemberUpdatedEventArgs e,
         GuildMember member
     )
     {
@@ -160,7 +154,7 @@ internal partial class ApplicationWorkflow
 
         if (newbieChannel is not null)
         {
-            DiscordChannel discordChannel = e.Guild.GetChannel(newbieChannel.ChannelId);
+            DiscordChannel? discordChannel = e.Guild.FindChannel(newbieChannel.ChannelId);
 
             if (discordChannel is not null)
             {

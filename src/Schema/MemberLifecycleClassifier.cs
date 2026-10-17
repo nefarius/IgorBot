@@ -3,7 +3,7 @@ namespace IgorBot.Schema;
 /// <summary>
 ///     Describes which code path led to a <see cref="MemberStatus.LeftVoluntarily" /> classification.
 /// </summary>
-internal enum VoluntaryLeavePath
+public enum VoluntaryLeavePath
 {
     /// <summary>
     ///     Normal case: a member who went through onboarding (or at least had a known non-legacy status) left.

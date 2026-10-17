@@ -13,7 +13,7 @@ internal partial class ApplicationWorkflow
     //
     // Called when member joined the Guild
     // 
-    public async Task DiscordOnGuildMemberAdded(DiscordClient sender, GuildMemberAddEventArgs e)
+    public async Task HandleEventAsync(DiscordClient sender, GuildMemberAddedEventArgs e)
     {
         if (e.Member.IsBot)
         {
@@ -69,7 +69,7 @@ internal partial class ApplicationWorkflow
         await db.SaveAsync(member);
 
         logger.LogInformation("{Member} updated in DB", e.Member);
-        DiscordRole strangerRole = e.Guild.GetRole(guildConfig.StrangerRoleId);
+        DiscordRole strangerRole = e.Guild.Roles[guildConfig.StrangerRoleId];
 
         if (guildConfig.AutoAssignStrangerRoleOnJoin && !e.Member.Roles.Contains(strangerRole))
         {

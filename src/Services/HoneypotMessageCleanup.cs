@@ -6,10 +6,8 @@ namespace IgorBot.Services;
 ///     Deletes the honeypot message that triggered enforcement.
 /// </summary>
 /// <remarks>
-///     DSharpPlus 4.5.1 sends <c>delete_message_days</c> as a query parameter and does not send a
-///     JSON body. Discord ignores that deprecated field, so the ban succeeds and the triggering
-///     message stays. Callers delete that message explicitly. Age is not a gate: the old one-day
-///     purge window, and Discord's seven-day maximum, both miss messages that must still be removed.
+///     Callers delete the triggering message explicitly. Age is not a gate: Discord's seven-day
+///     ban purge maximum misses honeypot messages that must still be removed.
 ///     A deletion failure is logged and swallowed. The ban has already completed, so it is not
 ///     repeated and reconciliation may advance its checkpoint.
 /// </remarks>
