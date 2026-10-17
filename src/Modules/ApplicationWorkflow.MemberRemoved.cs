@@ -15,7 +15,7 @@ internal partial class ApplicationWorkflow
     //
     // Called when member left the Guild
     // 
-    public async Task DiscordOnGuildMemberRemoved(DiscordClient sender, GuildMemberRemoveEventArgs e)
+    public async Task HandleEventAsync(DiscordClient sender, GuildMemberRemovedEventArgs e)
     {
         if (e.Member.IsBot)
         {
@@ -48,7 +48,7 @@ internal partial class ApplicationWorkflow
 
         GuildMember member = memberOrNull;
 
-        _ = Task.Run(async () =>
+        ObservableBackgroundWork.Run(async cancellationToken =>
         {
             // Record departure. Only transition to LeftVoluntarily when no more-specific
             // terminal cause (mod kick, ban, auto-kick, honeypot) has already been set.
@@ -59,9 +59,9 @@ internal partial class ApplicationWorkflow
             // (AuditLogKickHandler for external kicks, or GuildBanAdded for external bans)
             // may be writing a terminal status to the DB right now. Wait briefly then
             // re-fetch so we see their result before making the classification decision.
-            if (IsEligibleForVoluntaryLeave(member))
+            if (MemberDeparturePolicy.ShouldWaitForConcurrentTerminalWrite(member))
             {
-                await Task.Delay(TimeSpan.FromMilliseconds(500));
+                await Task.Delay(MemberDeparturePolicy.ConcurrentTerminalStatusGrace, cancellationToken);
                 member = (await db.Find<GuildMember>().OneAsync(entityId)) ?? member;
             }
 
@@ -86,12 +86,7 @@ internal partial class ApplicationWorkflow
             if (IsEligibleForVoluntaryLeave(member))
             {
                 VoluntaryLeavePath path = ClassifyVoluntaryLeavePath(member);
-                string reason = path switch
-                {
-                    VoluntaryLeavePath.LegacyUnknown => "legacy_unknown_voluntary_leave",
-                    VoluntaryLeavePath.LegacyDiscoveredBySync => "legacy_discovered_voluntary_leave",
-                    _ => "voluntary_leave"
-                };
+                string reason = MemberDeparturePolicy.ReasonFor(path);
 
                 logger.LogInformation(
                     "Classifying {Member} as voluntary leave (path={Path}, status was {Status})",
@@ -118,11 +113,17 @@ internal partial class ApplicationWorkflow
             {
                 try
                 {
-                    DiscordChannel discordChannel = e.Guild.GetChannel(newbieChannel.ChannelId);
+                    DiscordChannel? discordChannel = e.Guild.FindChannel(newbieChannel.ChannelId);
+                    if (discordChannel is null)
+                    {
+                        logger.LogWarning("Couldn't find temporary channel to delete");
+                    }
+                    else
+                    {
+                        logger.LogInformation("Removing channel {Channel}", discordChannel);
 
-                    logger.LogInformation("Removing channel {Channel}", discordChannel);
-
-                    await discordChannel.DeleteAsync($"{e.Member} has been removed");
+                        await discordChannel.DeleteAsync($"{e.Member} has been removed");
+                    }
 
                     await member.DeleteChannel(db);
                 }
@@ -160,14 +161,7 @@ internal partial class ApplicationWorkflow
                     logger.LogError(ex, "Failed to update status message");
                 }
             }
-        }).ContinueWith(t =>
-        {
-            if (t.IsFaulted && t.Exception is not null)
-            {
-                logger.LogError(t.Exception.GetBaseException(),
-                    "Unhandled exception in member-removed background task");
-            }
-        }, TaskContinuationOptions.OnlyOnFaulted);
+        }, lifetime.ApplicationStopping, logger, "member-removed");
     }
 
 }

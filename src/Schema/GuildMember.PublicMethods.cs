@@ -4,6 +4,8 @@ using DSharpPlus.EventArgs;
 
 using MongoDB.Entities;
 
+using IgorBot.Util;
+
 using Serilog;
 
 namespace IgorBot.Schema;
@@ -260,12 +262,12 @@ internal sealed partial class GuildMember
 
         if (!HasLeftGuild)
         {
-            messageBuilder.AddComponents(ButtonComponents);
+            messageBuilder.AddActionRowComponent(ButtonComponents);
         }
 
         if (!HasLeftGuild && application.ButtonComponents.Any())
         {
-            messageBuilder.AddComponents(application.ButtonComponents);
+            messageBuilder.AddActionRowComponent(application.ButtonComponents);
         }
 
         // Add action buttons to message
@@ -294,22 +296,23 @@ internal sealed partial class GuildMember
 
         if (!HasLeftGuild && ButtonComponents.Any())
         {
-            status.AddComponents(ButtonComponents);
+            status.AddActionRowComponent(ButtonComponents);
         }
 
         if (!isDeleted)
         {
             if (Application.ButtonComponents.Any())
             {
-                status.AddComponents(Application.ButtonComponents);
+                status.AddActionRowComponent(Application.ButtonComponents);
             }
         }
 
         DiscordGuild guild = client.Guilds[GuildId];
 
-        DiscordMessage statusMessage = await guild
-            .GetChannel(Application.ChannelId)
-            .GetMessageAsync(Application.MessageId);
+        DiscordChannel channel = guild.FindChannel(Application.ChannelId)
+                                 ?? throw new InvalidOperationException(
+                                     $"Application channel {Application.ChannelId} is not in the guild cache.");
+        DiscordMessage statusMessage = await channel.GetMessageAsync(Application.MessageId);
 
         await statusMessage.ModifyAsync(status);
     }
@@ -317,7 +320,7 @@ internal sealed partial class GuildMember
     /// <summary>
     ///     Respond to an interaction with an updated status widget.
     /// </summary>
-    public async Task RespondToInteraction(ComponentInteractionCreateEventArgs args, DiscordClient client)
+    public async Task RespondToInteraction(ComponentInteractionCreatedEventArgs args, DiscordClient client)
     {
         await args.Interaction.EditOriginalResponseAsync(GetInteractionResponse(client));
     }

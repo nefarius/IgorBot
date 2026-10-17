@@ -1,5 +1,6 @@
 using Coravel.Invocable;
 
+using DSharpPlus;
 using DSharpPlus.Entities;
 
 using IgorBot.Core;
@@ -9,8 +10,6 @@ using IgorBot.Util;
 
 using MongoDB.Entities;
 
-using Nefarius.DSharpPlus.Extensions.Hosting;
-
 namespace IgorBot.Invocables;
 
 /// <summary>
@@ -19,7 +18,7 @@ namespace IgorBot.Invocables;
 internal class MemberDbSyncInvokable(
     DB db,
     IGuildConfigService guildConfigService,
-    IDiscordClientService discord,
+    DiscordClient discord,
     ILogger<MemberDbSyncInvokable> logger)
     : IInvocable
 {
@@ -32,7 +31,7 @@ internal class MemberDbSyncInvokable(
             IReadOnlyList<GuildConfig> guildConfigs = await guildConfigService.GetAllAsync();
             foreach (GuildConfig guildConfig in guildConfigs)
             {
-                if (!discord.Client.Guilds.TryGetValue(guildConfig.GuildId, out DiscordGuild? guild))
+                if (!discord.Guilds.TryGetValue(guildConfig.GuildId, out DiscordGuild? guild))
                 {
                     logger.LogWarning("Guild {GuildId} not present in client, skipping sync", guildConfig.GuildId);
                     continue;
@@ -40,7 +39,7 @@ internal class MemberDbSyncInvokable(
 
                 logger.LogDebug("Processing members of {Guild}", guild);
 
-                IReadOnlyCollection<DiscordMember> members = await guild.GetAllMembersAsync();
+                List<DiscordMember> members = await guild.GetAllMembersAsync().MaterializeAsync();
 
                 foreach (DiscordMember member in members.Where(m => !m.IsBot))
                 {

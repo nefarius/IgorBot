@@ -1,6 +1,5 @@
 ﻿using System.Diagnostics.CodeAnalysis;
 
-using DSharpPlus;
 using DSharpPlus.Entities;
 
 using MongoDB.Bson.Serialization.Attributes;
@@ -54,33 +53,9 @@ internal sealed class StrangerApplicationEmbed : IEntity
     /// <summary>
     ///     Gets a list of button components for actions on this embed.
     /// </summary>
-    public IEnumerable<DiscordButtonComponent> ButtonComponents
-    {
-        get
-        {
-            List<DiscordButtonComponent> components = new();
-
-            if (QuestionnaireSubmittedAt.HasValue)
-            {
-                components.Add(new DiscordButtonComponent(
-                    ButtonStyle.Success,
-                    $"strangers|{ID}|{StrangerCommandPromote}",
-                    "Promote"
-                ));
-            }
-
-            if (IsAutoKickEnabled)
-            {
-                components.Add(new DiscordButtonComponent(
-                    ButtonStyle.Secondary,
-                    $"strangers|{ID}|{StrangerCommandDisableAutoKick}",
-                    "Disable auto-kick"
-                ));
-            }
-
-            return components;
-        }
-    }
+    public IEnumerable<DiscordButtonComponent> ButtonComponents =>
+        ModerationWidgetSpec.ApplicationActions(ID, QuestionnaireSubmittedAt.HasValue, IsAutoKickEnabled)
+            .Select(GuildMember.ToDiscordButton);
 
     [BsonId]
     [SuppressMessage("ReSharper", "InconsistentNaming")]

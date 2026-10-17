@@ -33,6 +33,20 @@ internal static class HoneypotReconciliationEngine
     }
 
     /// <summary>
+    ///     Reads the timestamp embedded in a Discord snowflake.
+    /// </summary>
+    public static DateTimeOffset TimestampFromSnowflake(ulong snowflake)
+    {
+        long milliseconds = (long)(snowflake >> 22) + DiscordEpochMilliseconds;
+        return DateTimeOffset.FromUnixTimeMilliseconds(milliseconds);
+    }
+
+    /// <summary>
+    ///     A history page shorter than <see cref="PageSize" /> has reached the end Discord will return.
+    /// </summary>
+    public static bool IsFinalHistoryPage(int fetchedCount) => fetchedCount < PageSize;
+
+    /// <summary>
     ///     Returns the message ID to pass to history fetches.
     ///     The 24-hour lookback applies only when no checkpoint exists.
     ///     An existing checkpoint is preserved unless it predates channel activation.

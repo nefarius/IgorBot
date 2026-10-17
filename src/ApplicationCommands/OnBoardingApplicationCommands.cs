@@ -1,12 +1,14 @@
-﻿using System.Diagnostics.CodeAnalysis;
+﻿using System.ComponentModel;
+using System.Diagnostics.CodeAnalysis;
 
 using DSharpPlus;
+using DSharpPlus.Commands;
+using DSharpPlus.Commands.ContextChecks;
+using DSharpPlus.Commands.Processors.SlashCommands;
 using DSharpPlus.Entities;
 using DSharpPlus.Exceptions;
 using DSharpPlus.Interactivity;
 using DSharpPlus.Interactivity.Extensions;
-using DSharpPlus.SlashCommands;
-using DSharpPlus.SlashCommands.Attributes;
 
 using IgorBot.Core;
 using IgorBot.Schema;
@@ -17,36 +19,35 @@ using MongoDB.Entities;
 
 namespace IgorBot.ApplicationCommands;
 
-[SlashCommandGroup("apply", "Apply for server membership.")]
+[Command("apply"), Description("Apply for server membership.")]
 [SuppressMessage("ReSharper", "UnusedMember.Global")]
 [SuppressMessage("ReSharper", "ClassNeverInstantiated.Global")]
 public sealed class OnBoardingApplicationCommands(DB db, IGuildConfigService guildConfigService)
-    : ApplicationCommandModule
 {
-    [SlashRequirePermissions(Permissions.SendMessages)]
-    [SlashCommand("member", "Apply for regular membership.")]
+    [RequirePermissions(DiscordPermission.SendMessages)]
+    [Command("member"), Description("Apply for regular membership.")]
     public async Task Member(
-        InteractionContext ctx
+        SlashCommandContext ctx
     )
     {
         #region Validation
 
-        ILogger<BaseDiscordClient> logger = ctx.Client.Logger;
+        ILogger logger = ctx.Client.Logger;
 
-        logger.LogInformation("{Member} started command", ctx.Member);
+        logger.LogInformation("{Member} started command", ctx.RequireMember());
 
-        await ctx.DeferAsync();
+        await ctx.DeferResponseAsync();
 
         GuildMember? dbMember = await db.Find<GuildMember>().OneAsync(ctx.ToEntityId());
 
         if (dbMember is null)
         {
-            logger.LogError("{Member} not found in database", ctx.Member);
-            await ctx.EditResponseAsync(new DiscordWebhookBuilder().AddEmbed(new DiscordEmbedBuilder
+            logger.LogError("{Member} not found in database", ctx.RequireMember());
+            await ctx.EditResponseAsync(new DiscordMessageBuilder().AddEmbed(new DiscordEmbedBuilder
             {
                 Title = "Missing database entry",
                 Description =
-                    $"{ctx.Member.Mention}: your account is missing from the database. Go whip a staff member!",
+                    $"{ctx.RequireMember().Mention}: your account is missing from the database. Go whip a staff member!",
                 Color = new DiscordColor(0xFF0000)
             }));
             return;
@@ -56,12 +57,12 @@ public sealed class OnBoardingApplicationCommands(DB db, IGuildConfigService gui
 
         if (application is null)
         {
-            logger.LogError("Application widget for {Member} not found in database", ctx.Member);
-            await ctx.EditResponseAsync(new DiscordWebhookBuilder().AddEmbed(new DiscordEmbedBuilder
+            logger.LogError("Application widget for {Member} not found in database", ctx.RequireMember());
+            await ctx.EditResponseAsync(new DiscordMessageBuilder().AddEmbed(new DiscordEmbedBuilder
             {
                 Title = "Missing application widget",
                 Description =
-                    $"{ctx.Member.Mention}: your application widget is missing from the database. Go whip a staff member!",
+                    $"{ctx.RequireMember().Mention}: your application widget is missing from the database. Go whip a staff member!",
                 Color = new DiscordColor(0xFF0000)
             }));
             return;
@@ -71,11 +72,11 @@ public sealed class OnBoardingApplicationCommands(DB db, IGuildConfigService gui
 
         #region Questionaire logic
 
-        DiscordGuild guild = ctx.Guild;
+        DiscordGuild guild = ctx.RequireGuild();
         GuildConfig? guildConfig = await guildConfigService.GetAsync(guild.Id);
         if (guildConfig == null)
         {
-            await ctx.EditResponseAsync(new DiscordWebhookBuilder().AddEmbed(new DiscordEmbedBuilder
+            await ctx.EditResponseAsync(new DiscordMessageBuilder().AddEmbed(new DiscordEmbedBuilder
             {
                 Title = "Server not configured",
                 Description =
@@ -87,7 +88,7 @@ public sealed class OnBoardingApplicationCommands(DB db, IGuildConfigService gui
 
         if (!guildConfig.Questionnaires.TryGetValue("Member", out Questionnaire? questionnaire) || questionnaire == null)
         {
-            await ctx.EditResponseAsync(new DiscordWebhookBuilder().AddEmbed(new DiscordEmbedBuilder
+            await ctx.EditResponseAsync(new DiscordMessageBuilder().AddEmbed(new DiscordEmbedBuilder
             {
                 Title = "Questionnaire not configured",
                 Description = "The Member questionnaire is not set up. Ask an administrator to configure it.",
@@ -98,13 +99,13 @@ public sealed class OnBoardingApplicationCommands(DB db, IGuildConfigService gui
 
         DiscordMember member = (DiscordMember)ctx.User;
 
-        if (member.Roles.All(r => r.Id != guildConfig.StrangerRoleId))
+        if (!QuestionnaireSessionPolicy.HasStrangerRole(member.Roles.Select(r => r.Id), guildConfig.StrangerRoleId))
         {
-            await ctx.EditResponseAsync(new DiscordWebhookBuilder().AddEmbed(new DiscordEmbedBuilder
+            await ctx.EditResponseAsync(new DiscordMessageBuilder().AddEmbed(new DiscordEmbedBuilder
             {
                 Title = "Missing role",
                 Description =
-                    $"{ctx.Member.Mention}: this command isn't allowed without a certain role!",
+                    $"{ctx.RequireMember().Mention}: this command isn't allowed without a certain role!",
                 Color = new DiscordColor(0xFF0000)
             }));
             return;
@@ -122,7 +123,7 @@ public sealed class OnBoardingApplicationCommands(DB db, IGuildConfigService gui
                 Color = new DiscordColor(0xFF0000)
             };
 
-            await ctx.EditResponseAsync(new DiscordWebhookBuilder().AddEmbed(embed));
+            await ctx.EditResponseAsync(new DiscordMessageBuilder().AddEmbed(embed));
         }
 
         DiscordChannel interactionChannel;
@@ -134,22 +135,24 @@ public sealed class OnBoardingApplicationCommands(DB db, IGuildConfigService gui
             // 
             interactionChannel =
                 questionnaire.ConductInPrivate
-                    ? await ctx.Member.CreateDmChannelAsync()
+                    ? await ctx.RequireMember().CreateDmChannelAsync()
                     : // start questionnaire in DMs
                     ctx.Channel; // start questionnaire in the channel of the invoked command
         }
         catch (UnauthorizedException)
         {
-            // Re-arm auto-kick since we never started the questionnaire
-            application.IsAutoKickEnabled = true;
-            await db.SaveAsync(application);
-            await db.SaveAsync(dbMember);
+            if (QuestionnaireSessionPolicy.ShouldRearmAutoKickAfterDmFailure())
+            {
+                application.IsAutoKickEnabled = true;
+                await db.SaveAsync(application);
+                await db.SaveAsync(dbMember);
+            }
 
-            await ctx.EditResponseAsync(new DiscordWebhookBuilder().AddEmbed(new DiscordEmbedBuilder
+            await ctx.EditResponseAsync(new DiscordMessageBuilder().AddEmbed(new DiscordEmbedBuilder
             {
                 Title = "Couldn't DM member",
                 Description =
-                    $":+1: {ctx.Member.Mention} I couldn't send you a DM, please adjust your privacy settings!",
+                    $":+1: {ctx.RequireMember().Mention} I couldn't send you a DM, please adjust your privacy settings!",
                 Color = new DiscordColor(0xFF0000)
             }));
             return;
@@ -158,9 +161,9 @@ public sealed class OnBoardingApplicationCommands(DB db, IGuildConfigService gui
         //
         // Check if this channel is allowed
         // 
-        if (questionnaire.BlockedChannelIds.Contains(interactionChannel.Id))
+        if (QuestionnaireSessionPolicy.IsBlockedChannel(questionnaire.BlockedChannelIds, interactionChannel.Id))
         {
-            await ctx.EditResponseAsync(new DiscordWebhookBuilder().AddEmbed(new DiscordEmbedBuilder
+            await ctx.EditResponseAsync(new DiscordMessageBuilder().AddEmbed(new DiscordEmbedBuilder
             {
                 Title = "Invalid channel",
                 Description = $":no_entry: Questionnaire `{questionnaire.Name}` not allowed in this channel.",
@@ -173,26 +176,29 @@ public sealed class OnBoardingApplicationCommands(DB db, IGuildConfigService gui
         // Disable auto-kick for the duration of the questionnaire so the idle
         // timer does not fire while the member is actively answering.
         //
-        application.IsAutoKickEnabled = false;
-        await db.SaveAsync(application);
-        await db.SaveAsync(dbMember);
-        await dbMember.UpdateApplicationWidget(ctx.Client);
+        if (QuestionnaireSessionPolicy.ShouldDisableAutoKickWhileAnswering())
+        {
+            application.IsAutoKickEnabled = false;
+            await db.SaveAsync(application);
+            await db.SaveAsync(dbMember);
+            await dbMember.UpdateApplicationWidget(ctx.Client);
+        }
 
         //
         // Notify user that action is happening in DMs
         //  
         if (questionnaire.ConductInPrivate)
         {
-            await ctx.EditResponseAsync(new DiscordWebhookBuilder().AddEmbed(new DiscordEmbedBuilder
+            await ctx.EditResponseAsync(new DiscordMessageBuilder().AddEmbed(new DiscordEmbedBuilder
             {
                 Title = "Questionnaire started",
-                Description = $"{ctx.Member.Mention} I've started the questionnaire in your DMs.",
+                Description = $"{ctx.RequireMember().Mention} I've started the questionnaire in your DMs.",
                 Color = new DiscordColor(0x00FF00)
             }));
         }
         else
         {
-            await ctx.EditResponseAsync(new DiscordWebhookBuilder().AddEmbed(new DiscordEmbedBuilder
+            await ctx.EditResponseAsync(new DiscordMessageBuilder().AddEmbed(new DiscordEmbedBuilder
             {
                 Title = "Let's go!",
                 Description =
@@ -218,22 +224,37 @@ public sealed class OnBoardingApplicationCommands(DB db, IGuildConfigService gui
             await interactionChannel.SendMessageAsync(
                 $"{i + 1}/{questionnaire.Questions.Count}. {question.Content}");
 
-            InteractivityResult<DiscordMessage> response = await interactionChannel.GetNextMessageAsync(
-                ctx.User,
-                TimeSpan.FromMinutes(questionnaire.TimeoutMinutes)
-            );
-
-            //
-            // Bail out if too slow to answer
-            //
-            if (response.TimedOut)
+            QuestionnaireReplyDisposition disposition;
+            string? answer = null;
+            try
             {
-                // Re-arm auto-kick so the idle timer can still fire
+                InteractivityResult<DiscordMessage> response = await interactionChannel.GetNextMessageAsync(
+                    ctx.User,
+                    QuestionnaireSessionPolicy.ReplyTimeout(questionnaire.TimeoutMinutes)
+                );
+                disposition = QuestionnaireSessionPolicy.Classify(response.TimedOut, cancelled: false);
+                if (disposition == QuestionnaireReplyDisposition.Answer)
+                {
+                    answer = response.Result.Content;
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                disposition = QuestionnaireSessionPolicy.Classify(timedOut: false, cancelled: true);
+            }
+
+            if (QuestionnaireSessionPolicy.ShouldRearmAutoKick(disposition))
+            {
                 application.IsAutoKickEnabled = true;
                 await db.SaveAsync(application);
                 await db.SaveAsync(dbMember);
 
-                string error = $"{ctx.Member.Mention} too slow, your questionnaire has timed out, please try again!";
+                if (disposition == QuestionnaireReplyDisposition.Cancelled)
+                {
+                    return;
+                }
+
+                string error = $"{ctx.RequireMember().Mention} too slow, your questionnaire has timed out, please try again!";
 
                 if (questionnaire.ConductInPrivate)
                 {
@@ -241,7 +262,7 @@ public sealed class OnBoardingApplicationCommands(DB db, IGuildConfigService gui
                 }
                 else
                 {
-                    await ctx.EditResponseAsync(new DiscordWebhookBuilder().AddEmbed(new DiscordEmbedBuilder
+                    await ctx.EditResponseAsync(new DiscordMessageBuilder().AddEmbed(new DiscordEmbedBuilder
                     {
                         Title = "Timeout", Description = error, Color = DiscordColor.IndianRed
                     }));
@@ -255,12 +276,12 @@ public sealed class OnBoardingApplicationCommands(DB db, IGuildConfigService gui
                 return;
             }
 
-            if (string.IsNullOrEmpty(response.Result.Content))
+            if (string.IsNullOrEmpty(answer))
             {
-                logger.LogError("Message result empty {Message}", response.Result);
+                logger.LogError("Message result empty for question {Index}", i);
             }
 
-            responses.Add(response.Result.Content);
+            responses.Add(answer ?? string.Empty);
         }
 
         DiscordEmbedBuilder submissionEmbed = new()
@@ -268,7 +289,7 @@ public sealed class OnBoardingApplicationCommands(DB db, IGuildConfigService gui
             Title = "Questionnaire submission",
             Description =
                 $"Questionnaire: {Formatter.Bold(questionnaire.Name)}, " +
-                $"Author: {ctx.Member} ({ctx.Member.Mention}), " +
+                $"Author: {ctx.RequireMember()} ({ctx.RequireMember().Mention}), " +
                 $"Status panel: {application.MessageMentionUrl}",
             Timestamp = DateTimeOffset.UtcNow,
             Footer = new DiscordEmbedBuilder.EmbedFooter
@@ -282,7 +303,7 @@ public sealed class OnBoardingApplicationCommands(DB db, IGuildConfigService gui
             for (int i = 0; i < questionnaire.Questions.Count; i++)
             {
                 submissionEmbed.AddField(questionnaire.Questions[i].Content,
-                    string.IsNullOrEmpty(responses[i]) ? "<no value>" : responses[i]);
+                    QuestionnaireSessionPolicy.DisplayAnswer(responses[i]));
             }
         }
         catch (Exception ex)
@@ -302,16 +323,16 @@ public sealed class OnBoardingApplicationCommands(DB db, IGuildConfigService gui
         if (questionnaire.ActionButtons.Count != 0)
         {
             // TODO: currently not used, remove or finish implementation
-            submission.AddComponents(questionnaire.ActionButtons.Select(b =>
+            submission.AddActionRowComponent(questionnaire.ActionButtons.Select(b =>
                 new DiscordButtonComponent(
                     b.Style,
-                    $"{b.CustomId}|{questionnaire.Id}|{ctx.Member.Id}",
+                    $"{b.CustomId}|{questionnaire.Id}|{ctx.RequireMember().Id}",
                     b.Label,
                     b.IsDisabled
                 )));
         }
 
-        DiscordChannel submissionChannel = ctx.Guild.GetChannel(questionnaire.SubmissionChannelId);
+        DiscordChannel? submissionChannel = ctx.RequireGuild().FindChannel(questionnaire.SubmissionChannelId);
 
         if (submissionChannel is null)
         {
@@ -324,11 +345,11 @@ public sealed class OnBoardingApplicationCommands(DB db, IGuildConfigService gui
                     $"{emoji} Submission channel with ID `{questionnaire.SubmissionChannelId}` doesn't seem to exist.",
                 Color = new DiscordColor(0xFF0000) // red
             };
-            await ctx.EditResponseAsync(new DiscordWebhookBuilder().AddEmbed(embed));
+            await ctx.EditResponseAsync(new DiscordMessageBuilder().AddEmbed(embed));
             return;
         }
 
-        logger.LogInformation("{User} finished questionnaire {Name}", ctx.Member, questionnaire.Name);
+        logger.LogInformation("{User} finished questionnaire {Name}", ctx.RequireMember(), questionnaire.Name);
 
         try
         {
@@ -349,12 +370,12 @@ public sealed class OnBoardingApplicationCommands(DB db, IGuildConfigService gui
         {
             Title = "Questionnaire submitted",
             Description =
-                $"Nicely done {ctx.Member.Mention}, I've submitted your answers to {submissionChannel.Mention}. " +
+                $"Nicely done {ctx.RequireMember().Mention}, I've submitted your answers to {submissionChannel.Mention}. " +
                 "Please be patient until a moderator acknowledges it.",
             Color = new DiscordColor(0x00FF00)
         });
 
-        logger.LogInformation("{Member} finished application command", ctx.Member);
+        logger.LogInformation("{Member} finished application command", ctx.RequireMember());
 
         #endregion
 

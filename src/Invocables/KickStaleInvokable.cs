@@ -2,6 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 
 using Coravel.Invocable;
 
+using DSharpPlus;
 using DSharpPlus.Entities;
 using DSharpPlus.Exceptions;
 
@@ -10,8 +11,6 @@ using IgorBot.Schema;
 using IgorBot.Services;
 
 using MongoDB.Entities;
-
-using Nefarius.DSharpPlus.Extensions.Hosting;
 
 namespace IgorBot.Invocables;
 
@@ -23,7 +22,7 @@ internal class KickStaleInvokable(
     DB db,
     ILogger<KickStaleInvokable> logger,
     IGuildConfigService guildConfigService,
-    IDiscordClientService discord,
+    DiscordClient discord,
     IDiscordReadinessService readiness)
     : IInvocable
 {
@@ -36,7 +35,7 @@ internal class KickStaleInvokable(
         // Enumerate guild configs with an active idle timespan set
         foreach (GuildConfig config1 in allConfigs.Where(gc => gc.IdleKickTimeSpan.HasValue))
         {
-            if (!discord.Client.Guilds.TryGetValue(config1.GuildId, out DiscordGuild? guild))
+            if (!discord.Guilds.TryGetValue(config1.GuildId, out DiscordGuild? guild))
             {
                 // If GuildAvailable has never fired for this guild the client cache is still
                 // being populated (startup race). Log at Debug to avoid false-alarm warnings.

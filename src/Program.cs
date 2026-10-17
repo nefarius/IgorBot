@@ -2,10 +2,6 @@ using System.Threading.Channels;
 
 using Coravel;
 
-using DSharpPlus;
-using DSharpPlus.Interactivity.Enums;
-
-using IgorBot.ApplicationCommands;
 using IgorBot.Core;
 using IgorBot.Handlers;
 using IgorBot.Invocables;
@@ -13,10 +9,6 @@ using IgorBot.Services;
 
 using MongoDB.Driver;
 using MongoDB.Entities;
-
-using Nefarius.DSharpPlus.Extensions.Hosting;
-using Nefarius.DSharpPlus.Interactivity.Extensions.Hosting;
-using Nefarius.DSharpPlus.SlashCommands.Extensions.Hosting;
 
 using Serilog;
 using Serilog.Core;
@@ -77,7 +69,7 @@ IHostBuilder builder = Host.CreateDefaultBuilder(args)
             throw new InvalidOperationException("Bot:Discord:Token is required in configuration.");
         }
 
-        ConfigureDiscord(services, config);
+        IgorDiscordRegistration.AddIgorDiscord(services, config.Discord.Token);
 
         services.AddHostedService<StartupTasks>();
     });
@@ -104,37 +96,6 @@ host.Services.UseScheduler(scheduler =>
 host.Run();
 return;
 
-
-void ConfigureDiscord(IServiceCollection serviceCollection, IgorConfig igorConfig)
-{
-    serviceCollection.AddDiscord(discordConfiguration =>
-    {
-        discordConfiguration.Token = igorConfig.Discord.Token;
-        discordConfiguration.MinimumLogLevel = LogLevel.Debug;
-        // GuildMembers is a privileged intent: enable "Server Members Intent" in Discord Developer Portal
-        discordConfiguration.Intents = DiscordIntents.Guilds |
-                                       DiscordIntents.GuildMembers |
-                                       DiscordIntents.GuildMessages |
-                                       DiscordIntents.DirectMessages |
-                                       DiscordIntents.MessageContents;
-    });
-
-    serviceCollection.AddDiscordInteractivity(options =>
-    {
-        options.PaginationBehaviour = PaginationBehaviour.WrapAround;
-        options.ResponseBehavior = InteractionResponseBehavior.Ack;
-        options.ResponseMessage = "That's not a valid button";
-        options.Timeout = TimeSpan.FromMinutes(3);
-    });
-
-    serviceCollection.AddDiscordSlashCommands(extension: extension =>
-    {
-        extension.RegisterCommands<OnBoardingApplicationCommands>();
-        extension.RegisterCommands<ConfigCommands>();
-    });
-
-    serviceCollection.AddDiscordHostedService();
-}
 
 void ConfigureLogging(HostBuilderContext hostBuilderContext, IServiceCollection serviceCollection)
 {

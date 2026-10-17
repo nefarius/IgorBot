@@ -136,7 +136,6 @@ Maintainers must add a repository secret named `DOCKERHUB_TOKEN` containing a Do
 ## 3rd party credits
 
 - [DSharpPlus](https://github.com/DSharpPlus/DSharpPlus)
-- [Nefarius.DSharpPlus.Extensions.Hosting](https://github.com/nefarius/Nefarius.DSharpPlus.Extensions.Hosting)
 - [MongoDB.Entities](https://mongodb-entities.com/)
 - [Coravel](https://docs.coravel.net/)
 - [MongoDB](https://www.mongodb.com/)

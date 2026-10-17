@@ -5,14 +5,14 @@ WORKDIR /app
 
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
-COPY ["./src/IgorBot.csproj", "."]
-RUN dotnet restore "./IgorBot.csproj"
-COPY ./src/ .
-WORKDIR "/src/."
-RUN dotnet build "IgorBot.csproj" -c Release -o /app/build
+COPY Directory.Build.props Directory.Packages.props ./
+COPY src/IgorBot.csproj src/packages.lock.json ./
+RUN dotnet restore "./IgorBot.csproj" --locked-mode
+COPY src/ .
+RUN dotnet build "IgorBot.csproj" -c Release -o /app/build --no-restore
 
 FROM build AS publish
-RUN dotnet publish "IgorBot.csproj" -c Release -o /app/publish
+RUN dotnet publish "IgorBot.csproj" -c Release -o /app/publish --no-restore
 
 FROM base AS final
 WORKDIR /app

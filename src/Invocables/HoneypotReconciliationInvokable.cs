@@ -2,16 +2,16 @@ using System.Diagnostics.CodeAnalysis;
 
 using Coravel.Invocable;
 
+using DSharpPlus;
 using DSharpPlus.Entities;
 using DSharpPlus.Exceptions;
 
 using IgorBot.Core;
 using IgorBot.Schema;
 using IgorBot.Services;
+using IgorBot.Util;
 
 using MongoDB.Entities;
-
-using Nefarius.DSharpPlus.Extensions.Hosting;
 
 namespace IgorBot.Invocables;
 
@@ -22,7 +22,7 @@ namespace IgorBot.Invocables;
 internal sealed class HoneypotReconciliationInvokable(
     DB db,
     IGuildConfigService guildConfigService,
-    IDiscordClientService discord,
+    DiscordClient discord,
     IDiscordReadinessService readiness,
     IHoneypotEnforcementService enforcement,
     ILogger<HoneypotReconciliationInvokable> logger) : IInvocable
@@ -78,7 +78,7 @@ internal sealed class HoneypotReconciliationInvokable(
         ulong guildId = config.GuildId;
         ulong channelId = config.HoneypotChannelId!.Value;
 
-        if (!discord.Client.Guilds.TryGetValue(guildId, out DiscordGuild? guild))
+        if (!discord.Guilds.TryGetValue(guildId, out DiscordGuild? guild))
         {
             if (readiness.IsGuildReady(guildId))
             {
@@ -96,7 +96,7 @@ internal sealed class HoneypotReconciliationInvokable(
             return;
         }
 
-        DiscordChannel? channel = guild.GetChannel(channelId);
+        DiscordChannel? channel = guild.FindChannel(channelId);
         if (channel is null)
         {
             logger.LogWarning(
@@ -199,7 +199,7 @@ internal sealed class HoneypotReconciliationInvokable(
                 await Task.Delay(DiscordApiThrottleDelay);
 
                 IReadOnlyList<DiscordMessage> older =
-                    await channel.GetMessagesBeforeAsync(before, HoneypotReconciliationEngine.PageSize);
+                    await channel.GetMessagesBeforeAsync(before, HoneypotReconciliationEngine.PageSize).MaterializeAsync();
                 if (older.Count == 0)
                 {
                     await SaveBacklogAsync(state, complete: true, beforeMessageId: null);
@@ -232,7 +232,7 @@ internal sealed class HoneypotReconciliationInvokable(
                 }
 
                 ulong oldest = older.Min(static m => m.Id);
-                if (reachedFloor || older.Count < HoneypotReconciliationEngine.PageSize || oldest <= lowerBound)
+                if (reachedFloor || HoneypotReconciliationEngine.IsFinalHistoryPage(older.Count) || oldest <= lowerBound)
                 {
                     await SaveBacklogAsync(state, complete: true, beforeMessageId: null);
                     return;
@@ -272,7 +272,7 @@ internal sealed class HoneypotReconciliationInvokable(
             else
             {
                 IReadOnlyList<DiscordMessage> afterPage =
-                    await channel.GetMessagesAfterAsync(cursor, HoneypotReconciliationEngine.PageSize);
+                    await channel.GetMessagesAfterAsync(cursor, HoneypotReconciliationEngine.PageSize).MaterializeAsync();
                 pagesFetched++;
 
                 if (afterPage.Count == 0)
@@ -281,7 +281,7 @@ internal sealed class HoneypotReconciliationInvokable(
                 }
 
                 collected.AddRange(afterPage);
-                if (afterPage.Count < HoneypotReconciliationEngine.PageSize)
+                if (HoneypotReconciliationEngine.IsFinalHistoryPage(afterPage.Count))
                 {
                     reachedHistoryStart = true;
                 }
@@ -320,7 +320,7 @@ internal sealed class HoneypotReconciliationInvokable(
             }
 
             IReadOnlyList<DiscordMessage> older =
-                await channel.GetMessagesBeforeAsync(walkFrom, HoneypotReconciliationEngine.PageSize);
+                await channel.GetMessagesBeforeAsync(walkFrom, HoneypotReconciliationEngine.PageSize).MaterializeAsync();
 
             if (older.Count == 0)
             {
@@ -330,7 +330,7 @@ internal sealed class HoneypotReconciliationInvokable(
             collected.AddRange(older);
             walkFrom = older.Min(m => m.Id);
 
-            if (older.Count < HoneypotReconciliationEngine.PageSize || walkFrom <= cursor)
+            if (HoneypotReconciliationEngine.IsFinalHistoryPage(older.Count) || walkFrom <= cursor)
             {
                 return true;
             }
