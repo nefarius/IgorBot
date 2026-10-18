@@ -114,28 +114,9 @@ internal partial class ApplicationWorkflow
     /// <summary>
     ///     Tasks required when a member got the Stranger role assigned.
     /// </summary>
-    private async Task ProcessStrangerAssignment(
-        DiscordGuild guild,
-        GuildConfig guildConfig,
-        GuildMember member
-    )
+    private Task ProcessStrangerAssignment(DiscordGuild guild, GuildConfig guildConfig, GuildMember member)
     {
-        GuildProperties? guildRuntime = await db.Find<GuildProperties>().OneAsync(guild.Id.ToString());
-
-        if (guildRuntime is null)
-        {
-            guildRuntime = new GuildProperties { GuildId = guild.Id };
-            await db.SaveAsync(guildRuntime);
-        }
-
-        NewMemberMessage message = new()
-        {
-            GuildProperties = guildRuntime, GuildConfig = guildConfig, MemberEntryId = member.ID
-        };
-
-        logger.LogInformation("Submitting new member workflow message");
-
-        await onboardingQueue.EnqueueAsync(message);
+        return onboardingSubmitter.SubmitAsync(guild, guildConfig, member);
     }
 
     /// <summary>

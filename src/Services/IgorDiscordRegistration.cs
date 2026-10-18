@@ -41,6 +41,7 @@ internal static class IgorDiscordRegistration
             extension.AddCommands(typeof(OnBoardingApplicationCommands));
             extension.AddCommands(typeof(ConfigCommands));
             extension.AddCommands(typeof(SystemOneCommands));
+            extension.AddCommands(typeof(JobCommands));
 
             ILogger logger = provider.GetRequiredService<ILoggerFactory>().CreateLogger("IgorBot.Commands");
             extension.CommandErrored += (_, args) =>

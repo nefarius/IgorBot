@@ -58,6 +58,8 @@ IHostBuilder builder = Host.CreateDefaultBuilder(args)
         services.AddSingleton(onboardingChannel.Reader);
         services.AddSingleton(onboardingChannel.Writer);
         services.AddSingleton<IOnboardingQueue, OnboardingQueue>();
+        services.AddSingleton<IOnboardingSubmitter, OnboardingSubmitter>();
+        services.AddSingleton<ILurkerReconciliationService, LurkerReconciliationService>();
         services.AddSingleton<NewMemberHandler>();
         services.AddHostedService<OnboardingQueueProcessor>();
 
@@ -99,6 +101,11 @@ host.Services.UseScheduler(scheduler =>
             .Daily();
 
         scheduler
+            .Schedule<LurkerReconciliationInvokable>()
+            .Daily()
+            .PreventOverlapping(nameof(LurkerReconciliationInvokable));
+
+        scheduler
             .Schedule<HoneypotReconciliationInvokable>()
             .EveryMinute()
             .PreventOverlapping(nameof(HoneypotReconciliationInvokable));
@@ -135,4 +142,5 @@ void ConfigureScheduler(IServiceCollection serviceCollection)
     serviceCollection.AddTransient<MemberDbSyncInvokable>();
     serviceCollection.AddTransient<OrphanEmbedReconciliationInvokable>();
     serviceCollection.AddTransient<HoneypotReconciliationInvokable>();
+    serviceCollection.AddTransient<LurkerReconciliationInvokable>();
 }

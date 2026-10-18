@@ -30,6 +30,8 @@ public sealed class DiscordCompositionTests(MongoFixture mongo)
         services.AddSingleton(db);
         services.AddSingleton<IGuildConfigService, UnusedGuildConfigService>();
         services.AddSingleton<IOnboardingQueue, UnusedOnboardingQueue>();
+        services.AddSingleton<IOnboardingSubmitter, OnboardingSubmitter>();
+        services.AddSingleton<ILurkerReconciliationService, LurkerReconciliationService>();
         services.AddSingleton<IHoneypotEnforcementService, UnusedHoneypotEnforcement>();
         services.AddSingleton<IHoneypotBanClient, UnusedHoneypotBanClient>();
         services.AddSingleton(SystemOneSettings.Create(new SystemOneConfig()));
