@@ -15,6 +15,13 @@ public sealed class CommandAccessPolicyTests
     }
 
     [Fact]
+    public void SystemOneTest_RequiresAdministrator()
+    {
+        CommandAccessPolicy.IsAuthorized(["Administrator"], CommandAccessPolicy.SystemOnePermissions).Should().BeTrue();
+        CommandAccessPolicy.IsAuthorized(["SendMessages"], CommandAccessPolicy.SystemOnePermissions).Should().BeFalse();
+    }
+
+    [Fact]
     public void ApplyMember_RequiresSendMessages()
     {
         CommandAccessPolicy.IsAuthorized(["SendMessages"], CommandAccessPolicy.ApplyMemberPermissions).Should().BeTrue();
@@ -172,6 +179,69 @@ public sealed class ConfigOptionApplicatorTests
         ConfigOptionApplicator.TryApply(config, ConfigOption.ModeratorRole, "<@&3>", role);
         config.ApplicationModeratorRoleIds.Should().Equal(3UL);
     }
+
+    [Theory]
+    [InlineData("true", true)]
+    [InlineData("false", false)]
+    public void TryApply_QuestionnaireScreening_RequiresMemberQuestionnaire(string value, bool expected)
+    {
+        GuildConfig missing = new();
+        ConfigOptionApplicator.TryApply(missing, ConfigOption.QuestionnaireScreening, value, _ => default)
+            .Should().Be("The Member questionnaire is not configured.");
+
+        GuildConfig config = MemberQuestionnaireConfig();
+        ConfigOptionApplicator.TryApply(config, ConfigOption.QuestionnaireScreening, value, _ => default)
+            .Should().BeNull();
+        config.Questionnaires[QuestionnaireKeys.Member].Automation.Enabled.Should().Be(expected);
+    }
+
+    [Fact]
+    public void TryApply_QuestionnaireContext_RejectsEmptyAndStoresTrimmedText()
+    {
+        GuildConfig config = MemberQuestionnaireConfig();
+        ConfigOptionApplicator.TryApply(config, ConfigOption.QuestionnaireScreeningContext, "  ", _ => default)
+            .Should().Be("Provide the server and questionnaire context.");
+
+        ConfigOptionApplicator.TryApply(
+                config, ConfigOption.QuestionnaireScreeningContext, "  DsHidMini support  ", _ => default)
+            .Should().BeNull();
+        config.Questionnaires[QuestionnaireKeys.Member].Automation.Context.Should().Be("DsHidMini support");
+    }
+
+    [Theory]
+    [InlineData("-0.01")]
+    [InlineData("1.01")]
+    [InlineData("80%")]
+    [InlineData("high")]
+    [InlineData("NaN")]
+    [InlineData("Infinity")]
+    public void TryApply_QuestionnaireThreshold_RejectsOutOfRange(string value)
+    {
+        GuildConfig config = MemberQuestionnaireConfig();
+        ConfigOptionApplicator.TryApply(config, ConfigOption.QuestionnaireAutoPromoteThreshold, value, _ => default)
+            .Should().Be("Value must be a probability from 0 to 1, for example 0.80.");
+    }
+
+    [Fact]
+    public void TryApply_QuestionnaireThreshold_AcceptsBounds()
+    {
+        GuildConfig config = MemberQuestionnaireConfig();
+        ConfigOptionApplicator.TryApply(config, ConfigOption.QuestionnaireAutoPromoteThreshold, "0.80", _ => default)
+            .Should().BeNull();
+        config.Questionnaires[QuestionnaireKeys.Member].Automation.AutoPromoteNormalProbability.Should().Be(0.80);
+    }
+
+    private static GuildConfig MemberQuestionnaireConfig() => new()
+    {
+        Questionnaires = new Dictionary<string, Questionnaire>
+        {
+            [QuestionnaireKeys.Member] = new()
+            {
+                Id = "newbie",
+                Name = "On-boarding"
+            }
+        }
+    };
 }
 
 public sealed class QuestionnaireSessionPolicyTests

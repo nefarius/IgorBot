@@ -1,0 +1,21 @@
+---
+description: Start each feature implementation on its own branch
+alwaysApply: true
+---
+
+# Feature branch workflow
+
+Before the first code, config, or documentation edit for a new feature:
+
+1. Inspect the current branch and worktree with `git status`.
+2. Leave uncommitted user changes in place. Do not stash, reset, or discard them to create the branch.
+3. If the work is not already on a dedicated feature branch, create and switch to `feature/<short-name>` from the current HEAD.
+4. Keep the feature on that branch until the user asks to commit, merge, or open a pull request.
+
+Read-only investigation and planning do not require a new branch.
+
+```bash
+git status --short
+git branch --show-current
+git checkout -b feature/example-name
+```

@@ -11,6 +11,9 @@
     environment:
       - TZ=Europe/Vienna
       - Bot__Discord__Token=<bot-token-here>
+      # - Bot__SystemOne__BaseUrl=http://192.168.30.187:8081
+      # - Bot__SystemOne__Model=loaded
+      # - Bot__SystemOne__ApiToken=<system-one-bearer-token>
     labels:
       - traefik.enable=false
     logging:

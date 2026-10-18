@@ -69,6 +69,17 @@ IHostBuilder builder = Host.CreateDefaultBuilder(args)
             throw new InvalidOperationException("Bot:Discord:Token is required in configuration.");
         }
 
+        SystemOneSettings systemOne = SystemOneSettings.Create(config.SystemOne);
+        services.AddSingleton(systemOne);
+        services.AddSingleton<IOnboardingDecisionClient>(_ =>
+            systemOne.IsConfigured
+                ? new OllamaSharpOnboardingDecisionClient(systemOne)
+                : new UnconfiguredOnboardingDecisionClient());
+        services.AddSingleton<IOnboardingDecisionService, OnboardingDecisionService>();
+        services.AddSingleton<ISystemOneProbe, SystemOneProbe>();
+        services.AddSingleton<IOnboardingAutomationExecutor, OnboardingAutomationExecutor>();
+        services.AddSingleton<IMemberPromotionService, MemberPromotionService>();
+
         IgorDiscordRegistration.AddIgorDiscord(services, config.Discord.Token);
 
         services.AddHostedService<StartupTasks>();

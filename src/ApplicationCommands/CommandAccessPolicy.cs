@@ -13,6 +13,8 @@ internal static class CommandAccessPolicy
 
     public static IReadOnlyList<string> ApplyMemberPermissions { get; } = [SendMessages];
 
+    public static IReadOnlyList<string> SystemOnePermissions { get; } = [Administrator];
+
     public static bool IsAuthorized(IEnumerable<string> granted, IReadOnlyList<string> required) =>
         required.All(granted.Contains);
 }

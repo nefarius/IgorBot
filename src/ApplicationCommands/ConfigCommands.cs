@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 
 using DSharpPlus.Commands;
 using DSharpPlus.Commands.ContextChecks;
@@ -84,7 +85,7 @@ public sealed class ConfigCommands(IGuildConfigService guildConfigService)
             config.ApplicationModeratorRoleIds.Add(moderatorRole.Id);
         }
 
-        config.Questionnaires["Member"] = new Questionnaire
+        config.Questionnaires[QuestionnaireKeys.Member] = new Questionnaire
         {
             Id = "Member",
             Name = "On-boarding",
@@ -193,6 +194,22 @@ public sealed class ConfigCommands(IGuildConfigService guildConfigService)
         embed.AddField("Honeypot", config.HoneypotChannelId.HasValue ? $"<#{config.HoneypotChannelId}>" : "Not set",
             true);
         embed.AddField("Onboarding workflow", config.EnableOnboardingWorkflow ? "Enabled" : "Disabled", true);
+        if (config.Questionnaires.TryGetValue(QuestionnaireKeys.Member, out Questionnaire? questionnaire))
+        {
+            QuestionnaireAutomation automation = questionnaire.Automation;
+            embed.AddField("Screening", automation.Enabled ? "Enabled" : "Disabled", true);
+            embed.AddField(
+                "Auto-promote at",
+                automation.AutoPromoteNormalProbability.ToString("P0", CultureInfo.InvariantCulture),
+                true);
+            string context = string.IsNullOrWhiteSpace(automation.Context) ? "Not set" : automation.Context.Trim();
+            if (context.Length > 1024)
+            {
+                context = context[..1021] + "...";
+            }
+
+            embed.AddField("Screening context", context);
+        }
 
         await ctx.EditResponseAsync(new DiscordMessageBuilder().AddEmbed(embed));
     }
@@ -305,5 +322,14 @@ public enum ConfigOption
     HoneypotExclusionRole,
 
     [ChoiceDisplayName("Honeypot exclusion role (remove)")]
-    HoneypotExclusionRoleRemove
+    HoneypotExclusionRoleRemove,
+
+    [ChoiceDisplayName("Questionnaire screening")]
+    QuestionnaireScreening,
+
+    [ChoiceDisplayName("Questionnaire screening context")]
+    QuestionnaireScreeningContext,
+
+    [ChoiceDisplayName("Questionnaire auto-promote threshold")]
+    QuestionnaireAutoPromoteThreshold
 }

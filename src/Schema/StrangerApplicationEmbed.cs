@@ -51,6 +51,11 @@ internal sealed class StrangerApplicationEmbed : IEntity
     public DateTime? QuestionnaireSubmittedAt { get; set; }
 
     /// <summary>
+    ///     Latest System One screening result for this application.
+    /// </summary>
+    public OnboardingDecisionRecord? Decision { get; set; }
+
+    /// <summary>
     ///     Gets a list of button components for actions on this embed.
     /// </summary>
     public IEnumerable<DiscordButtonComponent> ButtonComponents =>

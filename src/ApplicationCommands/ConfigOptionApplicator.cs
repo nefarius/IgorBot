@@ -1,3 +1,5 @@
+using System.Globalization;
+
 using IgorBot.Core;
 
 namespace IgorBot.ApplicationCommands;
@@ -90,6 +92,12 @@ internal static class ConfigOptionApplicator
             }),
             ConfigOption.HoneypotExclusionRoleRemove => AssignRole(parsedId, resolve, id =>
                 config.HoneypotExclusionRoleIds.Remove(id)),
+            ConfigOption.QuestionnaireScreening => AssignMemberAutomation(
+                config, automation => AssignBool(value, "Value must be 'true' or 'false'.", b => automation.Enabled = b)),
+            ConfigOption.QuestionnaireScreeningContext => AssignMemberAutomation(
+                config, automation => AssignContext(automation, value)),
+            ConfigOption.QuestionnaireAutoPromoteThreshold => AssignMemberAutomation(
+                config, automation => AssignThreshold(automation, value)),
             _ => $"Could not parse value for {option}. Use a role or channel mention, or appropriate text."
         };
     }
@@ -173,6 +181,48 @@ internal static class ConfigOptionApplicator
         }
 
         apply(parsed);
+        return null;
+    }
+
+    private static string? AssignMemberAutomation(GuildConfig config, Func<QuestionnaireAutomation, string?> apply)
+    {
+        if (!config.Questionnaires.TryGetValue(QuestionnaireKeys.Member, out Questionnaire? questionnaire) ||
+            questionnaire is null)
+        {
+            return "The Member questionnaire is not configured.";
+        }
+
+        return apply(questionnaire.Automation);
+    }
+
+    private static string? AssignContext(QuestionnaireAutomation automation, string value)
+    {
+        value = value.Trim();
+        if (value.Length == 0)
+        {
+            return "Provide the server and questionnaire context.";
+        }
+
+        if (value.Length > 1000)
+        {
+            return "Context must be 1000 characters or fewer.";
+        }
+
+        automation.Context = value;
+        return null;
+    }
+
+    private static string? AssignThreshold(QuestionnaireAutomation automation, string value)
+    {
+        if (!double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out double threshold) ||
+            !double.IsFinite(threshold) ||
+            threshold < 0 ||
+            threshold > 1)
+        {
+            return "Value must be a probability from 0 to 1, for example 0.80.";
+        }
+
+        automation.AutoPromoteNormalProbability = threshold;
         return null;
     }
 

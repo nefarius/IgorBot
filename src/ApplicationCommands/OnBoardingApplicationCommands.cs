@@ -22,7 +22,12 @@ namespace IgorBot.ApplicationCommands;
 [Command("apply"), Description("Apply for server membership.")]
 [SuppressMessage("ReSharper", "UnusedMember.Global")]
 [SuppressMessage("ReSharper", "ClassNeverInstantiated.Global")]
-public sealed class OnBoardingApplicationCommands(DB db, IGuildConfigService guildConfigService)
+internal sealed class OnBoardingApplicationCommands(
+    DB db,
+    IGuildConfigService guildConfigService,
+    IOnboardingDecisionService decisions,
+    IMemberPromotionService promotions,
+    IOnboardingAutomationExecutor automation)
 {
     [RequirePermissions(DiscordPermission.SendMessages)]
     [Command("member"), Description("Apply for regular membership.")]
@@ -86,7 +91,8 @@ public sealed class OnBoardingApplicationCommands(DB db, IGuildConfigService gui
             return;
         }
 
-        if (!guildConfig.Questionnaires.TryGetValue("Member", out Questionnaire? questionnaire) || questionnaire == null)
+        if (!guildConfig.Questionnaires.TryGetValue(QuestionnaireKeys.Member, out Questionnaire? questionnaire) ||
+            questionnaire == null)
         {
             await ctx.EditResponseAsync(new DiscordMessageBuilder().AddEmbed(new DiscordEmbedBuilder
             {
@@ -124,6 +130,7 @@ public sealed class OnBoardingApplicationCommands(DB db, IGuildConfigService gui
             };
 
             await ctx.EditResponseAsync(new DiscordMessageBuilder().AddEmbed(embed));
+            return;
         }
 
         DiscordChannel interactionChannel;
@@ -284,6 +291,24 @@ public sealed class OnBoardingApplicationCommands(DB db, IGuildConfigService gui
             responses.Add(answer ?? string.Empty);
         }
 
+        List<OnboardingAnswer> answers = new(questionnaire.Questions.Count);
+        for (int i = 0; i < questionnaire.Questions.Count; i++)
+        {
+            answers.Add(new OnboardingAnswer(questionnaire.Questions[i].Content, responses[i]));
+        }
+
+        OnboardingDecisionResult decision = await ClassifyForModeratorReviewAsync(
+            questionnaire, answers, guild.Id, member.Id, logger);
+        bool previouslyAttempted = application.Decision is { AutomationAttempted: true };
+        bool alreadyPromoted = dbMember.Status == MemberStatus.FullMember;
+        bool hasStrangerRole = QuestionnaireSessionPolicy.HasStrangerRole(
+            member.Roles.Select(role => role.Id), guildConfig.StrangerRoleId);
+        OnboardingAutomationState automationState = new(
+            previouslyAttempted || alreadyPromoted,
+            dbMember.Status,
+            hasStrangerRole);
+        bool willPromote = OnboardingAutomationPlanner.ShouldPromote(decision, automationState);
+
         DiscordEmbedBuilder submissionEmbed = new()
         {
             Title = "Questionnaire submission",
@@ -304,6 +329,13 @@ public sealed class OnBoardingApplicationCommands(DB db, IGuildConfigService gui
             {
                 submissionEmbed.AddField(questionnaire.Questions[i].Content,
                     QuestionnaireSessionPolicy.DisplayAnswer(responses[i]));
+            }
+
+            if (decision.Outcome != OnboardingDecisionOutcome.Disabled)
+            {
+                submissionEmbed.AddField(
+                    OnboardingDecisionFormatter.FieldName,
+                    OnboardingDecisionFormatter.Format(decision, willPromote, autoPromoted: false, promotionFailed: false));
             }
         }
         catch (Exception ex)
@@ -351,51 +383,131 @@ public sealed class OnBoardingApplicationCommands(DB db, IGuildConfigService gui
 
         logger.LogInformation("{User} finished questionnaire {Name}", ctx.RequireMember(), questionnaire.Name);
 
+        DiscordMessage? submissionMessage = null;
         try
         {
             //
             // All prepared, send the submission message
             // 
-            await submissionChannel.SendMessageAsync(submission);
+            submissionMessage = await submissionChannel.SendMessageAsync(submission);
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "Failed to send submission message");
         }
 
-        //
-        // Inform the user of success
-        // 
-        await interactionChannel.SendMessageAsync(new DiscordEmbedBuilder
-        {
-            Title = "Questionnaire submitted",
-            Description =
-                $"Nicely done {ctx.RequireMember().Mention}, I've submitted your answers to {submissionChannel.Mention}. " +
-                "Please be patient until a moderator acknowledges it.",
-            Color = new DiscordColor(0x00FF00)
-        });
-
-        logger.LogInformation("{Member} finished application command", ctx.RequireMember());
-
-        #endregion
-
-        #region Application widget logic
-
         application.QuestionnaireSubmittedAt = DateTime.UtcNow;
+        if (decision.Outcome != OnboardingDecisionOutcome.Disabled)
+        {
+            application.Decision = decision.ToRecord(previouslyAttempted || willPromote, autoPromoted: false);
+        }
 
         // Persist the submission timestamp so the Promote button remains visible
         // after a bot restart and so the auto-kick query filter stays correct.
         await db.SaveAsync(application);
-        await dbMember.TransitionToAsync(db, MemberStatus.QuestionnaireSubmitted);
+        await db.SaveAsync(dbMember);
+        if (!alreadyPromoted)
+        {
+            await dbMember.TransitionToAsync(db, MemberStatus.QuestionnaireSubmitted);
+        }
 
-        logger.LogInformation("Updating status message {Id}", application.MessageId);
-
-        //
-        // Update moderator status embed
-        // 
+        OnboardingAutomationEffect effect = OnboardingAutomationEffect.Held;
         try
         {
-            await dbMember.UpdateApplicationWidget(ctx.Client);
+            effect = alreadyPromoted
+                ? OnboardingAutomationEffect.Held
+                : await automation.ExecuteAsync(
+                    decision,
+                    automationState,
+                    () => promotions.PromoteAsync(
+                        guild,
+                        member,
+                        dbMember,
+                        guildConfig,
+                        actorId: null,
+                        OnboardingDecisionLabels.AutoPromoteReason));
+
+            if (effect == OnboardingAutomationEffect.Promoted && application.Decision is not null)
+            {
+                application.Decision.AutoPromoted = true;
+                await db.SaveAsync(application);
+                await db.SaveAsync(dbMember);
+            }
+
+            if (submissionMessage is not null &&
+                decision.Outcome != OnboardingDecisionOutcome.Disabled &&
+                effect != OnboardingAutomationEffect.Held)
+            {
+                try
+                {
+                    ReplaceScreeningField(
+                        submissionEmbed,
+                        OnboardingDecisionFormatter.Format(
+                            decision,
+                            willPromote,
+                            autoPromoted: effect == OnboardingAutomationEffect.Promoted,
+                            promotionFailed: effect == OnboardingAutomationEffect.PromotionFailed));
+                    await submissionMessage.ModifyAsync(new DiscordMessageBuilder().AddEmbed(submissionEmbed));
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Failed to update screening field");
+                }
+            }
+
+            string applicantText = alreadyPromoted || effect == OnboardingAutomationEffect.Promoted
+                ? $"Nicely done {member.Mention}, I've submitted your answers to {submissionChannel.Mention}. You've been accepted."
+                : $"Nicely done {member.Mention}, I've submitted your answers to {submissionChannel.Mention}. " +
+                  "Please be patient until a moderator acknowledges it.";
+
+            await interactionChannel.SendMessageAsync(new DiscordEmbedBuilder
+            {
+                Title = "Questionnaire submitted",
+                Description = applicantText,
+                Color = new DiscordColor(0x00FF00)
+            });
+
+            logger.LogInformation("{Member} finished application command", ctx.RequireMember());
+        }
+        finally
+        {
+            // The status widget is the moderator approve/reject surface. Refresh it even when
+            // System One is down or a later notification fails.
+            await RefreshModeratorWidgetAsync(dbMember, ctx.Client, logger);
+        }
+
+        #endregion
+    }
+
+    private async Task<OnboardingDecisionResult> ClassifyForModeratorReviewAsync(
+        Questionnaire questionnaire,
+        IReadOnlyList<OnboardingAnswer> answers,
+        ulong guildId,
+        ulong memberId,
+        ILogger logger)
+    {
+        try
+        {
+            return await decisions.EvaluateAsync(questionnaire, answers, guildId, memberId);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(
+                ex,
+                "System One screening failed for guild {GuildId} member {MemberId}; leaving the application for moderators",
+                guildId,
+                memberId);
+            return OnboardingDecisionPolicy.Unavailable(DateTime.UtcNow, "System One request failed.");
+        }
+    }
+
+    private static async Task RefreshModeratorWidgetAsync(GuildMember dbMember, DiscordClient client, ILogger logger)
+    {
+        logger.LogInformation("Updating status message {Id}", dbMember.Application?.MessageId);
+
+        try
+        {
+            await dbMember.UpdateApplicationWidget(client);
         }
         catch (NotFoundException ex)
         {
@@ -405,7 +517,18 @@ public sealed class OnBoardingApplicationCommands(DB db, IGuildConfigService gui
         {
             logger.LogError(ex, "Unexpected exception");
         }
+    }
 
-        #endregion
+    private static void ReplaceScreeningField(DiscordEmbedBuilder embed, string value)
+    {
+        for (int i = embed.Fields.Count - 1; i >= 0; i--)
+        {
+            if (embed.Fields[i].Name == OnboardingDecisionFormatter.FieldName)
+            {
+                embed.RemoveFieldAt(i);
+            }
+        }
+
+        embed.AddField(OnboardingDecisionFormatter.FieldName, value);
     }
 }
