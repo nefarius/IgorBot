@@ -18,7 +18,7 @@ public sealed class SystemOneStartupHealthCheckTests
         CapturingLogger logger = new();
         SystemOneStartupHealthCheck check = Create(handler, logger, baseUrl: "");
 
-        await check.StartAsync(CancellationToken.None);
+        await RunUntilSettled(check);
 
         handler.Calls.Should().Be(0);
         logger.Entries.Should().BeEmpty();
@@ -30,7 +30,7 @@ public sealed class SystemOneStartupHealthCheckTests
         RecordingHandler handler = new();
         SystemOneStartupHealthCheck check = Create(handler, new CapturingLogger(), "http://127.0.0.1:9/v1/systemone");
 
-        await check.StartAsync(CancellationToken.None);
+        await RunUntilSettled(check);
 
         handler.Calls.Should().Be(1);
         handler.Method.Should().Be(HttpMethod.Head);
@@ -46,7 +46,7 @@ public sealed class SystemOneStartupHealthCheckTests
         RecordingHandler handler = new();
         SystemOneStartupHealthCheck check = Create(handler, new CapturingLogger(), token: token);
 
-        await check.StartAsync(CancellationToken.None);
+        await RunUntilSettled(check);
 
         handler.Authorization.Should().Be(expected);
     }
@@ -62,7 +62,7 @@ public sealed class SystemOneStartupHealthCheckTests
             "http://user:pass@127.0.0.1:9/v1/systemone?x=1",
             token: "secret-token");
 
-        await check.StartAsync(CancellationToken.None);
+        await RunUntilSettled(check);
 
         handler.RequestUri.Should().Be(new Uri("http://127.0.0.1:9/v1/systemone?x=1"));
         handler.RequestUri!.UserInfo.Should().BeEmpty();
@@ -80,7 +80,7 @@ public sealed class SystemOneStartupHealthCheckTests
         CapturingLogger logger = new();
         SystemOneStartupHealthCheck check = Create(handler, logger);
 
-        await check.StartAsync(CancellationToken.None);
+        await RunUntilSettled(check);
 
         LogEntry entry = logger.Entries.Should().ContainSingle().Subject;
         entry.Level.Should().Be(LogLevel.Warning);
@@ -96,7 +96,7 @@ public sealed class SystemOneStartupHealthCheckTests
         CapturingLogger logger = new();
         SystemOneStartupHealthCheck check = Create(handler, logger);
 
-        await check.StartAsync(CancellationToken.None);
+        await RunUntilSettled(check);
 
         LogEntry entry = logger.Entries.Should().ContainSingle().Subject;
         entry.Level.Should().Be(LogLevel.Warning);
@@ -111,11 +111,30 @@ public sealed class SystemOneStartupHealthCheckTests
         CapturingLogger logger = new();
         SystemOneStartupHealthCheck check = Create(handler, logger);
 
-        await check.StartAsync(CancellationToken.None);
+        await RunUntilSettled(check);
 
         LogEntry entry = logger.Entries.Should().ContainSingle().Subject;
         entry.Level.Should().Be(LogLevel.Warning);
         entry.Exception.Should().BeOfType<TaskCanceledException>();
+    }
+
+    [Fact]
+    public async Task SlowEndpoint_ReturnsBeforeTheResponseAndCancelsOnShutdown()
+    {
+        RecordingHandler handler = new() { Hold = true };
+        CapturingLogger logger = new();
+        SystemOneStartupHealthCheck check = Create(handler, logger);
+
+        Task starting = check.StartAsync(CancellationToken.None);
+
+        starting.IsCompleted.Should().BeTrue();
+        await handler.Started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        logger.Entries.Should().BeEmpty();
+
+        await check.StopAsync(CancellationToken.None);
+
+        logger.Entries.Should().BeEmpty();
+        handler.Calls.Should().Be(1);
     }
 
     [Fact]
@@ -130,7 +149,16 @@ public sealed class SystemOneStartupHealthCheckTests
         Func<Task> act = () => check.StartAsync(cts.Token);
 
         await act.Should().ThrowAsync<OperationCanceledException>();
+        handler.Calls.Should().Be(0);
         logger.Entries.Should().BeEmpty();
+        await check.StopAsync(CancellationToken.None);
+    }
+
+    private static async Task RunUntilSettled(SystemOneStartupHealthCheck check)
+    {
+        await check.StartAsync(CancellationToken.None);
+        await check.ProbeCompletion;
+        await check.StopAsync(CancellationToken.None);
     }
 
     private static SystemOneStartupHealthCheck Create(
@@ -181,9 +209,14 @@ public sealed class SystemOneStartupHealthCheckTests
 
         public Exception? Error { get; init; }
 
+        public bool Hold { get; init; }
+
         public HttpStatusCode StatusCode { get; init; } = HttpStatusCode.OK;
 
-        protected override Task<HttpResponseMessage> SendAsync(
+        public TaskCompletionSource<bool> Started { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        protected override async Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request,
             CancellationToken cancellationToken)
         {
@@ -191,13 +224,19 @@ public sealed class SystemOneStartupHealthCheckTests
             Method = request.Method;
             RequestUri = request.RequestUri;
             Authorization = request.Headers.Authorization?.ToString();
+            Started.TrySetResult(true);
+            if (Hold)
+            {
+                await Task.Delay(Timeout.Infinite, cancellationToken);
+            }
+
             cancellationToken.ThrowIfCancellationRequested();
             if (Error is not null)
             {
                 throw Error;
             }
 
-            return Task.FromResult(new HttpResponseMessage(StatusCode));
+            return new HttpResponseMessage(StatusCode);
         }
     }
 }

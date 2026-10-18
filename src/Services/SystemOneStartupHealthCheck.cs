@@ -10,6 +10,9 @@ internal sealed class SystemOneStartupHealthCheck : IHostedService
     private readonly SystemOneSettings _settings;
     private readonly ILogger<SystemOneStartupHealthCheck> _logger;
     private readonly HttpMessageHandler? _handler;
+    private readonly CancellationTokenSource _shutdown = new();
+    private int _stopped;
+    private Task? _probe;
 
     public SystemOneStartupHealthCheck(SystemOneSettings settings, ILogger<SystemOneStartupHealthCheck> logger)
         : this(settings, logger, null)
@@ -26,15 +29,63 @@ internal sealed class SystemOneStartupHealthCheck : IHostedService
         _handler = handler;
     }
 
-    public async Task StartAsync(CancellationToken cancellationToken)
+    internal Task ProbeCompletion => _probe ?? Task.CompletedTask;
+
+    public Task StartAsync(CancellationToken cancellationToken)
     {
         if (!_settings.IsConfigured || _settings.BaseUri is null)
+        {
+            return Task.CompletedTask;
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+
+        CancellationTokenSource probeCancellation =
+            CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shutdown.Token);
+        _probe = RunProbeAsync(probeCancellation, _settings.BaseUri);
+        return Task.CompletedTask;
+    }
+
+    public async Task StopAsync(CancellationToken cancellationToken)
+    {
+        if (Interlocked.Exchange(ref _stopped, 1) == 1)
         {
             return;
         }
 
-        Uri endpoint = RequestUri(_settings.BaseUri);
-        string reportedEndpoint = SafeEndpoint(_settings.BaseUri);
+        try
+        {
+            await _shutdown.CancelAsync();
+            if (_probe is not null)
+            {
+                await _probe.WaitAsync(cancellationToken);
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        finally
+        {
+            if (_probe is null || _probe.IsCompleted)
+            {
+                _shutdown.Dispose();
+            }
+        }
+    }
+
+    private async Task RunProbeAsync(CancellationTokenSource probeCancellation, Uri baseUri)
+    {
+        using (probeCancellation)
+        {
+            await ProbeAsync(baseUri, probeCancellation.Token);
+        }
+    }
+
+    private async Task ProbeAsync(Uri baseUri, CancellationToken cancellationToken)
+    {
+        Uri endpoint = RequestUri(baseUri);
+        string reportedEndpoint = SafeEndpoint(baseUri);
         using HttpClient client = CreateClient();
         try
         {
@@ -61,15 +112,13 @@ internal sealed class SystemOneStartupHealthCheck : IHostedService
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            throw;
+            // Startup was aborted or the host is stopping. Reachability is no longer relevant.
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "System One endpoint {Endpoint} could not be reached", reportedEndpoint);
         }
     }
-
-    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
     private HttpClient CreateClient()
     {
