@@ -1,10 +1,10 @@
-using System.Net;
 using System.Net.Http.Headers;
+using System.Text.Json;
 
 namespace IgorBot.Services;
 
 /// <summary>
-///     Confirms the configured System One base URL is reachable without blocking startup.
+///     Confirms the configured System One server is healthy without blocking startup.
 /// </summary>
 internal sealed class SystemOneStartupHealthCheck : IHostedService
 {
@@ -85,32 +85,42 @@ internal sealed class SystemOneStartupHealthCheck : IHostedService
 
     private async Task ProbeAsync(Uri baseUri, CancellationToken cancellationToken)
     {
-        Uri endpoint = RequestUri(baseUri);
-        string reportedEndpoint = SafeEndpoint(baseUri);
+        Uri endpoint = HealthUri(baseUri);
+        string reportedEndpoint = SafeEndpoint(endpoint);
         using HttpClient client = CreateClient();
         try
         {
-            using HttpResponseMessage head = await SendAsync(client, HttpMethod.Head, endpoint, cancellationToken);
-            if (IsReachable(head))
+            using HttpResponseMessage response = await SendAsync(client, endpoint, cancellationToken);
+            if ((int)response.StatusCode is < 200 or > 299)
             {
-                LogReached(reportedEndpoint);
+                _logger.LogWarning(
+                    "System One endpoint {Endpoint} returned HTTP {StatusCode}",
+                    reportedEndpoint,
+                    (int)response.StatusCode);
                 return;
             }
 
-            if (!IsUnsupported(head.StatusCode))
+            string body = response.Content is null
+                ? ""
+                : await response.Content.ReadAsStringAsync(cancellationToken);
+            if (!TryReadStatus(body, out string? status))
             {
-                LogRejected(reportedEndpoint, head.StatusCode);
+                _logger.LogWarning(
+                    "System One endpoint {Endpoint} returned an unreadable health response",
+                    reportedEndpoint);
                 return;
             }
 
-            using HttpResponseMessage fallback = await SendAsync(client, HttpMethod.Get, endpoint, cancellationToken);
-            if (IsReachable(fallback))
+            if (!string.Equals(status, "ok", StringComparison.Ordinal))
             {
-                LogReached(reportedEndpoint);
+                _logger.LogWarning(
+                    "System One endpoint {Endpoint} reported health status {Status}",
+                    reportedEndpoint,
+                    status);
                 return;
             }
 
-            LogRejected(reportedEndpoint, fallback.StatusCode);
+            _logger.LogInformation("Reached System One endpoint {Endpoint}", reportedEndpoint);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -124,11 +134,10 @@ internal sealed class SystemOneStartupHealthCheck : IHostedService
 
     private async Task<HttpResponseMessage> SendAsync(
         HttpClient client,
-        HttpMethod method,
         Uri endpoint,
         CancellationToken cancellationToken)
     {
-        using HttpRequestMessage request = new(method, endpoint);
+        using HttpRequestMessage request = new(HttpMethod.Get, endpoint);
         if (_settings.ApiToken is not null)
         {
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _settings.ApiToken);
@@ -137,20 +146,26 @@ internal sealed class SystemOneStartupHealthCheck : IHostedService
         return await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
     }
 
-    private void LogReached(string endpoint) =>
-        _logger.LogInformation("Reached System One endpoint {Endpoint}", endpoint);
+    private static bool TryReadStatus(string body, out string? status)
+    {
+        status = null;
+        try
+        {
+            using JsonDocument document = JsonDocument.Parse(body);
+            if (!document.RootElement.TryGetProperty("status", out JsonElement property) ||
+                property.ValueKind != JsonValueKind.String)
+            {
+                return false;
+            }
 
-    private void LogRejected(string endpoint, HttpStatusCode statusCode) =>
-        _logger.LogWarning(
-            "System One endpoint {Endpoint} returned HTTP {StatusCode}",
-            endpoint,
-            (int)statusCode);
-
-    private static bool IsReachable(HttpResponseMessage response) =>
-        (int)response.StatusCode is >= 200 and <= 299;
-
-    private static bool IsUnsupported(HttpStatusCode statusCode) =>
-        statusCode is HttpStatusCode.MethodNotAllowed or HttpStatusCode.UnsupportedMediaType;
+            status = property.GetString();
+            return !string.IsNullOrWhiteSpace(status);
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
 
     private HttpClient CreateClient()
     {
@@ -161,8 +176,18 @@ internal sealed class SystemOneStartupHealthCheck : IHostedService
         };
     }
 
-    private static Uri RequestUri(Uri endpoint) =>
-        string.IsNullOrEmpty(endpoint.UserInfo) ? endpoint : new Uri(SafeEndpoint(endpoint));
+    internal static Uri HealthUri(Uri baseUri)
+    {
+        UriBuilder builder = new(baseUri)
+        {
+            Path = "/health",
+            Query = "",
+            Fragment = "",
+            UserName = "",
+            Password = ""
+        };
+        return builder.Uri;
+    }
 
     internal static string SafeEndpoint(Uri endpoint) =>
         endpoint.GetComponents(
