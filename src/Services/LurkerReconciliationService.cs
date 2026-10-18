@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+
 using DSharpPlus;
 using DSharpPlus.Entities;
 
@@ -28,7 +30,17 @@ internal sealed class LurkerReconciliationService(
     IDiscordReadinessService readiness,
     ILogger<LurkerReconciliationService> logger) : ILurkerReconciliationService
 {
+    /// <summary>
+    ///     Upper bound of members queued per guild and scan, so a large backlog can't flood the Discord API with
+    ///     channel creations. Remaining members are picked up by the next scan (or <c>/jobs run</c>).
+    /// </summary>
+    internal const int MaxSubmissionsPerScan = 50;
+
     private readonly Dictionary<ulong, SemaphoreSlim> _locks = new();
+
+    // Last member submitted per guild; the next scan resumes after it so members that keep failing
+    // can't permanently occupy the capped slots.
+    private readonly ConcurrentDictionary<ulong, ulong> _cursors = new();
 
     public async Task ReconcileAllAsync(CancellationToken ct = default)
     {
@@ -106,12 +118,23 @@ internal sealed class LurkerReconciliationService(
 
         logger.LogInformation("Running lurker reconciliation for {Guild}", guild);
 
-        List<DiscordMember> members = await guild.GetAllMembersAsync().MaterializeAsync();
+        List<DiscordMember> members = LurkerReconciliationPolicy.RotateAfter(
+            await guild.GetAllMembersAsync().MaterializeAsync(),
+            m => m.Id,
+            _cursors.GetValueOrDefault(guildId));
         int submitted = 0;
 
         foreach (DiscordMember member in members)
         {
             ct.ThrowIfCancellationRequested();
+
+            if (submitted >= MaxSubmissionsPerScan)
+            {
+                logger.LogWarning(
+                    "Lurker reconciliation for {Guild} hit the cap of {Cap} submissions, remaining members wait for the next scan",
+                    guild, MaxSubmissionsPerScan);
+                break;
+            }
 
             if (!LurkerReconciliationPolicy.HasOnlyStrangerRole(
                     member.IsBot, member.Roles.Select(r => r.Id).ToList(), config.StrangerRoleId))
@@ -147,6 +170,7 @@ internal sealed class LurkerReconciliationService(
                 logger.LogInformation("Reconciliation: {Member} is missing channel or widget, submitting", member);
                 await submitter.SubmitAsync(guild, config, dbMember, ct);
                 submitted++;
+                _cursors[guildId] = member.Id;
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
@@ -170,6 +194,17 @@ internal static class LurkerReconciliationPolicy
     public static bool HasOnlyStrangerRole(bool isBot, IReadOnlyCollection<ulong> roleIds, ulong strangerRoleId)
     {
         return !isBot && roleIds.Count == 1 && roleIds.Contains(strangerRoleId);
+    }
+
+    /// <summary>
+    ///     Orders items by key and rotates the list so it starts with the first key greater than
+    ///     <paramref name="afterKey" />, wrapping around.
+    /// </summary>
+    public static List<T> RotateAfter<T>(IEnumerable<T> items, Func<T, ulong> key, ulong afterKey)
+    {
+        List<T> ordered = items.OrderBy(key).ToList();
+        int start = ordered.FindIndex(i => key(i) > afterKey);
+        return start <= 0 ? ordered : [.. ordered.Skip(start), .. ordered.Take(start)];
     }
 
     public static bool NeedsOnboarding(GuildMember member)

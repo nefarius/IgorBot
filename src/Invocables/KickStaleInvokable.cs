@@ -9,6 +9,7 @@ using DSharpPlus.Exceptions;
 using IgorBot.Core;
 using IgorBot.Schema;
 using IgorBot.Services;
+using IgorBot.Util;
 
 using MongoDB.Entities;
 
@@ -26,7 +27,9 @@ internal class KickStaleInvokable(
     IDiscordReadinessService readiness)
     : IInvocable
 {
-    public async Task Invoke()
+    public Task Invoke() => SingleFlight.RunAsync(nameof(KickStaleInvokable), InvokeCore, logger);
+
+    private async Task InvokeCore()
     {
         logger.LogDebug("Running stale kick timer");
 

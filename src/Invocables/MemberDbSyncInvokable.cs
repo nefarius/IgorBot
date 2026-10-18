@@ -22,7 +22,9 @@ internal class MemberDbSyncInvokable(
     ILogger<MemberDbSyncInvokable> logger)
     : IInvocable
 {
-    public async Task Invoke()
+    public Task Invoke() => SingleFlight.RunAsync(nameof(MemberDbSyncInvokable), InvokeCore, logger);
+
+    private async Task InvokeCore()
     {
         logger.LogInformation("Running members database synchronization");
 

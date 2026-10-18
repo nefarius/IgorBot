@@ -37,6 +37,18 @@ public sealed class LurkerReconciliationPolicyTests
         LurkerReconciliationPolicy.NeedsOnboarding(Member(true))
             .Should().BeFalse();
 
+    [Fact]
+    public void RotateAfter_StartsAfterCursorAndWraps() =>
+        LurkerReconciliationPolicy.RotateAfter<ulong>([5, 1, 9, 3], x => x, 3)
+            .Should().Equal(5UL, 9UL, 1UL, 3UL);
+
+    [Fact]
+    public void RotateAfter_NoCursorOrPastEnd_KeepsSortedOrder()
+    {
+        LurkerReconciliationPolicy.RotateAfter<ulong>([5, 1, 3], x => x, 0).Should().Equal(1UL, 3UL, 5UL);
+        LurkerReconciliationPolicy.RotateAfter<ulong>([5, 1, 3], x => x, 9).Should().Equal(1UL, 3UL, 5UL);
+    }
+
     private static GuildMember Member(bool inProgress = false) => new()
     {
         GuildId = 1, MemberId = 2, Member = "m", Mention = "<@2>", IsOnboardingInProgress = inProgress

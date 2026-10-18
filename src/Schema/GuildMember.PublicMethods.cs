@@ -231,8 +231,9 @@ internal sealed partial class GuildMember
             new() { GuildId = guild.Id, ChannelId = channel.Id, ChannelName = channel.Name, Mention = channel.Mention };
         await db.SaveAsync(newbieChannel);
 
+        // Targeted update: don't overwrite concurrent changes to the rest of the member document.
+        await db.Update<GuildMember>().MatchID(ID).Modify(m => m.Channel, newbieChannel).ExecuteAsync();
         Channel = newbieChannel;
-        await db.SaveAsync(this);
     }
 
     /// <summary>
@@ -278,8 +279,8 @@ internal sealed partial class GuildMember
             await statusMsg.ModifyAsync(messageBuilder);
 
             // Store in DB
+            await db.Update<GuildMember>().MatchID(ID).Modify(m => m.Application, application).ExecuteAsync();
             Application = application;
-            await db.SaveAsync(this);
         }
         catch
         {

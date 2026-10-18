@@ -5,6 +5,7 @@ using Coravel;
 using IgorBot.Core;
 using IgorBot.Handlers;
 using IgorBot.Invocables;
+using IgorBot.Schema;
 using IgorBot.Services;
 
 using MongoDB.Driver;
@@ -40,6 +41,14 @@ IHostBuilder builder = Host.CreateDefaultBuilder(args)
 
         bool migrationDryRun = hostContext.Configuration.GetValue<bool>("Bot:Migration:DryRun");
         GuildMemberStatusMigration.RunAsync(db, migrationDryRun).GetAwaiter().GetResult();
+
+        // A crash mid-onboarding would leave this flag set forever and block healing; the queue is empty at startup.
+        db.Update<GuildMember>()
+            .Match(m => m.IsOnboardingInProgress)
+            .Modify(m => m.IsOnboardingInProgress, false)
+            .ExecuteAsync()
+            .GetAwaiter()
+            .GetResult();
 
         services.AddSingleton<IDiscordReadinessService, DiscordReadinessService>();
         services.AddSingleton<IHoneypotBanClient, DiscordHoneypotBanClient>();

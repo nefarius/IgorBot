@@ -4,8 +4,10 @@ using DSharpPlus.Exceptions;
 
 using IgorBot.Core;
 using IgorBot.Schema;
+using IgorBot.Services;
 using IgorBot.Util;
 
+using MongoDB.Driver;
 using MongoDB.Entities;
 
 namespace IgorBot.Handlers;
@@ -16,6 +18,7 @@ namespace IgorBot.Handlers;
 internal sealed class NewMemberHandler(
     DB db,
     DiscordClient client,
+    IGuildConfigService guildConfigService,
     ILogger<NewMemberHandler> logger)
 {
     public async Task ProcessAsync(NewMemberMessage message)
@@ -40,16 +43,18 @@ internal sealed class NewMemberHandler(
             return;
         }
 
-        dbMember.IsOnboardingInProgress = true;
-        await db.SaveAsync(dbMember);
+        if (!await TryClaimOnboardingAsync(dbMember))
+        {
+            logger.LogWarning("Member {Member} is already being onboarded elsewhere, aborting", dbMember);
+            return;
+        }
 
         try
         {
-            // The queued snapshot can be stale when many members are submitted at once (e.g. reconciliation),
-            // which would hand out the same channel number repeatedly. Always use the current counter.
-            GuildProperties guildProperties =
-                await db.Find<GuildProperties>().OneAsync(message.GuildProperties.ID) ?? message.GuildProperties;
-            GuildConfig guildConfig = message.GuildConfig;
+            // The queued config can be stale when many members are submitted at once (e.g. reconciliation)
+            // or settings changed while queued, so prefer the current one.
+            GuildConfig guildConfig = await guildConfigService.GetAsync(message.GuildConfig.GuildId) ??
+                                      message.GuildConfig;
 
             if (guildConfig.StrangerStatusChannelId == 0 || guildConfig.ApplicationCategoryId == 0)
             {
@@ -79,9 +84,6 @@ internal sealed class NewMemberHandler(
             }
 
             logger.LogInformation("Application category: {Category}", parentCategory);
-
-            string applicationChannelName =
-                string.Format(guildConfig.ApplicationChannelNameFormat, guildProperties.ApplicationChannels);
 
             logger.LogDebug("Building overwrites");
 
@@ -137,6 +139,11 @@ internal sealed class NewMemberHandler(
 
                 try
                 {
+                    // Reserve the number atomically so queued members can never share a channel name.
+                    ulong channelNumber = await ReserveChannelNumberAsync(guildConfig.GuildId);
+                    string applicationChannelName =
+                        string.Format(guildConfig.ApplicationChannelNameFormat, channelNumber);
+
                     logger.LogDebug("Attempting to create channel {Channel}", applicationChannelName);
 
                     //
@@ -154,12 +161,6 @@ internal sealed class NewMemberHandler(
                     try
                     {
                         //
-                        // Channel created successfully, increment and save counter
-                        // 
-                        guildProperties.ApplicationChannels++;
-                        await db.SaveAsync(guildProperties);
-
-                        //
                         // Store member to channel association
                         // 
                         await dbMember.CreateNewbieChannel(db, guild, channel);
@@ -174,16 +175,6 @@ internal sealed class NewMemberHandler(
                         catch (Exception deleteEx)
                         {
                             logger.LogError(deleteEx, "Failed to delete orphan channel {ChannelId}", channel.Id);
-                        }
-
-                        guildProperties.ApplicationChannels--;
-                        try
-                        {
-                            await db.SaveAsync(guildProperties);
-                        }
-                        catch (Exception rollbackEx)
-                        {
-                            logger.LogError(rollbackEx, "Failed to roll back ApplicationChannels counter");
                         }
 
                         return;
@@ -211,7 +202,7 @@ internal sealed class NewMemberHandler(
                 catch (Exception ex)
                 {
                     logger.LogError(ex, "Sending welcome message failed, rolling back channel creation");
-                    await RollbackChannelCreationAsync(dbMember, channel, guildProperties);
+                    await RollbackChannelCreationAsync(dbMember, channel);
                     return;
                 }
             }
@@ -230,7 +221,7 @@ internal sealed class NewMemberHandler(
                     if (createdChannel && channel is not null)
                     {
                         logger.LogError(ex, "Creating status widget failed, rolling back channel creation");
-                        await RollbackChannelCreationAsync(dbMember, channel, guildProperties);
+                        await RollbackChannelCreationAsync(dbMember, channel);
                     }
                     else
                     {
@@ -288,19 +279,70 @@ internal sealed class NewMemberHandler(
 
                 if (createdChannel && channel is not null)
                 {
-                    await RollbackChannelCreationAsync(dbMember, channel, guildProperties);
+                    await RollbackChannelCreationAsync(dbMember, channel);
                 }
             }
         }
         finally
         {
-            dbMember.IsOnboardingInProgress = false;
-            await db.SaveAsync(dbMember);
+            await SetOnboardingInProgressAsync(dbMember, false);
         }
     }
 
-    private async Task RollbackChannelCreationAsync(GuildMember dbMember, DiscordChannel channel,
-        GuildProperties guildProperties)
+    /// <summary>
+    ///     Atomically sets the in-progress flag only if nobody else holds it.
+    /// </summary>
+    private async Task<bool> TryClaimOnboardingAsync(GuildMember member)
+    {
+        UpdateResult result = await db.Update<GuildMember>()
+            .Match(m => m.Eq(f => f.ID, member.ID) & m.Ne(f => f.IsOnboardingInProgress, true))
+            .Modify(m => m.IsOnboardingInProgress, true)
+            .ExecuteAsync();
+
+        if (result.ModifiedCount != 1)
+        {
+            return false;
+        }
+
+        member.IsOnboardingInProgress = true;
+        return true;
+    }
+
+    /// <summary>
+    ///     Targeted update so a long-running onboarding never overwrites concurrent changes to the member document.
+    /// </summary>
+    private async Task SetOnboardingInProgressAsync(GuildMember member, bool value)
+    {
+        member.IsOnboardingInProgress = value;
+        await db.Update<GuildMember>()
+            .MatchID(member.ID)
+            .Modify(m => m.IsOnboardingInProgress, value)
+            .ExecuteAsync();
+    }
+
+    /// <summary>
+    ///     Atomically takes the next channel number. Numbers are never handed back, so rollbacks leave gaps
+    ///     instead of risking duplicates.
+    /// </summary>
+    private async Task<ulong> ReserveChannelNumberAsync(ulong guildId)
+    {
+        string id = guildId.ToString();
+        GuildProperties? before = await db.Collection<GuildProperties>().FindOneAndUpdateAsync(
+            Builders<GuildProperties>.Filter.Eq(g => g.ID, id),
+            Builders<GuildProperties>.Update.Inc(g => g.ApplicationChannels, 1UL),
+            new FindOneAndUpdateOptions<GuildProperties> { ReturnDocument = ReturnDocument.Before });
+
+        if (before is not null)
+        {
+            return before.ApplicationChannels;
+        }
+
+        // First use for this guild: create the document, then reserve again.
+        await db.SaveAsync(new GuildProperties { GuildId = guildId });
+        return await ReserveChannelNumberAsync(guildId);
+    }
+
+    private async Task RollbackChannelCreationAsync(GuildMember dbMember, DiscordChannel channel)
     {
         try
         {
@@ -319,18 +361,6 @@ internal sealed class NewMemberHandler(
         {
             logger.LogError(ex, "Failed to delete channel during rollback");
             throw;
-        }
-        finally
-        {
-            guildProperties.ApplicationChannels--;
-            try
-            {
-                await db.SaveAsync(guildProperties);
-            }
-            catch (Exception rollbackEx)
-            {
-                logger.LogError(rollbackEx, "Failed to roll back ApplicationChannels counter");
-            }
         }
     }
 }
