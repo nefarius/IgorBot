@@ -43,7 +43,11 @@ internal sealed class NewMemberHandler(
             return;
         }
 
-        await SetOnboardingInProgressAsync(dbMember, true);
+        if (!await TryClaimOnboardingAsync(dbMember))
+        {
+            logger.LogWarning("Member {Member} is already being onboarded elsewhere, aborting", dbMember);
+            return;
+        }
 
         try
         {
@@ -283,6 +287,25 @@ internal sealed class NewMemberHandler(
         {
             await SetOnboardingInProgressAsync(dbMember, false);
         }
+    }
+
+    /// <summary>
+    ///     Atomically sets the in-progress flag only if nobody else holds it.
+    /// </summary>
+    private async Task<bool> TryClaimOnboardingAsync(GuildMember member)
+    {
+        UpdateResult result = await db.Update<GuildMember>()
+            .Match(m => m.Eq(f => f.ID, member.ID) & m.Ne(f => f.IsOnboardingInProgress, true))
+            .Modify(m => m.IsOnboardingInProgress, true)
+            .ExecuteAsync();
+
+        if (result.ModifiedCount != 1)
+        {
+            return false;
+        }
+
+        member.IsOnboardingInProgress = true;
+        return true;
     }
 
     /// <summary>
