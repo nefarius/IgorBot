@@ -36,6 +36,7 @@
         <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets"/>
         <PackageReference Include="MongoDB.Entities"/>
         <PackageReference Include="OllamaSharp"/>
+        <PackageReference Include="Polly.Core"/>
         <PackageReference Include="Serilog.Extensions.Logging"/>
         <PackageReference Include="Serilog.Settings.Configuration"/>
         <PackageReference Include="Serilog.Sinks.Console"/>

@@ -443,11 +443,6 @@
         "resolved": "13.0.4",
         "contentHash": "pdgNNMai3zv51W5aq268sujXUyx7SNdE2bj1wZcWjAQrKMFZV260lbqYop1d2GM67JI1huLRwxo9ZqnfF/lC6A=="
       },
-      "Polly.Core": {
-        "type": "Transitive",
-        "resolved": "8.7.0",
-        "contentHash": "BS2t+nsBer16PIebCEPNBK5fgMisADQyRCd7K+BgkMWpFmSaiYE+rVVNpFhGRqUkJmNSLmw0uCNzHHWfgml28Q=="
-      },
       "Raffinert.FuzzySharp": {
         "type": "Transitive",
         "resolved": "3.0.6",
@@ -544,6 +539,7 @@
           "Microsoft.VisualStudio.Azure.Containers.Tools.Targets": "[1.23.0, )",
           "MongoDB.Entities": "[25.1.0, )",
           "OllamaSharp": "[5.5.0, )",
+          "Polly.Core": "[8.7.0, )",
           "Serilog.Extensions.Logging": "[10.0.0, )",
           "Serilog.Settings.Configuration": "[10.0.1, )",
           "Serilog.Sinks.Console": "[6.1.1, )"
@@ -647,6 +643,12 @@
           "Microsoft.Extensions.AI": "10.8.0",
           "Microsoft.Extensions.AI.Abstractions": "10.8.0"
         }
+      },
+      "Polly.Core": {
+        "type": "CentralTransitive",
+        "requested": "[8.7.0, )",
+        "resolved": "8.7.0",
+        "contentHash": "BS2t+nsBer16PIebCEPNBK5fgMisADQyRCd7K+BgkMWpFmSaiYE+rVVNpFhGRqUkJmNSLmw0uCNzHHWfgml28Q=="
       },
       "Serilog.Extensions.Logging": {
         "type": "CentralTransitive",
