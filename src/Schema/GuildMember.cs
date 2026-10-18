@@ -128,6 +128,10 @@ internal sealed partial class GuildMember : IEntity
         statusEmbed.AddField("Member", Mention);
         statusEmbed.AddField("Database ID", ID);
         statusEmbed.AddField("Status", Status.ToString(), true);
+        if (Application?.Decision is { } decision)
+        {
+            statusEmbed.AddField("Screening", decision.ToScreeningText());
+        }
         statusEmbed.AddField("Created at", Formatter.Timestamp(CreatedAt));
         statusEmbed.AddField("Joined at", Formatter.Timestamp(JoinedAt), true);
 

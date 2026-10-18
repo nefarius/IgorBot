@@ -17,6 +17,7 @@ internal partial class ApplicationWorkflow(
     ILogger<ApplicationWorkflow> logger,
     IGuildConfigService guildConfigService,
     IOnboardingQueue onboardingQueue,
+    IMemberPromotionService promotionService,
     IHostApplicationLifetime lifetime)
     :
         IEventHandler<GuildMemberAddedEventArgs>,
@@ -171,63 +172,9 @@ internal partial class ApplicationWorkflow(
         GuildMember entry,
         DiscordMember member, GuildConfig guildConfig)
     {
-        DiscordRole strangerRole = args.Guild.Roles[guildConfig.StrangerRoleId];
-        DiscordRole memberRole = args.Guild.Roles[guildConfig.MemberRoleId];
-
-        // Perform Discord mutations before persisting so the DB is only updated
-        // when both role operations have actually succeeded.
-        await member.GrantRoleAsync(memberRole);
-
-        try
-        {
-            await member.RevokeRoleAsync(strangerRole);
-        }
-        catch (Exception ex)
-        {
-            // Member role was already granted; log and surface the error so the
-            // moderator can manually revoke the stranger role.
-            logger.LogError(ex, "RevokeRoleAsync failed for {Member} after GrantRoleAsync succeeded; " +
-                                "member role has been granted but stranger role was not removed", member);
-            throw;
-        }
-
-        // Both Discord mutations succeeded — persist the promotion.
-        // Note: GuildMemberUpdated also calls TransitionToAsync(FullMember) when the
-        // role-add event fires; the guard in TransitionToAsync makes that a no-op here.
-        await entry.TransitionToAsync(db, MemberStatus.FullMember, actorId: args.User.Id);
-
-        logger.LogInformation("{User} promoted {Member}",
-            args.User, member);
-
+        await promotionService.PromoteAsync(
+            args.Guild, member, entry, guildConfig, actorId: args.User.Id, reason: null);
         await entry.RespondToInteraction(args, client);
-
-        if (!string.IsNullOrEmpty(guildConfig.MemberWelcomeTemplate))
-        {
-            try
-            {
-                DiscordChannel? welcomeChannel = args.Guild.FindChannel(guildConfig.MemberWelcomeMessageChannelId);
-                if (welcomeChannel is null)
-                {
-                    logger.LogWarning(
-                        "Member welcome channel {ChannelId} is not cached for guild {GuildId}",
-                        guildConfig.MemberWelcomeMessageChannelId, args.Guild.Id);
-                }
-                else
-                {
-                    await welcomeChannel
-                        .SendMessageAsync(string.Format(guildConfig.MemberWelcomeTemplate, member.Mention));
-                }
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Failed to deliver welcome message");
-            }
-        }
-        else
-        {
-            logger.LogWarning("MemberWelcomeTemplate is not configured for guild {GuildId}, skipping welcome message",
-                args.Guild.Id);
-        }
     }
 
     private async Task HandleStrangerBan(ComponentInteractionCreatedEventArgs args, DiscordClient client,

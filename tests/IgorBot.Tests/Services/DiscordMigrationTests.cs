@@ -145,6 +145,16 @@ public sealed class ModerationWidgetSpecTests
     }
 
     [Fact]
+    public void SubmittedApplication_KeepsApproveAndRejectButtonsWithoutAClassifier()
+    {
+        IEnumerable<string> labels = ModerationWidgetSpec.MemberActions("member")
+            .Concat(ModerationWidgetSpec.ApplicationActions("app", questionnaireSubmitted: true, autoKickEnabled: false))
+            .Select(button => button.Label);
+
+        labels.Should().Equal("Kick", "Ban", "Promote");
+    }
+
+    [Fact]
     public void ApplicationActions_DependOnSubmissionAndAutoKick()
     {
         ModerationWidgetSpec.ApplicationActions("app", questionnaireSubmitted: false, autoKickEnabled: true)

@@ -1,11 +1,13 @@
 using DSharpPlus;
 using DSharpPlus.Commands;
+using DSharpPlus.Entities;
 using DSharpPlus.Interactivity;
 
 using FluentAssertions;
 
 using IgorBot.Core;
 using IgorBot.Modules;
+using IgorBot.Schema;
 using IgorBot.Services;
 
 using Microsoft.Extensions.DependencyInjection;
@@ -30,6 +32,12 @@ public sealed class DiscordCompositionTests(MongoFixture mongo)
         services.AddSingleton<IOnboardingQueue, UnusedOnboardingQueue>();
         services.AddSingleton<IHoneypotEnforcementService, UnusedHoneypotEnforcement>();
         services.AddSingleton<IHoneypotBanClient, UnusedHoneypotBanClient>();
+        services.AddSingleton(SystemOneSettings.Create(new SystemOneConfig()));
+        services.AddSingleton<IOnboardingDecisionClient, UnconfiguredOnboardingDecisionClient>();
+        services.AddSingleton<IOnboardingDecisionService, OnboardingDecisionService>();
+        services.AddSingleton<ISystemOneProbe, SystemOneProbe>();
+        services.AddSingleton<IOnboardingAutomationExecutor, OnboardingAutomationExecutor>();
+        services.AddSingleton<IMemberPromotionService, UnusedPromotionService>();
         services.AddSingleton<IDiscordReadinessService, DiscordReadinessService>();
         services.AddSingleton<IHostApplicationLifetime, IdleHostLifetime>();
         IgorDiscordRegistration.AddIgorDiscord(services, "composition-test-token");
@@ -94,6 +102,19 @@ public sealed class DiscordCompositionTests(MongoFixture mongo)
         public void StopApplication()
         {
         }
+    }
+
+    private sealed class UnusedPromotionService : IMemberPromotionService
+    {
+        public Task PromoteAsync(
+            DiscordGuild guild,
+            DiscordMember member,
+            GuildMember entry,
+            GuildConfig guildConfig,
+            ulong? actorId,
+            string? reason,
+            CancellationToken cancellationToken = default) =>
+            Task.CompletedTask;
     }
 
     private sealed class UnusedHoneypotBanClient : IHoneypotBanClient

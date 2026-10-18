@@ -72,7 +72,8 @@ After inviting the bot to your server, run `/config setup` in Discord (Administr
 Use `/config view` to inspect the current configuration and `/config set` to update individual options. Available
 options include: stranger role, member role, application category, stranger status channel, member welcome channel,
 application channel format, templates, auto-assign stranger role, idle kick minutes, honeypot channel, moderator role,
-**enable onboarding workflow**, **honeypot exclusion role (add)**, and **honeypot exclusion role (remove)**.
+**enable onboarding workflow**, **honeypot exclusion role (add)**, **honeypot exclusion role (remove)**,
+**questionnaire screening**, **questionnaire screening context**, and **questionnaire auto-promote threshold**.
 
 ### Honeypot-only setup with `/config setup-honeypot`
 
@@ -94,6 +95,32 @@ Individual features can be enabled or disabled per guild:
 | Join role assignment | `auto_assign_stranger_role`           | Assigns stranger role on join             |
 | Onboarding workflow  | `enable_onboarding_workflow`          | When disabled: no channel/widget creation |
 | Honeypot             | `honeypot_channel` / `setup-honeypot` | Works standalone                           |
+| Questionnaire screening | Member questionnaire automation    | Off until enabled; see below              |
+
+### Optional System One screening
+
+System One can classify a completed Member questionnaire and automatically promote high-confidence `normal` submissions. `bot`, `reject`, ambiguous, and failed classifications stay in the existing moderator queue. The integration never kicks or bans.
+
+The endpoint is bot-wide. Leave `Bot:SystemOne:BaseUrl` empty to keep the client disabled. For a local PS5LM server, set the server root (`http://host:8081`, not the `/v1/systemone` path) and leave the token empty. For hosted System One, set `Bot:SystemOne:ApiToken`; Igor sends it as `Authorization: Bearer <token>`. Put that token in `Bot__SystemOne__ApiToken` through the environment or user secrets rather than in a committed JSON file.
+
+| Setting | Description | Default |
+|---------|-------------|---------|
+| `Bot:SystemOne:BaseUrl` | Ollama-compatible System One server root | empty |
+| `Bot:SystemOne:Model` | Model name. PS5LM uses the model already loaded | `loaded` |
+| `Bot:SystemOne:ApiToken` | Optional bearer token | empty |
+| `Bot:SystemOne:TimeoutSeconds` | Request timeout | `10` |
+
+Each Member questionnaire then opts in through `/config set`:
+
+| Option | Description |
+|--------|-------------|
+| Questionnaire screening | `true` or `false`. Existing questionnaires stay off |
+| Questionnaire screening context | What the server and questionnaire are for. Sent with the answers; usernames are not |
+| Questionnaire auto-promote threshold | Probability from `0` to `1`. A `normal` result at or above this value is promoted |
+
+`/config view` shows whether screening is enabled, the threshold, and the context. The moderator submission and status panel show the recommendation, probabilities, confidence, threshold, and whether automatic promotion happened.
+
+Administrators can run `/systemone test` at any time. It sends one canned onboarding decision and replies ephemerally with the endpoint, model, elapsed time, verdict, and probabilities. A connection or model failure is reported there and does not change any member.
 
 ### Optional: Initial config via appsettings
 

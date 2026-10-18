@@ -122,6 +122,32 @@ public sealed class GuildConfig
 }
 
 /// <summary>
+///     Bot-wide connection settings for a System One decision endpoint.
+/// </summary>
+internal sealed class SystemOneConfig
+{
+    /// <summary>
+    ///     Server root, for example <c>http://192.168.30.187:8081</c>. Empty disables the integration.
+    /// </summary>
+    public string? BaseUrl { get; set; }
+
+    /// <summary>
+    ///     Model name sent to Ollama-compatible servers. PS5LM ignores it and uses the loaded model.
+    /// </summary>
+    public string Model { get; set; } = "loaded";
+
+    /// <summary>
+    ///     Optional bearer token. Prefer <c>Bot__SystemOne__ApiToken</c> over storing this in a file.
+    /// </summary>
+    public string? ApiToken { get; set; }
+
+    /// <summary>
+    ///     Per-request timeout in seconds.
+    /// </summary>
+    public int TimeoutSeconds { get; set; } = 10;
+}
+
+/// <summary>
 ///     A question to ask.
 /// </summary>
 [SuppressMessage("ReSharper", "CollectionNeverUpdated.Global")]
@@ -220,6 +246,49 @@ public sealed class Questionnaire
     ///     Optional list of channel IDs where the command should be denied.
     /// </summary>
     public IList<ulong> BlockedChannelIds { get; set; } = new List<ulong>();
+
+    /// <summary>
+    ///     Optional automatic screening for submitted answers.
+    /// </summary>
+    public QuestionnaireAutomation Automation
+    {
+        get => _automation ??= new QuestionnaireAutomation();
+        set => _automation = value ?? new QuestionnaireAutomation();
+    }
+
+    private QuestionnaireAutomation? _automation = new();
+}
+
+/// <summary>
+///     Well-known questionnaire dictionary keys.
+/// </summary>
+public static class QuestionnaireKeys
+{
+    /// <summary>
+    ///     The membership application questionnaire.
+    /// </summary>
+    public const string Member = "Member";
+}
+
+/// <summary>
+///     Opt-in policy for classifying one questionnaire with System One.
+/// </summary>
+public sealed class QuestionnaireAutomation
+{
+    /// <summary>
+    ///     When false, submissions follow the existing moderator workflow.
+    /// </summary>
+    public bool Enabled { get; set; }
+
+    /// <summary>
+    ///     Short description of the server and questionnaire, included in the decision request.
+    /// </summary>
+    public string? Context { get; set; }
+
+    /// <summary>
+    ///     Minimum <c>normal</c> probability required before automatic promotion.
+    /// </summary>
+    public double AutoPromoteNormalProbability { get; set; } = 0.80;
 }
 
 [SuppressMessage("ReSharper", "CollectionNeverUpdated.Global")]
@@ -228,4 +297,6 @@ internal sealed class IgorConfig
     public DiscordConfig Discord { get; set; } = null!;
 
     public Dictionary<string, GuildConfig> Guilds { get; set; } = new();
+
+    public SystemOneConfig SystemOne { get; set; } = new();
 }
