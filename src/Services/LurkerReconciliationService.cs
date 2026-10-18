@@ -28,6 +28,12 @@ internal sealed class LurkerReconciliationService(
     IDiscordReadinessService readiness,
     ILogger<LurkerReconciliationService> logger) : ILurkerReconciliationService
 {
+    /// <summary>
+    ///     Upper bound of members queued per guild and scan, so a large backlog can't flood the Discord API with
+    ///     channel creations. Remaining members are picked up by the next scan (or <c>/jobs run</c>).
+    /// </summary>
+    internal const int MaxSubmissionsPerScan = 50;
+
     private readonly Dictionary<ulong, SemaphoreSlim> _locks = new();
 
     public async Task ReconcileAllAsync(CancellationToken ct = default)
@@ -112,6 +118,14 @@ internal sealed class LurkerReconciliationService(
         foreach (DiscordMember member in members)
         {
             ct.ThrowIfCancellationRequested();
+
+            if (submitted >= MaxSubmissionsPerScan)
+            {
+                logger.LogWarning(
+                    "Lurker reconciliation for {Guild} hit the cap of {Cap} submissions, remaining members wait for the next scan",
+                    guild, MaxSubmissionsPerScan);
+                break;
+            }
 
             if (!LurkerReconciliationPolicy.HasOnlyStrangerRole(
                     member.IsBot, member.Roles.Select(r => r.Id).ToList(), config.StrangerRoleId))

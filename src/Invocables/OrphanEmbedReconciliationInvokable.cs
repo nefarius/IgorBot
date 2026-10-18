@@ -36,7 +36,9 @@ internal class OrphanEmbedReconciliationInvokable(
     /// </summary>
     private static readonly TimeSpan DiscordApiThrottleDelay = TimeSpan.FromSeconds(1.2);
 
-    public async Task Invoke()
+    public Task Invoke() => SingleFlight.RunAsync(nameof(OrphanEmbedReconciliationInvokable), InvokeCore, logger);
+
+    private async Task InvokeCore()
     {
         logger.LogInformation("Running orphan application embed reconciliation");
 
