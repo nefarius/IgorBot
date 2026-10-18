@@ -1,5 +1,6 @@
 using DSharpPlus;
 using DSharpPlus.Entities;
+using DSharpPlus.Exceptions;
 using DSharpPlus.EventArgs;
 
 using MongoDB.Entities;
@@ -248,34 +249,65 @@ internal sealed partial class GuildMember
 
         // Create message so we have a unique ID
         DiscordMessage statusMsg = await strangerStatusChannel.SendMessageAsync(initialEmbed);
+        StrangerApplicationEmbed? application = null;
 
-        // Create application entity
-        StrangerApplicationEmbed application = new()
+        try
         {
-            GuildId = guild.Id, ChannelId = strangerStatusChannel.Id, MessageId = statusMsg.Id
-        };
+            // Create application entity
+            application = new StrangerApplicationEmbed
+            {
+                GuildId = guild.Id, ChannelId = strangerStatusChannel.Id, MessageId = statusMsg.Id
+            };
 
-        // generates entity ID
-        await db.SaveAsync(application);
+            // generates entity ID
+            await db.SaveAsync(application);
 
-        DiscordMessageBuilder messageBuilder = new DiscordMessageBuilder().AddEmbed(initialEmbed);
+            DiscordMessageBuilder messageBuilder = new DiscordMessageBuilder().AddEmbed(initialEmbed);
 
-        if (!HasLeftGuild)
-        {
-            messageBuilder.AddActionRowComponent(ButtonComponents);
+            if (!HasLeftGuild)
+            {
+                messageBuilder.AddActionRowComponent(ButtonComponents);
+            }
+
+            if (!HasLeftGuild && application.ButtonComponents.Any())
+            {
+                messageBuilder.AddActionRowComponent(application.ButtonComponents);
+            }
+
+            // Add action buttons to message
+            await statusMsg.ModifyAsync(messageBuilder);
+
+            // Store in DB
+            Application = application;
+            await db.SaveAsync(this);
         }
-
-        if (!HasLeftGuild && application.ButtonComponents.Any())
+        catch
         {
-            messageBuilder.AddActionRowComponent(application.ButtonComponents);
+            // Don't leave a half-created widget behind (message and/or application record).
+            Application = null;
+            try
+            {
+                await statusMsg.DeleteAsync();
+            }
+            catch (Exception)
+            {
+                // best effort
+            }
+
+            if (application is not null && !application.HasDefaultID())
+            {
+                try
+                {
+                    await db.DeleteAsync(application);
+                }
+                catch (Exception)
+                {
+                    // best effort
+                }
+            }
+
+            throw;
         }
-
-        // Add action buttons to message
-        await statusMsg.ModifyAsync(messageBuilder);
-
-        // Store in DB
-        Application = application;
-        await db.SaveAsync(this);
     }
 
     /// <summary>
@@ -334,6 +366,36 @@ internal sealed partial class GuildMember
         await UpdateApplicationWidget(client, true);
 
         await db.DeleteAsync(Application!);
+        Application = null;
+        await db.SaveAsync(this);
+    }
+
+    /// <summary>
+    ///     Removes the application widget entirely: deletes the Discord message and the application record.
+    ///     Unlike <see cref="DeleteApplicationWidget" />, the message is not kept as a final-status record.
+    /// </summary>
+    public async Task RemoveApplicationWidget(DB db, DiscordClient client)
+    {
+        if (Application is null)
+        {
+            return;
+        }
+
+        try
+        {
+            DiscordChannel? channel = client.Guilds[GuildId].FindChannel(Application.ChannelId);
+            if (channel is not null)
+            {
+                DiscordMessage message = await channel.GetMessageAsync(Application.MessageId);
+                await message.DeleteAsync();
+            }
+        }
+        catch (NotFoundException)
+        {
+            // message already gone
+        }
+
+        await db.DeleteAsync(Application);
         Application = null;
         await db.SaveAsync(this);
     }

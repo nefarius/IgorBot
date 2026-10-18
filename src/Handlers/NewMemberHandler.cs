@@ -274,7 +274,7 @@ internal sealed class NewMemberHandler(
                 {
                     try
                     {
-                        await dbMember.DeleteApplicationWidget(db, client);
+                        await dbMember.RemoveApplicationWidget(db, client);
                     }
                     catch (Exception widgetEx)
                     {
