@@ -159,6 +159,7 @@ internal sealed class SystemOneStartupHealthCheck : IHostedService
                 {
                     string reason = args.Outcome.Exception?.GetType().Name ??
                                     $"HTTP {(int)args.Outcome.Result!.StatusCode}";
+                    args.Outcome.Result?.Dispose();
                     _logger.LogInformation(
                         "System One endpoint {Endpoint} not reachable yet ({Reason}), retry {Attempt} of {Maximum} in {Delay}",
                         reportedEndpoint,

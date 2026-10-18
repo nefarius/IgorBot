@@ -93,6 +93,21 @@ public sealed class SystemOneStartupHealthCheckTests
     }
 
     [Fact]
+    public async Task RetriedResponses_AreDisposedBeforeTheNextRequest()
+    {
+        DisposalTrackingHandler handler = new();
+        CapturingLogger logger = new();
+        SystemOneStartupHealthCheck check = Create(handler, logger);
+
+        await RunUntilSettled(check);
+
+        handler.Calls.Should().Be(7);
+        handler.DisposedBeforeEveryRetry.Should().BeTrue();
+        handler.Content!.IsDisposed.Should().BeTrue();
+        Warnings(logger).Should().ContainSingle().Which.Message.Should().Contain("503");
+    }
+
+    [Fact]
     public async Task NonSuccessStatus_DoesNotWaitForTheBody()
     {
         RecordingHandler handler = new()
@@ -388,6 +403,38 @@ public sealed class SystemOneStartupHealthCheckTests
             {
                 Content = content
             };
+        }
+    }
+
+    private sealed class DisposalTrackingHandler : HttpMessageHandler
+    {
+        public int Calls { get; private set; }
+        public bool DisposedBeforeEveryRetry { get; private set; } = true;
+        public DisposalTrackingContent? Content { get; private set; }
+
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            Calls++;
+            DisposedBeforeEveryRetry &= Content is null || Content.IsDisposed;
+            Content = new DisposalTrackingContent();
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable) { Content = Content });
+        }
+    }
+
+    private sealed class DisposalTrackingContent : StringContent
+    {
+        public DisposalTrackingContent() : base("")
+        {
+        }
+
+        public bool IsDisposed { get; private set; }
+
+        protected override void Dispose(bool disposing)
+        {
+            IsDisposed = true;
+            base.Dispose(disposing);
         }
     }
 
