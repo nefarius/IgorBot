@@ -35,7 +35,7 @@ public enum ManualJob
 }
 
 [Command("jobs"), Description("Run scheduled maintenance jobs on demand. Administrator only.")]
-[RequirePermissions(DiscordPermission.Administrator)]
+[RequirePermissions(botPermissions: [], userPermissions: [DiscordPermission.Administrator])]
 [SuppressMessage("ReSharper", "UnusedMember.Global")]
 [SuppressMessage("ReSharper", "ClassNeverInstantiated.Global")]
 internal sealed class JobCommands(IQueue queue, ILogger<JobCommands> logger)
@@ -51,7 +51,7 @@ internal sealed class JobCommands(IQueue queue, ILogger<JobCommands> logger)
         switch (job)
         {
             case ManualJob.LurkerReconciliation:
-                queue.QueueInvocable<LurkerReconciliationInvokable>();
+                queue.QueueCancellableInvocable<LurkerReconciliationInvokable>();
                 break;
             case ManualJob.MemberDbSync:
                 queue.QueueInvocable<MemberDbSyncInvokable>();

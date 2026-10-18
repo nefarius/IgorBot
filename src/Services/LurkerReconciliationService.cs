@@ -32,7 +32,7 @@ internal sealed class LurkerReconciliationService(
 
     public async Task ReconcileAllAsync(CancellationToken ct = default)
     {
-        IReadOnlyList<GuildConfig> configs = await guildConfigService.GetAllAsync();
+        IReadOnlyList<GuildConfig> configs = await guildConfigService.GetAllAsync(ct);
         foreach (GuildConfig config in configs)
         {
             ct.ThrowIfCancellationRequested();
@@ -78,7 +78,7 @@ internal sealed class LurkerReconciliationService(
 
     private async Task ReconcileCoreAsync(ulong guildId, CancellationToken ct)
     {
-        GuildConfig? config = await guildConfigService.GetAsync(guildId);
+        GuildConfig? config = await guildConfigService.GetAsync(guildId, ct);
         if (config is null || !config.EnableOnboardingWorkflow || config.StrangerRoleId == 0 ||
             config.StrangerStatusChannelId == 0 || config.ApplicationCategoryId == 0)
         {
@@ -144,7 +144,7 @@ internal sealed class LurkerReconciliationService(
                     continue;
                 }
 
-                logger.LogInformation("Reconciliation: {Member} lacks channel and widget, submitting", member);
+                logger.LogInformation("Reconciliation: {Member} is missing channel or widget, submitting", member);
                 await submitter.SubmitAsync(guild, config, dbMember, ct);
                 submitted++;
             }
@@ -174,6 +174,8 @@ internal static class LurkerReconciliationPolicy
 
     public static bool NeedsOnboarding(GuildMember member)
     {
-        return member.Channel is null && member.Application is null && !member.IsOnboardingInProgress;
+        // Partial records (channel without widget or vice versa) are repaired too; the onboarding
+        // handler only recreates the missing artifact.
+        return (member.Channel is null || member.Application is null) && !member.IsOnboardingInProgress;
     }
 }
