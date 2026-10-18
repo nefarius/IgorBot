@@ -77,6 +77,7 @@ IHostBuilder builder = Host.CreateDefaultBuilder(args)
                 : new UnconfiguredOnboardingDecisionClient());
         services.AddSingleton<IOnboardingDecisionService, OnboardingDecisionService>();
         services.AddSingleton<ISystemOneProbe, SystemOneProbe>();
+        services.AddHostedService<SystemOneStartupHealthCheck>();
         services.AddSingleton<IOnboardingAutomationExecutor, OnboardingAutomationExecutor>();
         services.AddSingleton<IMemberPromotionService, MemberPromotionService>();
 
