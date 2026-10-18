@@ -1,4 +1,5 @@
 using System.Net.Http.Headers;
+using System.Text;
 using System.Text.Json;
 
 namespace IgorBot.Services;
@@ -8,6 +9,7 @@ namespace IgorBot.Services;
 /// </summary>
 internal sealed class SystemOneStartupHealthCheck : IHostedService
 {
+    private const int MaximumHealthBodyLength = 1024;
     private readonly SystemOneSettings _settings;
     private readonly ILogger<SystemOneStartupHealthCheck> _logger;
     private readonly HttpMessageHandler? _handler;
@@ -102,7 +104,7 @@ internal sealed class SystemOneStartupHealthCheck : IHostedService
 
             string body = response.Content is null
                 ? ""
-                : await response.Content.ReadAsStringAsync(cancellationToken);
+                : await ReadHealthBodyAsync(response.Content, cancellationToken);
             if (!TryReadStatus(body, out string? status))
             {
                 _logger.LogWarning(
@@ -146,13 +148,38 @@ internal sealed class SystemOneStartupHealthCheck : IHostedService
         return await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
     }
 
+    private async Task<string> ReadHealthBodyAsync(HttpContent content, CancellationToken cancellationToken)
+    {
+        using CancellationTokenSource timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(_settings.Timeout);
+        await using Stream stream = await content.ReadAsStreamAsync(timeout.Token);
+        using MemoryStream buffer = new();
+        byte[] chunk = new byte[256];
+        while (true)
+        {
+            int read = await stream.ReadAsync(chunk.AsMemory(), timeout.Token);
+            if (read == 0)
+            {
+                return Encoding.UTF8.GetString(buffer.ToArray());
+            }
+
+            if (buffer.Length + read > MaximumHealthBodyLength)
+            {
+                return "";
+            }
+
+            buffer.Write(chunk, 0, read);
+        }
+    }
+
     private static bool TryReadStatus(string body, out string? status)
     {
         status = null;
         try
         {
             using JsonDocument document = JsonDocument.Parse(body);
-            if (!document.RootElement.TryGetProperty("status", out JsonElement property) ||
+            if (document.RootElement.ValueKind != JsonValueKind.Object ||
+                !document.RootElement.TryGetProperty("status", out JsonElement property) ||
                 property.ValueKind != JsonValueKind.String)
             {
                 return false;

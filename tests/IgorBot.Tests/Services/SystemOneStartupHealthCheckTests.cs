@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net;
 using System.Text;
 
@@ -91,13 +92,54 @@ public sealed class SystemOneStartupHealthCheckTests
         handler.Calls.Should().Be(1);
     }
 
+    [Fact]
+    public async Task NonSuccessStatus_DoesNotWaitForTheBody()
+    {
+        RecordingHandler handler = new()
+        {
+            StatusCode = HttpStatusCode.ServiceUnavailable,
+            HoldBody = true
+        };
+        CapturingLogger logger = new();
+        SystemOneStartupHealthCheck check = Create(handler, logger, timeoutSeconds: 1);
+        Stopwatch watch = Stopwatch.StartNew();
+
+        await RunUntilSettled(check);
+
+        watch.Elapsed.Should().BeLessThan(TimeSpan.FromMilliseconds(500));
+        LogEntry entry = logger.Entries.Should().ContainSingle().Subject;
+        entry.Level.Should().Be(LogLevel.Warning);
+        entry.Message.Should().Contain("503");
+        entry.Message.Should().NotContain("could not be reached");
+    }
+
     [Theory]
     [InlineData("not-json")]
     [InlineData("""{"state":"ok"}""")]
     [InlineData("""{"status":1}""")]
+    [InlineData("[]")]
+    [InlineData("\"ok\"")]
+    [InlineData("null")]
     public async Task UnreadableHealthResponse_LogsAWarning(string body)
     {
         RecordingHandler handler = new() { Body = body };
+        CapturingLogger logger = new();
+        SystemOneStartupHealthCheck check = Create(handler, logger);
+
+        await RunUntilSettled(check);
+
+        LogEntry entry = logger.Entries.Should().ContainSingle().Subject;
+        entry.Level.Should().Be(LogLevel.Warning);
+        entry.Message.Should().Contain("unreadable health response");
+    }
+
+    [Fact]
+    public async Task OversizedHealthBody_LogsAnUnreadableResponse()
+    {
+        RecordingHandler handler = new()
+        {
+            Body = "{\"status\":\"ok\",\"padding\":\"" + new string('x', 1100) + "\"}"
+        };
         CapturingLogger logger = new();
         SystemOneStartupHealthCheck check = Create(handler, logger);
 
@@ -153,6 +195,20 @@ public sealed class SystemOneStartupHealthCheckTests
     }
 
     [Fact]
+    public async Task SlowResponseBody_IsBoundedByTheConfiguredTimeout()
+    {
+        RecordingHandler handler = new() { HoldBody = true };
+        CapturingLogger logger = new();
+        SystemOneStartupHealthCheck check = Create(handler, logger, timeoutSeconds: 1);
+
+        await RunUntilSettled(check).WaitAsync(TimeSpan.FromSeconds(4));
+
+        LogEntry entry = logger.Entries.Should().ContainSingle().Subject;
+        entry.Level.Should().Be(LogLevel.Warning);
+        entry.Message.Should().Contain("could not be reached");
+    }
+
+    [Fact]
     public async Task SlowEndpoint_ReturnsBeforeTheResponseAndCancelsOnShutdown()
     {
         RecordingHandler handler = new() { Hold = true };
@@ -200,13 +256,14 @@ public sealed class SystemOneStartupHealthCheckTests
         HttpMessageHandler handler,
         CapturingLogger logger,
         string baseUrl = "http://127.0.0.1:9",
-        string? token = null)
+        string? token = null,
+        int timeoutSeconds = 2)
     {
         SystemOneSettings settings = SystemOneSettings.Create(new SystemOneConfig
         {
             BaseUrl = baseUrl,
             ApiToken = token,
-            TimeoutSeconds = 2
+            TimeoutSeconds = timeoutSeconds
         });
         return new SystemOneStartupHealthCheck(settings, logger, handler);
     }
@@ -246,6 +303,8 @@ public sealed class SystemOneStartupHealthCheckTests
 
         public bool Hold { get; init; }
 
+        public bool HoldBody { get; init; }
+
         public HttpStatusCode StatusCode { get; init; } = HttpStatusCode.OK;
 
         public string Body { get; init; } = """{"status":"ok"}""";
@@ -273,10 +332,61 @@ public sealed class SystemOneStartupHealthCheckTests
                 throw Error;
             }
 
+            HttpContent content = HoldBody
+                ? new StreamContent(new PendingBody())
+                : new StringContent(Body, Encoding.UTF8, "application/json");
             return new HttpResponseMessage(StatusCode)
             {
-                Content = new StringContent(Body, Encoding.UTF8, "application/json")
+                Content = content
             };
+        }
+    }
+
+    private sealed class PendingBody : Stream
+    {
+        public override bool CanRead => true;
+
+        public override bool CanSeek => false;
+
+        public override bool CanWrite => false;
+
+        public override long Length => throw new NotSupportedException();
+
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+
+        public override void Flush()
+        {
+        }
+
+        public override int Read(byte[] buffer, int offset, int count) =>
+            throw new NotSupportedException();
+
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+
+        public override void SetLength(long value) => throw new NotSupportedException();
+
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+        public override async Task<int> ReadAsync(
+            byte[] buffer,
+            int offset,
+            int count,
+            CancellationToken cancellationToken)
+        {
+            await Task.Delay(Timeout.Infinite, cancellationToken);
+            return 0;
+        }
+
+        public override async ValueTask<int> ReadAsync(
+            Memory<byte> buffer,
+            CancellationToken cancellationToken = default)
+        {
+            await Task.Delay(Timeout.Infinite, cancellationToken);
+            return 0;
         }
     }
 }
