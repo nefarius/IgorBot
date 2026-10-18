@@ -33,9 +33,10 @@ internal sealed class NewMemberHandler(
 
         logger.LogDebug("Got member from DB: {@Member}", dbMember);
 
-        if (dbMember.Channel is not null || dbMember.IsOnboardingInProgress)
+        // A record with only one of channel/widget is a partial setup; only the missing artifact is recreated.
+        if ((dbMember.Channel is not null && dbMember.Application is not null) || dbMember.IsOnboardingInProgress)
         {
-            logger.LogWarning("Member {Member} already has an active newbie channel, aborting", dbMember);
+            logger.LogWarning("Member {Member} already has an active newbie channel and widget, aborting", dbMember);
             return;
         }
 
@@ -125,91 +126,133 @@ internal sealed class NewMemberHandler(
 
             logger.LogDebug("Created {Count} overwrites", overwrites.Count);
 
-            DiscordChannel channel;
+            DiscordChannel? channel = null;
+            bool createdChannel = false;
 
-            try
+            if (dbMember.Channel is null)
             {
-                logger.LogDebug("Attempting to create channel {Channel}", applicationChannelName);
-
-                //
-                // Create new text channel private to the member and staff
-                // 
-                channel = await guild.CreateChannelAsync(
-                    applicationChannelName,
-                    DiscordChannelType.Text,
-                    parentCategory,
-                    overwrites: overwrites
-                );
-
-                logger.LogInformation("Created {Channel}", channel);
 
                 try
                 {
-                    //
-                    // Channel created successfully, increment and save counter
-                    // 
-                    guildProperties.ApplicationChannels++;
-                    await db.SaveAsync(guildProperties);
+                    logger.LogDebug("Attempting to create channel {Channel}", applicationChannelName);
 
                     //
-                    // Store member to channel association
+                    // Create new text channel private to the member and staff
                     // 
-                    await dbMember.CreateNewbieChannel(db, guild, channel);
+                    channel = await guild.CreateChannelAsync(
+                        applicationChannelName,
+                        DiscordChannelType.Text,
+                        parentCategory,
+                        overwrites: overwrites
+                    );
+
+                    logger.LogInformation("Created {Channel}", channel);
+
+                    try
+                    {
+                        //
+                        // Channel created successfully, increment and save counter
+                        // 
+                        guildProperties.ApplicationChannels++;
+                        await db.SaveAsync(guildProperties);
+
+                        //
+                        // Store member to channel association
+                        // 
+                        await dbMember.CreateNewbieChannel(db, guild, channel);
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.LogError(ex, "Failed to persist channel creation, rolling back");
+                        try
+                        {
+                            await channel.DeleteAsync();
+                        }
+                        catch (Exception deleteEx)
+                        {
+                            logger.LogError(deleteEx, "Failed to delete orphan channel {ChannelId}", channel.Id);
+                        }
+
+                        guildProperties.ApplicationChannels--;
+                        try
+                        {
+                            await db.SaveAsync(guildProperties);
+                        }
+                        catch (Exception rollbackEx)
+                        {
+                            logger.LogError(rollbackEx, "Failed to roll back ApplicationChannels counter");
+                        }
+
+                        return;
+                    }
                 }
                 catch (Exception ex)
                 {
-                    logger.LogError(ex, "Failed to persist channel creation, rolling back");
-                    try
-                    {
-                        await channel.DeleteAsync();
-                    }
-                    catch (Exception deleteEx)
-                    {
-                        logger.LogError(deleteEx, "Failed to delete orphan channel {ChannelId}", channel.Id);
-                    }
+                    logger.LogError(ex, "Channel creation failed");
+                    return;
+                }
 
-                    guildProperties.ApplicationChannels--;
-                    try
+                createdChannel = true;
+            }
+
+            if (createdChannel && channel is not null)
+            {
+                try
+                {
+                    //
+                    // Get users attention by adding the welcome message
+                    //
+                    await channel.SendMessageAsync(new DiscordMessageBuilder()
+                        .WithContent(string.Format(guildConfig.NewbieWelcomeTemplate, guildMember.Mention)));
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Sending welcome message failed, rolling back channel creation");
+                    await RollbackChannelCreationAsync(dbMember, channel, guildProperties);
+                    return;
+                }
+            }
+
+            bool createdWidget = false;
+
+            if (dbMember.Application is null)
+            {
+                try
+                {
+                    await dbMember.CreateApplicationWidget(db, client, guild, strangerStatusChannel);
+                    createdWidget = true;
+                }
+                catch (Exception ex)
+                {
+                    if (createdChannel && channel is not null)
                     {
-                        await db.SaveAsync(guildProperties);
+                        logger.LogError(ex, "Creating status widget failed, rolling back channel creation");
+                        await RollbackChannelCreationAsync(dbMember, channel, guildProperties);
                     }
-                    catch (Exception rollbackEx)
+                    else
                     {
-                        logger.LogError(rollbackEx, "Failed to roll back ApplicationChannels counter");
+                        // Existing channel is preserved; the next reconciliation retries the widget.
+                        logger.LogError(ex, "Creating status widget failed for {Member}", dbMember);
                     }
 
                     return;
                 }
             }
-            catch (Exception ex)
+            else if (createdChannel)
             {
-                logger.LogError(ex, "Channel creation failed");
-                return;
+                // Existing widget predates the new channel, refresh it so it links to it.
+                try
+                {
+                    await dbMember.UpdateApplicationWidget(client);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogWarning(ex, "Failed to refresh existing widget for {Member}", dbMember);
+                }
             }
 
-            try
+            if (dbMember.Status is MemberStatus.Onboarding or MemberStatus.QuestionnaireSubmitted)
             {
-                //
-                // Get users attention by adding the welcome message
-                //
-                await channel.SendMessageAsync(new DiscordMessageBuilder()
-                    .WithContent(string.Format(guildConfig.NewbieWelcomeTemplate, guildMember.Mention)));
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Sending welcome message failed, rolling back channel creation");
-                await RollbackChannelCreationAsync(dbMember, channel, guildProperties);
-                return;
-            }
-
-            try
-            {
-                await dbMember.CreateApplicationWidget(db, client, guild, strangerStatusChannel);
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Creating status widget failed, rolling back channel creation");
-                await RollbackChannelCreationAsync(dbMember, channel, guildProperties);
                 return;
             }
 
@@ -219,22 +262,31 @@ internal sealed class NewMemberHandler(
             }
             catch (Exception ex)
             {
-                // Widget was created successfully but the status transition failed.
-                // Clean up the widget (Discord message + DB entity) before rolling back
-                // the channel so no orphaned moderator panel is left behind.
-                logger.LogError(ex,
-                    "TransitionToAsync failed after widget creation, rolling back widget and channel");
-                try
+                if (!createdChannel && !createdWidget)
                 {
-                    await dbMember.DeleteApplicationWidget(db, client);
-                }
-                catch (Exception widgetEx)
-                {
-                    logger.LogError(widgetEx,
-                        "Failed to delete orphan application widget during rollback");
+                    logger.LogError(ex, "TransitionToAsync failed for {Member}", dbMember);
+                    return;
                 }
 
-                await RollbackChannelCreationAsync(dbMember, channel, guildProperties);
+                // Clean up only what this run created so no orphaned artifact is left behind.
+                logger.LogError(ex, "TransitionToAsync failed after setup, rolling back created artifacts");
+                if (createdWidget)
+                {
+                    try
+                    {
+                        await dbMember.RemoveApplicationWidget(db, client);
+                    }
+                    catch (Exception widgetEx)
+                    {
+                        logger.LogError(widgetEx,
+                            "Failed to delete orphan application widget during rollback");
+                    }
+                }
+
+                if (createdChannel && channel is not null)
+                {
+                    await RollbackChannelCreationAsync(dbMember, channel, guildProperties);
+                }
             }
         }
         finally

@@ -16,7 +16,7 @@ internal partial class ApplicationWorkflow(
     DB db,
     ILogger<ApplicationWorkflow> logger,
     IGuildConfigService guildConfigService,
-    IOnboardingQueue onboardingQueue,
+    IOnboardingSubmitter onboardingSubmitter,
     IMemberPromotionService promotionService,
     IHostApplicationLifetime lifetime)
     :
