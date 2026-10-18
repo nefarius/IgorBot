@@ -45,7 +45,10 @@ internal sealed class NewMemberHandler(
 
         try
         {
-            GuildProperties guildProperties = message.GuildProperties;
+            // The queued snapshot can be stale when many members are submitted at once (e.g. reconciliation),
+            // which would hand out the same channel number repeatedly. Always use the current counter.
+            GuildProperties guildProperties =
+                await db.Find<GuildProperties>().OneAsync(message.GuildProperties.ID) ?? message.GuildProperties;
             GuildConfig guildConfig = message.GuildConfig;
 
             if (guildConfig.StrangerStatusChannelId == 0 || guildConfig.ApplicationCategoryId == 0)
