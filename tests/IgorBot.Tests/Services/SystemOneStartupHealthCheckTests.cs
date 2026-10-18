@@ -87,6 +87,42 @@ public sealed class SystemOneStartupHealthCheckTests
         entry.Message.Should().Contain("http://127.0.0.1:9/");
         entry.Message.Should().Contain("503");
         entry.Exception.Should().BeNull();
+        handler.Methods.Should().Equal(HttpMethod.Head);
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.MethodNotAllowed)]
+    [InlineData(HttpStatusCode.UnsupportedMediaType)]
+    public async Task UnsupportedHead_RetriesWithGet(HttpStatusCode status)
+    {
+        RecordingHandler handler = new() { Responses = [status, HttpStatusCode.OK] };
+        CapturingLogger logger = new();
+        SystemOneStartupHealthCheck check = Create(handler, logger);
+
+        await RunUntilSettled(check);
+
+        handler.Methods.Should().Equal(HttpMethod.Head, HttpMethod.Get);
+        LogEntry entry = logger.Entries.Should().ContainSingle().Subject;
+        entry.Level.Should().Be(LogLevel.Information);
+        entry.Message.Should().Be("Reached System One endpoint http://127.0.0.1:9/");
+    }
+
+    [Fact]
+    public async Task UnsupportedHead_LogsTheGetStatusWhenThatAlsoFails()
+    {
+        RecordingHandler handler = new()
+        {
+            Responses = [HttpStatusCode.UnsupportedMediaType, HttpStatusCode.ServiceUnavailable]
+        };
+        CapturingLogger logger = new();
+        SystemOneStartupHealthCheck check = Create(handler, logger);
+
+        await RunUntilSettled(check);
+
+        handler.Methods.Should().Equal(HttpMethod.Head, HttpMethod.Get);
+        LogEntry entry = logger.Entries.Should().ContainSingle().Subject;
+        entry.Level.Should().Be(LogLevel.Warning);
+        entry.Message.Should().Contain("503");
     }
 
     [Fact]
@@ -203,6 +239,8 @@ public sealed class SystemOneStartupHealthCheckTests
 
         public HttpMethod? Method { get; private set; }
 
+        public List<HttpMethod> Methods { get; } = [];
+
         public Uri? RequestUri { get; private set; }
 
         public string? Authorization { get; private set; }
@@ -213,6 +251,10 @@ public sealed class SystemOneStartupHealthCheckTests
 
         public HttpStatusCode StatusCode { get; init; } = HttpStatusCode.OK;
 
+        public HttpStatusCode[]? Responses { get; init; }
+
+        private int _responseIndex;
+
         public TaskCompletionSource<bool> Started { get; } =
             new(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -222,6 +264,7 @@ public sealed class SystemOneStartupHealthCheckTests
         {
             Calls++;
             Method = request.Method;
+            Methods.Add(request.Method);
             RequestUri = request.RequestUri;
             Authorization = request.Headers.Authorization?.ToString();
             Started.TrySetResult(true);
@@ -236,7 +279,17 @@ public sealed class SystemOneStartupHealthCheckTests
                 throw Error;
             }
 
-            return new HttpResponseMessage(StatusCode);
+            return new HttpResponseMessage(NextStatus());
+        }
+
+        private HttpStatusCode NextStatus()
+        {
+            if (Responses is null || _responseIndex >= Responses.Length)
+            {
+                return StatusCode;
+            }
+
+            return Responses[_responseIndex++];
         }
     }
 }

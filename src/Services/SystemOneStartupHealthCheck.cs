@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Headers;
 
 namespace IgorBot.Services;
@@ -89,26 +90,27 @@ internal sealed class SystemOneStartupHealthCheck : IHostedService
         using HttpClient client = CreateClient();
         try
         {
-            using HttpRequestMessage request = new(HttpMethod.Head, endpoint);
-            if (_settings.ApiToken is not null)
+            using HttpResponseMessage head = await SendAsync(client, HttpMethod.Head, endpoint, cancellationToken);
+            if (IsReachable(head))
             {
-                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _settings.ApiToken);
-            }
-
-            using HttpResponseMessage response = await client.SendAsync(
-                request,
-                HttpCompletionOption.ResponseHeadersRead,
-                cancellationToken);
-            if ((int)response.StatusCode is >= 200 and <= 299)
-            {
-                _logger.LogInformation("Reached System One endpoint {Endpoint}", reportedEndpoint);
+                LogReached(reportedEndpoint);
                 return;
             }
 
-            _logger.LogWarning(
-                "System One endpoint {Endpoint} returned HTTP {StatusCode}",
-                reportedEndpoint,
-                (int)response.StatusCode);
+            if (!IsUnsupported(head.StatusCode))
+            {
+                LogRejected(reportedEndpoint, head.StatusCode);
+                return;
+            }
+
+            using HttpResponseMessage fallback = await SendAsync(client, HttpMethod.Get, endpoint, cancellationToken);
+            if (IsReachable(fallback))
+            {
+                LogReached(reportedEndpoint);
+                return;
+            }
+
+            LogRejected(reportedEndpoint, fallback.StatusCode);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -119,6 +121,36 @@ internal sealed class SystemOneStartupHealthCheck : IHostedService
             _logger.LogWarning(ex, "System One endpoint {Endpoint} could not be reached", reportedEndpoint);
         }
     }
+
+    private async Task<HttpResponseMessage> SendAsync(
+        HttpClient client,
+        HttpMethod method,
+        Uri endpoint,
+        CancellationToken cancellationToken)
+    {
+        using HttpRequestMessage request = new(method, endpoint);
+        if (_settings.ApiToken is not null)
+        {
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _settings.ApiToken);
+        }
+
+        return await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+    }
+
+    private void LogReached(string endpoint) =>
+        _logger.LogInformation("Reached System One endpoint {Endpoint}", endpoint);
+
+    private void LogRejected(string endpoint, HttpStatusCode statusCode) =>
+        _logger.LogWarning(
+            "System One endpoint {Endpoint} returned HTTP {StatusCode}",
+            endpoint,
+            (int)statusCode);
+
+    private static bool IsReachable(HttpResponseMessage response) =>
+        (int)response.StatusCode is >= 200 and <= 299;
+
+    private static bool IsUnsupported(HttpStatusCode statusCode) =>
+        statusCode is HttpStatusCode.MethodNotAllowed or HttpStatusCode.UnsupportedMediaType;
 
     private HttpClient CreateClient()
     {
