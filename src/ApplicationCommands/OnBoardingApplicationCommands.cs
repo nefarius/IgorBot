@@ -405,6 +405,7 @@ internal sealed class OnBoardingApplicationCommands(
         // Persist the submission timestamp so the Promote button remains visible
         // after a bot restart and so the auto-kick query filter stays correct.
         await db.SaveAsync(application);
+        await db.SaveAsync(dbMember);
         if (!alreadyPromoted)
         {
             await dbMember.TransitionToAsync(db, MemberStatus.QuestionnaireSubmitted);
@@ -414,7 +415,7 @@ internal sealed class OnBoardingApplicationCommands(
         try
         {
             effect = alreadyPromoted
-                ? OnboardingAutomationEffect.Promoted
+                ? OnboardingAutomationEffect.Held
                 : await automation.ExecuteAsync(
                     decision,
                     automationState,
@@ -430,6 +431,7 @@ internal sealed class OnBoardingApplicationCommands(
             {
                 application.Decision.AutoPromoted = true;
                 await db.SaveAsync(application);
+                await db.SaveAsync(dbMember);
             }
 
             if (submissionMessage is not null &&
@@ -453,7 +455,7 @@ internal sealed class OnBoardingApplicationCommands(
                 }
             }
 
-            string applicantText = effect == OnboardingAutomationEffect.Promoted
+            string applicantText = alreadyPromoted || effect == OnboardingAutomationEffect.Promoted
                 ? $"Nicely done {member.Mention}, I've submitted your answers to {submissionChannel.Mention}. You've been accepted."
                 : $"Nicely done {member.Mention}, I've submitted your answers to {submissionChannel.Mention}. " +
                   "Please be patient until a moderator acknowledges it.";

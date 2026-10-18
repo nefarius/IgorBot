@@ -213,6 +213,8 @@ public sealed class ConfigOptionApplicatorTests
     [InlineData("1.01")]
     [InlineData("80%")]
     [InlineData("high")]
+    [InlineData("NaN")]
+    [InlineData("Infinity")]
     public void TryApply_QuestionnaireThreshold_RejectsOutOfRange(string value)
     {
         GuildConfig config = MemberQuestionnaireConfig();

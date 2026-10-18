@@ -215,6 +215,7 @@ internal static class ConfigOptionApplicator
     private static string? AssignThreshold(QuestionnaireAutomation automation, string value)
     {
         if (!double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out double threshold) ||
+            !double.IsFinite(threshold) ||
             threshold < 0 ||
             threshold > 1)
         {

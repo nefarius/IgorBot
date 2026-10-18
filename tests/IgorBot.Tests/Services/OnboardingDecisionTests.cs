@@ -267,7 +267,8 @@ public sealed class OnboardingDecisionClientTests
 
         result.Label.Should().Be(OnboardingDecisionLabels.Normal);
         handler.Request!.RequestUri!.AbsolutePath.Should().Be("/v1/systemone");
-        handler.Request.Headers.Authorization?.ToString().Should().Be(expected);
+        string? authorization = handler.Request.Headers.Authorization?.ToString();
+        authorization.Should().Be(expected);
         handler.Body.Should().Contain("project documentation");
         handler.Body.Should().NotContain("976144920576425995");
     }
@@ -451,6 +452,7 @@ public sealed class SystemOneProbeTests
         report.Status.Should().Be(SystemOneProbeStatus.Succeeded);
         report.Label.Should().Be(OnboardingDecisionLabels.Normal);
         report.Endpoint.Should().Be("http://127.0.0.1:9");
+        report.Endpoint.Should().NotContain("@");
         report.UsedAuthorization.Should().BeTrue();
         report.Elapsed.Should().BeGreaterThanOrEqualTo(TimeSpan.Zero);
         client.Calls.Should().Be(1);
@@ -470,6 +472,21 @@ public sealed class SystemOneProbeTests
         report.Failure.Should().Contain(nameof(HttpRequestException));
         report.Failure.Should().NotContain(token);
         report.Failure.Should().Contain("***");
+    }
+
+    [Fact]
+    public async Task EndpointReport_OmitsUserInfo()
+    {
+        SystemOneSettings settings = SystemOneSettings.Create(new SystemOneConfig
+        {
+            BaseUrl = "http://user:pass@127.0.0.1:9",
+            TimeoutSeconds = 2
+        });
+        SystemOneProbe probe = new(settings, new ProbeClient());
+
+        SystemOneProbeReport report = await probe.ProbeAsync();
+
+        report.Endpoint.Should().Be("http://127.0.0.1:9");
     }
 
     private static SystemOneSettings Configured(string? token) =>

@@ -61,7 +61,7 @@ internal sealed class SystemOneCommands(ISystemOneProbe probe)
 
         if (report.Status == SystemOneProbeStatus.Succeeded)
         {
-            embed.AddField("Verdict", report.Label ?? "n/a", true);
+            embed.AddField("Verdict", Trim(report.Label ?? "n/a"), true);
             embed.AddField("Confidence", Percent(report.Confidence), true);
             embed.AddField("Probabilities", Trim(FormatProbabilities(report.Probabilities)));
         }

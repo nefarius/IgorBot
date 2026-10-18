@@ -65,7 +65,7 @@ internal sealed class SystemOneProbe(SystemOneSettings settings, IOnboardingDeci
             };
         }
 
-        string endpoint = settings.BaseUri.GetLeftPart(UriPartial.Authority);
+        string endpoint = settings.BaseUri.GetComponents(UriComponents.SchemeAndServer, UriFormat.SafeUnescaped);
         Stopwatch watch = Stopwatch.StartNew();
         try
         {
