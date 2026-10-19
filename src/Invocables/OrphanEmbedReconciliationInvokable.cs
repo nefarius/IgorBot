@@ -53,8 +53,15 @@ internal class OrphanEmbedReconciliationInvokable(
                     continue;
                 }
 
-                await ReconcileOrphanEmbedsAsync(guild);
-                await ReconcileMissingDiscordMessagesAsync(guild);
+                try
+                {
+                    await ReconcileOrphanEmbedsAsync(guild);
+                    await ReconcileMissingDiscordMessagesAsync(guild);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Orphan embed reconciliation failed for {Guild}; continuing", guild);
+                }
             }
 
             logger.LogInformation("Orphan embed reconciliation done");
@@ -72,21 +79,29 @@ internal class OrphanEmbedReconciliationInvokable(
 
         foreach (StrangerApplicationEmbed embed in embeds)
         {
-            if (DateTime.UtcNow - embed.CreatedAt < OrphanGracePeriod)
+            try
             {
-                logger.LogDebug("Skipping embed {EmbedId} within grace period (created {CreatedAt})",
-                    embed.ID, embed.CreatedAt);
-                continue;
+                if (DateTime.UtcNow - embed.CreatedAt < OrphanGracePeriod)
+                {
+                    logger.LogDebug("Skipping embed {EmbedId} within grace period (created {CreatedAt})",
+                        embed.ID, embed.CreatedAt);
+                    continue;
+                }
+
+                List<GuildMember> referencingMembers = await db.Find<GuildMember>()
+                    .ManyAsync(m => m.Eq(f => f.Application!.ID, embed.ID));
+
+                if (referencingMembers.Count == 0)
+                {
+                    logger.LogInformation(
+                        "Removing orphaned application embed {EmbedId} (no GuildMember references it)",
+                        embed.ID);
+                    await db.DeleteAsync(embed);
+                }
             }
-
-            List<GuildMember> referencingMembers = await db.Find<GuildMember>()
-                .ManyAsync(m => m.Eq(f => f.Application!.ID, embed.ID));
-
-            if (referencingMembers.Count == 0)
+            catch (Exception ex)
             {
-                logger.LogInformation("Removing orphaned application embed {EmbedId} (no GuildMember references it)",
-                    embed.ID);
-                await db.DeleteAsync(embed);
+                logger.LogError(ex, "Failed to reconcile application embed {EmbedId}", embed.ID);
             }
         }
     }
@@ -120,11 +135,19 @@ internal class OrphanEmbedReconciliationInvokable(
                 DiscordChannel? channel = guild.FindChannel(guildMember.Application.ChannelId);
                 if (channel is null)
                 {
-                    logger.LogInformation(
-                        "Application widget channel no longer exists for {MemberId}, removing orphaned embed",
-                        guildMember.MemberId);
-                    await guildMember.DeleteApplication(db);
-                    continue;
+                    // A cache miss is not proof of deletion; confirm through the REST API first.
+                    try
+                    {
+                        channel = await guild.GetChannelAsync(guildMember.Application.ChannelId);
+                    }
+                    catch (NotFoundException)
+                    {
+                        logger.LogInformation(
+                            "Application widget channel no longer exists for {MemberId}, removing orphaned embed",
+                            guildMember.MemberId);
+                        await guildMember.DeleteApplication(db);
+                        continue;
+                    }
                 }
 
                 await channel.GetMessageAsync(guildMember.Application.MessageId);
@@ -134,7 +157,18 @@ internal class OrphanEmbedReconciliationInvokable(
                 logger.LogInformation(
                     "Application widget message no longer exists for {MemberId}, removing orphaned embed",
                     guildMember.MemberId);
-                await guildMember.DeleteApplication(db);
+                try
+                {
+                    await guildMember.DeleteApplication(db);
+                }
+                catch (Exception deleteEx)
+                {
+                    logger.LogError(deleteEx, "Failed to remove orphaned embed for {MemberId}", guildMember.MemberId);
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Failed to verify application widget for {MemberId}", guildMember.MemberId);
             }
         }
     }

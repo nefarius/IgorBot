@@ -81,10 +81,32 @@ public sealed class GuildConfigHoneypotActivationTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task SaveAsync_StaleSnapshot_DoesNotOverwriteNewerHoneypotChannel()
+    public async Task SaveAsync_StaleSnapshot_IsRejectedAndKeepsNewerConfig()
     {
         await _sut.SaveAsync(MinimalConfig(channelId: 10));
         GuildConfig stale = (await _sut.GetAsync(GuildId))!;
+
+        GuildConfig newer = (await _sut.GetAsync(GuildId))!;
+        newer.HoneypotChannelId = 20;
+        await _sut.SaveAsync(newer);
+        DateTime? activationAfterChannelChange = (await _sut.GetAsync(GuildId))!.HoneypotChannelActivatedAt;
+
+        stale.IdleKickTimeSpan = TimeSpan.FromMinutes(15);
+        Func<Task> act = () => _sut.SaveAsync(stale);
+        await act.Should().ThrowAsync<ConfigConflictException>();
+
+        GuildConfig? loaded = await _sut.GetAsync(GuildId);
+        loaded!.HoneypotChannelId.Should().Be(20UL);
+        loaded.IdleKickTimeSpan.Should().BeNull();
+        loaded.HoneypotChannelActivatedAt.Should().Be(activationAfterChannelChange);
+    }
+
+    [Fact]
+    public async Task SaveAsync_UnversionedSnapshot_KeepsNewerHoneypotChannel()
+    {
+        await _sut.SaveAsync(MinimalConfig(channelId: 10));
+        GuildConfig stale = (await _sut.GetAsync(GuildId))!;
+        stale.OverwriteExisting = true; // intentional overwrite (e.g. fresh setup) still keeps the newer honeypot channel
 
         GuildConfig newer = (await _sut.GetAsync(GuildId))!;
         newer.HoneypotChannelId = 20;

@@ -144,23 +144,9 @@ internal sealed class LurkerReconciliationService(
 
             try
             {
-                GuildMember? dbMember = await db.Find<GuildMember>().OneAsync(member.ToEntityId());
-
-                if (dbMember is null)
-                {
-                    DateTime now = DateTime.UtcNow;
-                    dbMember = new GuildMember
-                    {
-                        GuildId = guild.Id,
-                        MemberId = member.Id,
-                        Member = member.ToString(),
-                        Mention = member.Mention,
-                        Status = MemberStatus.New,
-                        StatusChangedAt = now,
-                        StatusReason = "reconciliation"
-                    };
-                    await db.SaveAsync(dbMember);
-                }
+                (GuildMember dbMember, _) = await GuildMember.EnsureExistsAsync(
+                    db, guild.Id, member.Id, member.ToString(), member.Mention,
+                    MemberStatus.New, "reconciliation");
 
                 if (!LurkerReconciliationPolicy.NeedsOnboarding(dbMember))
                 {

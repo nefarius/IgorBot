@@ -15,13 +15,7 @@ internal sealed class OnboardingSubmitter(
     public async Task SubmitAsync(DiscordGuild guild, GuildConfig guildConfig, GuildMember member,
         CancellationToken ct = default)
     {
-        GuildProperties? guildRuntime = await db.Find<GuildProperties>().OneAsync(guild.Id.ToString());
-
-        if (guildRuntime is null)
-        {
-            guildRuntime = new GuildProperties { GuildId = guild.Id };
-            await db.SaveAsync(guildRuntime);
-        }
+        GuildProperties guildRuntime = await GuildProperties.EnsureExistsAsync(db, guild.Id);
 
         NewMemberMessage message = new()
         {

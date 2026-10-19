@@ -145,7 +145,8 @@ public class GuildConfigEntity : IEntity
             HoneypotChannelActivatedAt = HoneypotChannelActivatedAt,
             HoneypotExclusionRoleIds = new List<ulong>(HoneypotExclusionRoleIds),
             AutoAssignStrangerRoleOnJoin = AutoAssignStrangerRoleOnJoin,
-            EnableOnboardingWorkflow = EnableOnboardingWorkflow ?? true
+            EnableOnboardingWorkflow = EnableOnboardingWorkflow ?? true,
+            ConfigVersion = ConfigVersion
         };
         result.Questionnaires = new Dictionary<string, Questionnaire>(Questionnaires);
         return result;
@@ -174,7 +175,8 @@ public class GuildConfigEntity : IEntity
             HoneypotChannelActivatedAt = config.HoneypotChannelActivatedAt,
             HoneypotExclusionRoleIds = new List<ulong>(config.HoneypotExclusionRoleIds),
             AutoAssignStrangerRoleOnJoin = config.AutoAssignStrangerRoleOnJoin,
-            EnableOnboardingWorkflow = config.EnableOnboardingWorkflow
+            EnableOnboardingWorkflow = config.EnableOnboardingWorkflow,
+            ConfigVersion = config.ConfigVersion
         };
     }
 }

@@ -37,6 +37,13 @@ internal sealed class NewMemberHandler(
         logger.LogDebug("Got member from DB: {@Member}", dbMember);
 
         // A record with only one of channel/widget is a partial setup; only the missing artifact is recreated.
+        if (dbMember.HasLeftGuild)
+        {
+            logger.LogInformation("Member {Member} already left the guild (status {Status}), skipping onboarding",
+                dbMember, dbMember.Status);
+            return;
+        }
+
         if ((dbMember.Channel is not null && dbMember.Application is not null) || dbMember.IsOnboardingInProgress)
         {
             logger.LogWarning("Member {Member} already has an active newbie channel and widget, aborting", dbMember);
@@ -250,9 +257,23 @@ internal sealed class NewMemberHandler(
                 return;
             }
 
+            // The member may have left, been kicked or lost the stranger role while the channel and widget
+            // were being created (this takes several Discord round trips). Verify against Discord and the
+            // database, and undo what this run created if the onboarding no longer applies.
+            bool stillApplicable;
+            string? abortReason = null;
             try
             {
-                await dbMember.TransitionToAsync(db, MemberStatus.Onboarding);
+                stillApplicable = await IsStillStrangerAsync(guild, dbMember.MemberId, guildConfig.StrangerRoleId);
+                if (!stillApplicable)
+                {
+                    abortReason = "member left or lost the stranger role";
+                }
+                else if (!await dbMember.TryTransitionAsync(db, MemberStatus.Onboarding))
+                {
+                    stillApplicable = false;
+                    abortReason = "persisted status no longer allows onboarding";
+                }
             }
             catch (Exception ex)
             {
@@ -262,8 +283,18 @@ internal sealed class NewMemberHandler(
                     return;
                 }
 
-                // Clean up only what this run created so no orphaned artifact is left behind.
                 logger.LogError(ex, "TransitionToAsync failed after setup, rolling back created artifacts");
+                stillApplicable = false;
+            }
+
+            if (!stillApplicable)
+            {
+                if (abortReason is not null)
+                {
+                    logger.LogWarning("Onboarding of {Member} aborted: {Reason}", dbMember, abortReason);
+                }
+
+                // Clean up only what this run created so no orphaned artifact is left behind.
                 if (createdWidget)
                 {
                     try
@@ -286,6 +317,22 @@ internal sealed class NewMemberHandler(
         finally
         {
             await SetOnboardingInProgressAsync(dbMember, false);
+        }
+    }
+
+    /// <summary>
+    ///     Re-checks via REST that the member is still in the guild and still holds the stranger role.
+    /// </summary>
+    private static async Task<bool> IsStillStrangerAsync(DiscordGuild guild, ulong memberId, ulong strangerRoleId)
+    {
+        try
+        {
+            DiscordMember current = await guild.GetMemberAsync(memberId, true);
+            return current.Roles.Any(r => r.Id == strangerRoleId);
+        }
+        catch (NotFoundException)
+        {
+            return false;
         }
     }
 
@@ -337,8 +384,9 @@ internal sealed class NewMemberHandler(
             return before.ApplicationChannels;
         }
 
-        // First use for this guild: create the document, then reserve again.
-        await db.SaveAsync(new GuildProperties { GuildId = guildId });
+        // First use for this guild: create the document atomically (never resetting an existing counter),
+        // then reserve again.
+        await GuildProperties.EnsureExistsAsync(db, guildId);
         return await ReserveChannelNumberAsync(guildId);
     }
 

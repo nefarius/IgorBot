@@ -46,6 +46,16 @@ internal partial class ApplicationWorkflow
 
         logger.LogWarning("{Member} was banned externally (outside the bot)", e.Member);
 
-        await member.TransitionToAsync(db, MemberStatus.BannedExternally, "external ban");
+        // Conditional: skip when a bot-driven ban status landed between the read above and this write.
+        await member.TryTransitionAsync(
+            db,
+            MemberStatus.BannedExternally,
+            [
+                MemberStatus.Unknown, MemberStatus.New, MemberStatus.Onboarding,
+                MemberStatus.QuestionnaireSubmitted, MemberStatus.FullMember, MemberStatus.StrangerRoleRemoved,
+                MemberStatus.LeftVoluntarily, MemberStatus.KickedByModerator, MemberStatus.KickedExternally,
+                MemberStatus.AutoKicked
+            ],
+            "external ban");
     }
 }

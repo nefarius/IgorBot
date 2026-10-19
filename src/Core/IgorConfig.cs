@@ -119,6 +119,29 @@ public sealed class GuildConfig
     ///     stranger role. When false, only role assignment happens if <see cref="AutoAssignStrangerRoleOnJoin" /> is set.
     /// </summary>
     public bool EnableOnboardingWorkflow { get; set; } = true;
+
+    /// <summary>
+    ///     Version of the stored document this snapshot was loaded from. <c>0</c> means "not loaded from storage":
+    ///     saving then overwrites. A non-zero value makes <c>SaveAsync</c> fail with
+    ///     <see cref="ConfigConflictException" /> when somebody else saved in the meantime.
+    /// </summary>
+    public int ConfigVersion { get; set; }
+
+    /// <summary>
+    ///     Explicit marker for an intentional overwrite of an existing stored configuration (fresh
+    ///     <c>/config setup</c>). Not persisted. Without it, <c>SaveAsync</c> always compares
+    ///     <see cref="ConfigVersion" /> (including <c>0</c> for legacy documents) against the stored one.
+    /// </summary>
+    public bool OverwriteExisting { get; set; }
+}
+
+/// <summary>
+///     Thrown when a guild configuration snapshot was saved after a newer version had been stored.
+/// </summary>
+public sealed class ConfigConflictException(ulong guildId)
+    : InvalidOperationException($"Guild config {guildId} was changed concurrently; reload and retry.")
+{
+    public ulong GuildId { get; } = guildId;
 }
 
 /// <summary>

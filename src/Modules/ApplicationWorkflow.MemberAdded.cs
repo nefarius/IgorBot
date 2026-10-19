@@ -28,45 +28,20 @@ internal partial class ApplicationWorkflow
 
         logger.LogInformation("{Member} joined", e.Member);
 
-        GuildMember? guildMember = await db.Find<GuildMember>().OneAsync(e.ToEntityId());
-
-        bool isFirstJoin = guildMember is null;
-
-        if (isFirstJoin)
-        {
-            guildMember = new GuildMember
-            {
-                GuildId = e.Guild.Id,
-                MemberId = e.Member.Id,
-                Member = e.Member.ToString(),
-                Mention = e.Member.Mention
-            };
-
-            await db.SaveAsync(guildMember);
-
-            logger.LogInformation("{Member} added to DB", e.Member);
-        }
-
-        // guildMember is guaranteed non-null: either it existed before or was just created above.
-        GuildMember member = guildMember!;
-        member.JoinedAt = DateTime.UtcNow;
+        // Atomic create-or-load: concurrent creators (honeypot, sync, reconciliation) never collide.
+        (GuildMember member, bool isFirstJoin) = await GuildMember.EnsureExistsAsync(
+            db, e.Guild.Id, e.Member.Id, e.Member.ToString(), e.Member.Mention,
+            MemberStatus.New, "join");
 
         if (isFirstJoin)
         {
-            // Brand-new member: initialize canonical state without recording a misleading "rejoin" history entry.
-            DateTime now = DateTime.UtcNow;
-            member.Status = MemberStatus.New;
-            member.StatusChangedAt = now;
-            member.StatusReason = "join";
-            logger.LogInformation("GuildMember {MemberId} initialized as New (first join)", member.ID);
+            logger.LogInformation("{Member} added to DB, initialized as New (first join)", e.Member);
         }
-        else
+        else if (!await member.ReactivateAsync(db))
         {
-            // Returning member: reset lifecycle fields and record a rejoin history event.
-            member.Reset();
+            logger.LogWarning("{Member} rejoin skipped: a honeypot ban was just recorded", e.Member);
+            return;
         }
-
-        await db.SaveAsync(member);
 
         logger.LogInformation("{Member} updated in DB", e.Member);
         if (!e.Guild.Roles.TryGetValue(guildConfig.StrangerRoleId, out DiscordRole? strangerRole))

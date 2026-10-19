@@ -3,6 +3,7 @@ using DSharpPlus.Entities;
 using DSharpPlus.Exceptions;
 using DSharpPlus.EventArgs;
 
+using MongoDB.Driver;
 using MongoDB.Entities;
 
 using IgorBot.Util;
@@ -27,9 +28,38 @@ internal sealed partial class GuildMember
         string? reason = null,
         ulong? actorId = null)
     {
+        await TransitionCoreAsync(db, next, reason, actorId, null);
+    }
+
+    /// <summary>
+    ///     Compare-and-set variant of <see cref="TransitionToAsync" />: the write only applies when the persisted
+    ///     status is one of <paramref name="allowedFrom" /> (defaults to <see cref="MemberTransitionPolicy" />).
+    ///     Returns <see langword="false" /> and leaves the in-memory object untouched when another writer got there
+    ///     first; the caller decides whether to reload or give up.
+    /// </summary>
+    public Task<bool> TryTransitionAsync(
+        DB db,
+        MemberStatus next,
+        IReadOnlyCollection<MemberStatus>? allowedFrom = null,
+        string? reason = null,
+        ulong? actorId = null,
+        Func<FilterDefinitionBuilder<GuildMember>, FilterDefinition<GuildMember>>? extraMatch = null)
+    {
+        allowedFrom ??= MemberTransitionPolicy.AllowedFrom(next);
+        return TransitionCoreAsync(db, next, reason, actorId, allowedFrom, extraMatch);
+    }
+
+    private async Task<bool> TransitionCoreAsync(
+        DB db,
+        MemberStatus next,
+        string? reason,
+        ulong? actorId,
+        IReadOnlyCollection<MemberStatus>? allowedFrom,
+        Func<FilterDefinitionBuilder<GuildMember>, FilterDefinition<GuildMember>>? extraMatch = null)
+    {
         if (Status == next)
         {
-            return;
+            return true;
         }
 
         Log.Information(
@@ -96,7 +126,29 @@ internal sealed partial class GuildMember
                 break;
         }
 
-        await update.ExecuteAsync();
+        if (allowedFrom is not null)
+        {
+            MemberStatus[] allowed = allowedFrom.ToArray();
+            bool includesUnknown = allowed.Contains(MemberStatus.Unknown);
+            update = update.Match(f => includesUnknown
+                ? f.In(m => m.Status, allowed) | f.Exists(m => m.Status, false)
+                : f.In(m => m.Status, allowed));
+        }
+
+        if (extraMatch is not null)
+        {
+            update = update.Match(extraMatch);
+        }
+
+        UpdateResult result = await update.ExecuteAsync();
+
+        if ((allowedFrom is not null || extraMatch is not null) && result.MatchedCount == 0)
+        {
+            Log.Warning(
+                "GuildMember {MemberId} transition {From} -> {To} rejected: persisted status is not in the allowed set",
+                ID, Status, next);
+            return false;
+        }
 
         Log.Information(
             "GuildMember {MemberId} transitioned {From} -> {To}",
@@ -146,6 +198,8 @@ internal sealed partial class GuildMember
                 StrangerRoleRemovedAt = now;
                 break;
         }
+
+        return true;
     }
 
     /// <summary>
@@ -200,10 +254,10 @@ internal sealed partial class GuildMember
             return;
         }
 
-        await db.DeleteAsync(Application);
-
+        StrangerApplicationEmbed application = Application;
+        await ClearApplicationReferenceAsync(db, application);
+        await db.DeleteAsync(application);
         Application = null;
-        await db.SaveAsync(this);
     }
 
     /// <summary>
@@ -216,9 +270,243 @@ internal sealed partial class GuildMember
             return;
         }
 
-        await db.DeleteAsync(Channel);
+        NewbieChannel channel = Channel;
+
+        // Targeted update matched on the channel ID: a newer channel assigned meanwhile is never wiped.
+        await db.Update<GuildMember>()
+            .MatchID(ID)
+            .Match(f => f.Eq(m => m.Channel!.ID, channel.ID))
+            .Modify(m => m.Channel, (NewbieChannel?)null)
+            .ExecuteAsync();
+
+        await db.DeleteAsync(channel);
         Channel = null;
-        await db.SaveAsync(this);
+    }
+
+    /// <summary>
+    ///     Clears the embedded application reference, but only while it still points at
+    ///     <paramref name="application" />.
+    /// </summary>
+    private async Task ClearApplicationReferenceAsync(DB db, StrangerApplicationEmbed application)
+    {
+        await db.Update<GuildMember>()
+            .MatchID(ID)
+            .Match(f => f.Eq(m => m.Application!.ID, application.ID))
+            .Modify(m => m.Application, (StrangerApplicationEmbed?)null)
+            .ExecuteAsync();
+    }
+
+    /// <summary>
+    ///     Persists the auto-kick flag on the embedded application (the authoritative copy) without touching
+    ///     anything else on the member document.
+    /// </summary>
+    public async Task SetAutoKickEnabledAsync(DB db, bool enabled)
+    {
+        if (Application is null)
+        {
+            return;
+        }
+
+        await db.Update<GuildMember>()
+            .MatchID(ID)
+            .Match(f => f.Eq(m => m.Application!.ID, Application.ID))
+            .Modify(m => m.Application!.IsAutoKickEnabled, enabled)
+            .ExecuteAsync();
+        Application.IsAutoKickEnabled = enabled;
+    }
+
+    /// <summary>
+    ///     Persists the questionnaire submission timestamp and optional screening decision on the embedded
+    ///     application.
+    /// </summary>
+    public async Task SetQuestionnaireSubmittedAsync(DB db, DateTime submittedAt, OnboardingDecisionRecord? decision)
+    {
+        if (Application is null)
+        {
+            return;
+        }
+
+        Update<GuildMember> update = db.Update<GuildMember>()
+            .MatchID(ID)
+            .Match(f => f.Eq(m => m.Application!.ID, Application.ID))
+            .Modify(m => m.Application!.QuestionnaireSubmittedAt, (DateTime?)submittedAt);
+
+        if (decision is not null)
+        {
+            update = update.Modify(m => m.Application!.Decision, decision);
+        }
+
+        await update.ExecuteAsync();
+        Application.QuestionnaireSubmittedAt = submittedAt;
+        if (decision is not null)
+        {
+            Application.Decision = decision;
+        }
+    }
+
+    /// <summary>
+    ///     Persists the screening decision on the embedded application.
+    /// </summary>
+    public async Task SetApplicationDecisionAsync(DB db, OnboardingDecisionRecord decision)
+    {
+        if (Application is null)
+        {
+            return;
+        }
+
+        await db.Update<GuildMember>()
+            .MatchID(ID)
+            .Match(f => f.Eq(m => m.Application!.ID, Application.ID))
+            .Modify(m => m.Application!.Decision, decision)
+            .ExecuteAsync();
+        Application.Decision = decision;
+    }
+
+    /// <summary>
+    ///     Stamps <see cref="LeftAt" /> for legacy queries without touching the canonical status.
+    /// </summary>
+    public async Task StampLeftAtAsync(DB db)
+    {
+        DateTime now = DateTime.UtcNow;
+        await db.Update<GuildMember>()
+            .MatchID(ID)
+            .Modify(m => m.LeftAt, (DateTime?)now)
+            .ExecuteAsync();
+        LeftAt = now;
+    }
+
+    /// <summary>
+    ///     Persists the in-progress onboarding flag with a targeted update.
+    /// </summary>
+    public async Task SetOnboardingInProgressAsync(DB db, bool value)
+    {
+        await db.Update<GuildMember>()
+            .MatchID(ID)
+            .Modify(m => m.IsOnboardingInProgress, value)
+            .ExecuteAsync();
+        IsOnboardingInProgress = value;
+    }
+
+    /// <summary>
+    ///     Updates the cached display strings with a targeted update.
+    /// </summary>
+    public async Task UpdateDisplayAsync(DB db, string member, string mention)
+    {
+        await db.Update<GuildMember>()
+            .MatchID(ID)
+            .Modify(m => m.Member, member)
+            .Modify(m => m.Mention, mention)
+            .ExecuteAsync();
+        Member = member;
+        Mention = mention;
+    }
+
+    /// <summary>
+    ///     Atomically creates the member document if it does not exist (<c>$setOnInsert</c> upsert) and returns
+    ///     the persisted document. Safe against concurrent creators: exactly one of them reports
+    ///     <c>created == true</c>, and nobody overwrites existing data.
+    /// </summary>
+    public static async Task<(GuildMember Member, bool Created)> EnsureExistsAsync(
+        DB db,
+        ulong guildId,
+        ulong memberId,
+        string display,
+        string mention,
+        MemberStatus initialStatus,
+        string? initialReason,
+        MemberStatusEvent? initialEvent = null)
+    {
+        string id = $"{guildId}-{memberId}";
+        DateTime now = DateTime.UtcNow;
+        List<MemberStatusEvent> history = initialEvent is null ? [] : [initialEvent];
+
+        FilterDefinition<GuildMember> filter = Builders<GuildMember>.Filter.Eq(m => m.ID, id);
+        UpdateDefinition<GuildMember> upsert = Builders<GuildMember>.Update
+            .SetOnInsert(m => m.GuildId, guildId)
+            .SetOnInsert(m => m.MemberId, memberId)
+            .SetOnInsert(m => m.Member, display)
+            .SetOnInsert(m => m.Mention, mention)
+            .SetOnInsert(m => m.JoinedAt, now)
+            .SetOnInsert(m => m.Status, initialStatus)
+            .SetOnInsert(m => m.StatusChangedAt, initialStatus == MemberStatus.Unknown ? null : (DateTime?)now)
+            .SetOnInsert(m => m.StatusReason, initialReason)
+            .SetOnInsert(m => m.StatusHistory, history)
+            .SetOnInsert(m => m.RemovedByModeration, false)
+            .SetOnInsert(m => m.IsOnboardingInProgress, false);
+
+        GuildMember? before = null;
+        for (int attempt = 0; ; attempt++)
+        {
+            try
+            {
+                before = await db.Collection<GuildMember>().FindOneAndUpdateAsync(
+                    filter,
+                    upsert,
+                    new FindOneAndUpdateOptions<GuildMember>
+                    {
+                        IsUpsert = true, ReturnDocument = ReturnDocument.Before
+                    });
+                break;
+            }
+            catch (MongoCommandException ex) when (attempt == 0 && ex.Code == 11000)
+            {
+                // Lost the upsert race to another creator; the retry matches their document.
+            }
+            catch (MongoWriteException ex) when (attempt == 0 && ex.WriteError.Category == ServerErrorCategory.DuplicateKey)
+            {
+            }
+        }
+
+        GuildMember? current = await db.Find<GuildMember>().OneAsync(id);
+        return (current ?? throw new InvalidOperationException($"Member {id} vanished after upsert."),
+            before is null);
+    }
+
+    /// <summary>
+    ///     Atomically re-activates a returning member: one <c>$set</c> + <c>$push</c> that clears lifecycle fields,
+    ///     detaches the old channel/widget and records a rejoin event. Skipped (returns <see langword="false" />)
+    ///     when a honeypot ban was recorded moments ago, so a slow join handler cannot undo a ban that raced it.
+    /// </summary>
+    public async Task<bool> ReactivateAsync(DB db)
+    {
+        DateTime now = DateTime.UtcNow;
+        DateTime banCutoff = now - MemberTransitionPolicy.ExternalKickUpgradeWindow;
+
+        MemberStatusEvent evt = new()
+        {
+            From = Status, To = MemberStatus.New, At = now, Reason = "rejoin"
+        };
+
+        UpdateResult result = await db.Update<GuildMember>()
+            .MatchID(ID)
+            .Match(f => !(f.Eq(m => m.Status, MemberStatus.BannedByHoneypot) &
+                          f.Gt(m => m.StatusChangedAt, (DateTime?)banCutoff)))
+            .Modify(m => m.JoinedAt, now)
+            .Modify(m => m.Status, MemberStatus.New)
+            .Modify(m => m.StatusChangedAt, (DateTime?)now)
+            .Modify(m => m.StatusReason, "rejoin")
+            .Modify(b => b.Push(m => m.StatusHistory, evt))
+            .Modify(m => m.LeftAt, (DateTime?)null)
+            .Modify(m => m.KickedAt, (DateTime?)null)
+            .Modify(m => m.BannedAt, (DateTime?)null)
+            .Modify(m => m.AutoKickedAt, (DateTime?)null)
+            .Modify(m => m.PromotedAt, (DateTime?)null)
+            .Modify(m => m.FullMemberAt, (DateTime?)null)
+            .Modify(m => m.StrangerRoleRemovedAt, (DateTime?)null)
+            .Modify(m => m.RemovedByModeration, false)
+            .Modify(m => m.Application, (StrangerApplicationEmbed?)null)
+            .Modify(m => m.Channel, (NewbieChannel?)null)
+            .ExecuteAsync();
+
+        if (result.MatchedCount == 0)
+        {
+            Log.Warning("GuildMember {MemberId} rejoin reset skipped: fresh honeypot ban recorded", ID);
+            return false;
+        }
+
+        Reset();
+        JoinedAt = now;
+        return true;
     }
 
 
@@ -364,11 +652,25 @@ internal sealed partial class GuildMember
     /// </summary>
     public async Task DeleteApplicationWidget(DB db, DiscordClient client)
     {
-        await UpdateApplicationWidget(client, true);
+        if (Application is null)
+        {
+            return;
+        }
 
-        await db.DeleteAsync(Application!);
+        try
+        {
+            await UpdateApplicationWidget(client, true);
+        }
+        catch (NotFoundException)
+        {
+            // Message already gone; the DB reference must still be cleared.
+            Log.Warning("Application widget message for {MemberId} no longer exists", ID);
+        }
+
+        StrangerApplicationEmbed application = Application;
+        await ClearApplicationReferenceAsync(db, application);
+        await db.DeleteAsync(application);
         Application = null;
-        await db.SaveAsync(this);
     }
 
     /// <summary>
@@ -396,8 +698,9 @@ internal sealed partial class GuildMember
             // message already gone
         }
 
-        await db.DeleteAsync(Application);
+        StrangerApplicationEmbed application = Application;
+        await ClearApplicationReferenceAsync(db, application);
+        await db.DeleteAsync(application);
         Application = null;
-        await db.SaveAsync(this);
     }
 }

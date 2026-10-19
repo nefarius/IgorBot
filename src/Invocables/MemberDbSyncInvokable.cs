@@ -2,6 +2,7 @@ using Coravel.Invocable;
 
 using DSharpPlus;
 using DSharpPlus.Entities;
+using DSharpPlus.Exceptions;
 
 using IgorBot.Core;
 using IgorBot.Schema;
@@ -41,61 +42,28 @@ internal class MemberDbSyncInvokable(
 
                 logger.LogDebug("Processing members of {Guild}", guild);
 
-                List<DiscordMember> members = await guild.GetAllMembersAsync().MaterializeAsync();
+                List<DiscordMember> members;
+                try
+                {
+                    members = await guild.GetAllMembersAsync().MaterializeAsync();
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Failed to list members of {Guild}; continuing with remaining guilds", guild);
+                    continue;
+                }
 
                 foreach (DiscordMember member in members.Where(m => !m.IsBot))
                 {
-                    string id = member.ToEntityId();
-                    GuildMember? guildMember = await db.Find<GuildMember>().OneAsync(id);
-
-                    // already exists
-                    if (guildMember is not null)
+                    // One bad member must not stop the synchronization of everybody else.
+                    try
                     {
-                        // newbie channel object exists in DB but no longer in guild
-                        if (guildMember.Channel is not null &&
-                            !guild.Channels.ContainsKey(guildMember.Channel.ChannelId))
-                        {
-                            logger.LogInformation("Removing orphaned channel entity {Channel}", guildMember.Channel);
-                            await guildMember.DeleteChannel(db);
-                        }
-
-                        string currentMemberString = member.ToString();
-
-                        if (!string.IsNullOrEmpty(currentMemberString) && guildMember.Member != currentMemberString)
-                        {
-                            logger.LogInformation("Updating Member property from {Old} to {New} for entity {Member}",
-                                guildMember.Member, currentMemberString, guildMember);
-                            guildMember.Member = currentMemberString;
-                            await db.SaveAsync(guildMember);
-                        }
-
-                        continue;
+                        await SyncMemberAsync(guild, member);
                     }
-
-                    // add missing
-                    DateTime now = DateTime.UtcNow;
-                    guildMember = new GuildMember
+                    catch (Exception ex)
                     {
-                        GuildId = member.Guild.Id,
-                        MemberId = member.Id,
-                        Member = member.ToString(),
-                        Mention = member.Mention,
-                        Status = MemberStatus.New,
-                        StatusChangedAt = now,
-                        StatusReason = MemberLifecycleClassifier.DiscoveredBySyncReason
-                    };
-                    guildMember.StatusHistory.Add(new MemberStatusEvent
-                    {
-                        From = MemberStatus.Unknown,
-                        To = MemberStatus.New,
-                        At = now,
-                        Reason = MemberLifecycleClassifier.DiscoveredBySyncReason
-                    });
-
-                    await db.SaveAsync(guildMember);
-
-                    logger.LogInformation("{Member} added to DB by sync (stamped Status={Status})", member,
-                        MemberStatus.New);
+                        logger.LogError(ex, "Failed to synchronize {Member}", member);
+                    }
                 }
             }
 
@@ -104,6 +72,61 @@ internal class MemberDbSyncInvokable(
         catch (Exception ex)
         {
             logger.LogError(ex, "An error occured during sync run");
+        }
+    }
+
+    private async Task SyncMemberAsync(DiscordGuild guild, DiscordMember member)
+    {
+        DateTime now = DateTime.UtcNow;
+
+        // Atomic create-or-load; never overwrites a document another handler is creating or changing.
+        (GuildMember guildMember, bool created) = await GuildMember.EnsureExistsAsync(
+            db, guild.Id, member.Id, member.ToString(), member.Mention,
+            MemberStatus.New, MemberLifecycleClassifier.DiscoveredBySyncReason,
+            new MemberStatusEvent
+            {
+                From = MemberStatus.Unknown,
+                To = MemberStatus.New,
+                At = now,
+                Reason = MemberLifecycleClassifier.DiscoveredBySyncReason
+            });
+
+        if (created)
+        {
+            logger.LogInformation("{Member} added to DB by sync (stamped Status={Status})", member,
+                MemberStatus.New);
+            return;
+        }
+
+        // newbie channel object exists in DB but no longer in guild
+        if (guildMember.Channel is not null &&
+            !guild.Channels.ContainsKey(guildMember.Channel.ChannelId))
+        {
+            // A cache miss is not proof of deletion; confirm through the REST API first.
+            bool confirmedGone = false;
+            try
+            {
+                await guild.GetChannelAsync(guildMember.Channel.ChannelId);
+            }
+            catch (NotFoundException)
+            {
+                confirmedGone = true;
+            }
+
+            if (confirmedGone)
+            {
+                logger.LogInformation("Removing orphaned channel entity {Channel}", guildMember.Channel);
+                await guildMember.DeleteChannel(db);
+            }
+        }
+
+        string currentMemberString = member.ToString();
+
+        if (!string.IsNullOrEmpty(currentMemberString) && guildMember.Member != currentMemberString)
+        {
+            logger.LogInformation("Updating Member property from {Old} to {New} for entity {Member}",
+                guildMember.Member, currentMemberString, guildMember);
+            await guildMember.UpdateDisplayAsync(db, currentMemberString, guildMember.Mention);
         }
     }
 }

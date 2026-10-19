@@ -50,7 +50,12 @@ internal sealed class AuditLogKickHandler(
             return;
         }
 
-        if (!ExternalKickPolicy.ShouldPreMark(member.Status))
+        // The audit-log entry can arrive after the removal event was already classified as voluntary;
+        // a recent LeftVoluntarily is upgraded to KickedExternally.
+        bool upgradeLeave = MemberTransitionPolicy.CanUpgradeLeaveToExternalKick(
+            member.Status, member.StatusChangedAt, DateTime.UtcNow);
+
+        if (!upgradeLeave && !ExternalKickPolicy.ShouldPreMark(member.Status))
         {
             logger.LogInformation(
                 "Audit-log kick for {TargetId}: status already {Status}, skipping pre-mark",
@@ -62,8 +67,20 @@ internal sealed class AuditLogKickHandler(
             "External kick detected via audit log: member {TargetId} in guild {GuildId} kicked by actor {ActorId} (reason={Reason}). Pre-marking as KickedExternally.",
             targetId, guildId, actorId, reason);
 
-        await member.TransitionToAsync(db, MemberStatus.KickedExternally,
-            reason: reason ?? "external kick via audit log",
-            actorId: actorId);
+        MemberStatus[] allowedFrom =
+        [
+            .. MemberTransitionPolicy.AllowedFrom(MemberStatus.KickedExternally)!,
+            MemberStatus.LeftVoluntarily
+        ];
+
+        // Conditional: a status written concurrently by another handler (panel kick, ban) wins.
+        if (!await member.TryTransitionAsync(db, MemberStatus.KickedExternally,
+                allowedFrom,
+                reason ?? "external kick via audit log",
+                actorId))
+        {
+            logger.LogInformation(
+                "Audit-log kick for {TargetId} not recorded: status changed concurrently", targetId);
+        }
     }
 }

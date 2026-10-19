@@ -7,6 +7,7 @@ using IgorBot.Handlers;
 using IgorBot.Invocables;
 using IgorBot.Schema;
 using IgorBot.Services;
+using IgorBot.Util;
 
 using MongoDB.Driver;
 using MongoDB.Entities;
@@ -49,6 +50,11 @@ IHostBuilder builder = Host.CreateDefaultBuilder(args)
             .ExecuteAsync()
             .GetAwaiter()
             .GetResult();
+
+        // Registered before every other hosted service: stops last, i.e. after the gateway no longer
+        // delivers events, and waits for in-flight event follow-up work.
+        services.AddHostedService<BackgroundWorkDrainService>();
+        services.Configure<HostOptions>(o => o.ShutdownTimeout = TimeSpan.FromSeconds(30));
 
         services.AddSingleton<IDiscordReadinessService, DiscordReadinessService>();
         services.AddSingleton<IHoneypotBanClient, DiscordHoneypotBanClient>();
