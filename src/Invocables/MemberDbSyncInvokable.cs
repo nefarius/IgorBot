@@ -2,6 +2,7 @@ using Coravel.Invocable;
 
 using DSharpPlus;
 using DSharpPlus.Entities;
+using DSharpPlus.Exceptions;
 
 using IgorBot.Core;
 using IgorBot.Schema;
@@ -101,8 +102,22 @@ internal class MemberDbSyncInvokable(
         if (guildMember.Channel is not null &&
             !guild.Channels.ContainsKey(guildMember.Channel.ChannelId))
         {
-            logger.LogInformation("Removing orphaned channel entity {Channel}", guildMember.Channel);
-            await guildMember.DeleteChannel(db);
+            // A cache miss is not proof of deletion; confirm through the REST API first.
+            bool confirmedGone = false;
+            try
+            {
+                await guild.GetChannelAsync(guildMember.Channel.ChannelId);
+            }
+            catch (NotFoundException)
+            {
+                confirmedGone = true;
+            }
+
+            if (confirmedGone)
+            {
+                logger.LogInformation("Removing orphaned channel entity {Channel}", guildMember.Channel);
+                await guildMember.DeleteChannel(db);
+            }
         }
 
         string currentMemberString = member.ToString();

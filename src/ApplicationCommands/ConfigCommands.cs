@@ -67,7 +67,8 @@ public sealed class ConfigCommands(IGuildConfigService guildConfigService)
             MemberWelcomeTemplate = memberWelcomeTemplate,
             AutoAssignStrangerRoleOnJoin = autoAssignStrangerRole,
             EnableOnboardingWorkflow = enableOnboardingWorkflow,
-            ApplicationModeratorRoleIds = []
+            ApplicationModeratorRoleIds = [],
+            OverwriteExisting = true
         };
 
         if (idleKickMinutes > 0)

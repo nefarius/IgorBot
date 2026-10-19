@@ -126,6 +126,13 @@ public sealed class GuildConfig
     ///     <see cref="ConfigConflictException" /> when somebody else saved in the meantime.
     /// </summary>
     public int ConfigVersion { get; set; }
+
+    /// <summary>
+    ///     Explicit marker for an intentional overwrite of an existing stored configuration (fresh
+    ///     <c>/config setup</c>). Not persisted. Without it, <c>SaveAsync</c> always compares
+    ///     <see cref="ConfigVersion" /> (including <c>0</c> for legacy documents) against the stored one.
+    /// </summary>
+    public bool OverwriteExisting { get; set; }
 }
 
 /// <summary>

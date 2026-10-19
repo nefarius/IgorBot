@@ -16,13 +16,24 @@ internal static class ObservableBackgroundWork
         Func<CancellationToken, Task> work,
         CancellationToken cancellationToken,
         ILogger logger,
-        string operation)
+        string operation,
+        bool cancelInFlightOnStop = false)
     {
+        // Shutdown stops work that has not started yet; work already running is only cancelled when it opted in,
+        // otherwise it may finish (bounded by the drain deadline) instead of being cut off mid-write.
+        CancellationToken workToken = cancelInFlightOnStop ? cancellationToken : CancellationToken.None;
+
         Task task = Task.Run(async () =>
         {
             try
             {
-                await work(cancellationToken);
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    logger.LogDebug("Skipped {Operation}: host is stopping", operation);
+                    return;
+                }
+
+                await work(workToken);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -42,7 +53,7 @@ internal static class ObservableBackgroundWork
     ///     Waits until all tracked work finished or <paramref name="timeout" /> elapsed.
     /// </summary>
     /// <returns>The number of tasks still running.</returns>
-    public static async Task<int> DrainAsync(TimeSpan timeout)
+    public static async Task<int> DrainAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
     {
         Task[] pending = InFlight.Keys.ToArray();
         if (pending.Length == 0)
@@ -50,7 +61,7 @@ internal static class ObservableBackgroundWork
             return 0;
         }
 
-        await Task.WhenAny(Task.WhenAll(pending), Task.Delay(timeout));
+        await Task.WhenAny(Task.WhenAll(pending), Task.Delay(timeout, cancellationToken));
         return InFlight.Count;
     }
 }
@@ -74,7 +85,7 @@ internal sealed class BackgroundWorkDrainService(ILogger<BackgroundWorkDrainServ
         }
 
         logger.LogInformation("Waiting for {Count} background operation(s) to finish", active);
-        int remaining = await ObservableBackgroundWork.DrainAsync(DrainTimeout);
+        int remaining = await ObservableBackgroundWork.DrainAsync(DrainTimeout, cancellationToken);
         if (remaining > 0)
         {
             logger.LogWarning("{Count} background operation(s) did not finish before shutdown", remaining);

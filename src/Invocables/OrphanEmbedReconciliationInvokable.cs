@@ -157,7 +157,14 @@ internal class OrphanEmbedReconciliationInvokable(
                 logger.LogInformation(
                     "Application widget message no longer exists for {MemberId}, removing orphaned embed",
                     guildMember.MemberId);
-                await guildMember.DeleteApplication(db);
+                try
+                {
+                    await guildMember.DeleteApplication(db);
+                }
+                catch (Exception deleteEx)
+                {
+                    logger.LogError(deleteEx, "Failed to remove orphaned embed for {MemberId}", guildMember.MemberId);
+                }
             }
             catch (Exception ex)
             {

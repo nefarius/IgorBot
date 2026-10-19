@@ -19,6 +19,9 @@ internal sealed class CachedGuildConfigService(IGuildConfigService inner, ILogge
 
     private readonly ConcurrentDictionary<ulong, CachedEntry> _cache = new();
 
+    // Bumped on every invalidation so an in-flight read cannot re-cache a pre-save snapshot.
+    private readonly ConcurrentDictionary<ulong, long> _generations = new();
+
     public async Task<GuildConfig?> GetAsync(ulong guildId, CancellationToken ct = default)
     {
         if (_cache.TryGetValue(guildId, out CachedEntry? entry) && !entry.IsExpired())
@@ -26,14 +29,20 @@ internal sealed class CachedGuildConfigService(IGuildConfigService inner, ILogge
             return Clone(entry.Config);
         }
 
+        long generation = _generations.GetValueOrDefault(guildId);
         GuildConfig? config = await inner.GetAsync(guildId, ct);
-        if (config is not null)
+
+        // Only cache when no save invalidated this guild while the read was in flight.
+        if (_generations.GetValueOrDefault(guildId) == generation)
         {
-            _cache[guildId] = new CachedEntry(Clone(config), CacheTtlSeconds);
-        }
-        else
-        {
-            _cache.TryRemove(guildId, out _);
+            if (config is not null)
+            {
+                _cache[guildId] = new CachedEntry(Clone(config), CacheTtlSeconds);
+            }
+            else
+            {
+                _cache.TryRemove(guildId, out _);
+            }
         }
 
         return config;
@@ -53,6 +62,7 @@ internal sealed class CachedGuildConfigService(IGuildConfigService inner, ILogge
         finally
         {
             // Also on failure (e.g. a version conflict): the cached copy may be the stale one.
+            _generations.AddOrUpdate(config.GuildId, 1, static (_, g) => g + 1);
             if (_cache.TryRemove(config.GuildId, out _))
             {
                 logger.LogDebug("Invalidated guild config cache for {GuildId}", config.GuildId);

@@ -149,6 +149,19 @@ internal partial class ApplicationWorkflow
 
             try
             {
+                if (discordChannel is null)
+                {
+                    // A cache miss is not proof of deletion; confirm through the REST API.
+                    try
+                    {
+                        discordChannel = await e.Guild.GetChannelAsync(newbieChannel.ChannelId);
+                    }
+                    catch (NotFoundException)
+                    {
+                        // confirmed gone
+                    }
+                }
+
                 if (discordChannel is not null)
                 {
                     logger.LogInformation("Removing channel {Channel}", discordChannel);

@@ -31,15 +31,17 @@ internal sealed class GuildConfigService(DB db) : IGuildConfigService
 
     public async Task SaveAsync(GuildConfig config, CancellationToken ct = default)
     {
-        // The version the caller based its edits on. 0 = blind overwrite (fresh /config setup, migration).
+        // The version the caller based its edits on. Version 0 is a regular value (legacy documents);
+        // only the explicit OverwriteExisting marker skips the comparison.
         int expectedVersion = config.ConfigVersion;
+        bool blind = config.OverwriteExisting;
 
         for (int attempt = 0; attempt < MaxSaveAttempts; attempt++)
         {
             GuildConfigEntity? previous = await db.Find<GuildConfigEntity>()
                 .OneAsync(config.GuildId.ToString(), ct);
 
-            if (expectedVersion != 0 && previous is not null && previous.ConfigVersion != expectedVersion)
+            if (!blind && previous is not null && previous.ConfigVersion != expectedVersion)
             {
                 throw new ConfigConflictException(config.GuildId);
             }
@@ -88,7 +90,7 @@ internal sealed class GuildConfigService(DB db) : IGuildConfigService
                 return;
             }
 
-            if (expectedVersion != 0)
+            if (!blind)
             {
                 throw new ConfigConflictException(config.GuildId);
             }

@@ -106,7 +106,7 @@ public sealed class GuildConfigHoneypotActivationTests : IAsyncLifetime
     {
         await _sut.SaveAsync(MinimalConfig(channelId: 10));
         GuildConfig stale = (await _sut.GetAsync(GuildId))!;
-        stale.ConfigVersion = 0; // blind overwrite (e.g. fresh setup) still keeps the newer honeypot channel
+        stale.OverwriteExisting = true; // intentional overwrite (e.g. fresh setup) still keeps the newer honeypot channel
 
         GuildConfig newer = (await _sut.GetAsync(GuildId))!;
         newer.HoneypotChannelId = 20;

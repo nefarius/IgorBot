@@ -41,6 +41,7 @@ internal sealed class IgorCoreModule(
             ct => reconciliation.ReconcileGuildAsync(guildId, ct),
             lifetime.ApplicationStopping,
             logger,
-            "lurker-reconciliation");
+            "lurker-reconciliation",
+            cancelInFlightOnStop: true);
     }
 }

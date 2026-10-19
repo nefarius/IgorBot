@@ -120,6 +120,19 @@ internal partial class ApplicationWorkflow
                     DiscordChannel? discordChannel = e.Guild.FindChannel(newbieChannel.ChannelId);
                     if (discordChannel is null)
                     {
+                        // A cache miss is not proof of deletion; confirm through the REST API.
+                        try
+                        {
+                            discordChannel = await e.Guild.GetChannelAsync(newbieChannel.ChannelId);
+                        }
+                        catch (NotFoundException)
+                        {
+                            // confirmed gone
+                        }
+                    }
+
+                    if (discordChannel is null)
+                    {
                         logger.LogWarning("Couldn't find temporary channel to delete");
                     }
                     else
