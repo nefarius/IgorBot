@@ -56,18 +56,18 @@ internal sealed class HoneypotEnforcementService(
             return await RetryExistingHoneypotBanAsync(guildId, memberId, memberDisplay);
         }
 
-        bool isNewDocument = existing is null;
-        GuildMember guildMember = existing ?? new GuildMember
+        GuildMember guildMember;
+        bool isNewDocument;
+        if (existing is not null)
         {
-            GuildId = guildId,
-            MemberId = memberId,
-            Member = memberDisplay,
-            Mention = mention
-        };
-
-        if (isNewDocument)
+            guildMember = existing;
+            isNewDocument = false;
+        }
+        else
         {
-            await db.SaveAsync(guildMember);
+            // Atomic upsert: a concurrent join handler or sync creating the same document cannot collide.
+            (guildMember, isNewDocument) = await GuildMember.EnsureExistsAsync(
+                db, guildId, memberId, memberDisplay, mention, MemberStatus.Unknown, null);
         }
 
         MemberStatus previousStatus = guildMember.Status;

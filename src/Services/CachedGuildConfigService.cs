@@ -1,6 +1,10 @@
 using System.Collections.Concurrent;
 
 using IgorBot.Core;
+using IgorBot.Schema;
+
+using MongoDB.Bson;
+using MongoDB.Bson.Serialization;
 
 namespace IgorBot.Services;
 
@@ -19,13 +23,13 @@ internal sealed class CachedGuildConfigService(IGuildConfigService inner, ILogge
     {
         if (_cache.TryGetValue(guildId, out CachedEntry? entry) && !entry.IsExpired())
         {
-            return entry.Config;
+            return Clone(entry.Config);
         }
 
         GuildConfig? config = await inner.GetAsync(guildId, ct);
         if (config is not null)
         {
-            _cache[guildId] = new CachedEntry(config, CacheTtlSeconds);
+            _cache[guildId] = new CachedEntry(Clone(config), CacheTtlSeconds);
         }
         else
         {
@@ -42,11 +46,28 @@ internal sealed class CachedGuildConfigService(IGuildConfigService inner, ILogge
 
     public async Task SaveAsync(GuildConfig config, CancellationToken ct = default)
     {
-        await inner.SaveAsync(config, ct);
-        if (_cache.TryRemove(config.GuildId, out _))
+        try
         {
-            logger.LogDebug("Invalidated guild config cache for {GuildId}", config.GuildId);
+            await inner.SaveAsync(config, ct);
         }
+        finally
+        {
+            // Also on failure (e.g. a version conflict): the cached copy may be the stale one.
+            if (_cache.TryRemove(config.GuildId, out _))
+            {
+                logger.LogDebug("Invalidated guild config cache for {GuildId}", config.GuildId);
+            }
+        }
+    }
+
+    /// <summary>
+    ///     Callers mutate the config they get (commands) while others read it concurrently (honeypot, jobs), so every
+    ///     caller receives its own deep copy.
+    /// </summary>
+    internal static GuildConfig Clone(GuildConfig config)
+    {
+        BsonDocument document = GuildConfigEntity.FromGuildConfig(config).ToBsonDocument();
+        return BsonSerializer.Deserialize<GuildConfigEntity>(document).ToGuildConfig();
     }
 
     private sealed class CachedEntry

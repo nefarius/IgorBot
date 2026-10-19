@@ -150,9 +150,7 @@ internal sealed class OnBoardingApplicationCommands(
         {
             if (QuestionnaireSessionPolicy.ShouldRearmAutoKickAfterDmFailure())
             {
-                application.IsAutoKickEnabled = true;
-                await db.SaveAsync(application);
-                await db.SaveAsync(dbMember);
+                await dbMember.SetAutoKickEnabledAsync(db, true);
             }
 
             await ctx.EditResponseAsync(new DiscordMessageBuilder().AddEmbed(new DiscordEmbedBuilder
@@ -185,9 +183,7 @@ internal sealed class OnBoardingApplicationCommands(
         //
         if (QuestionnaireSessionPolicy.ShouldDisableAutoKickWhileAnswering())
         {
-            application.IsAutoKickEnabled = false;
-            await db.SaveAsync(application);
-            await db.SaveAsync(dbMember);
+            await dbMember.SetAutoKickEnabledAsync(db, false);
             await dbMember.UpdateApplicationWidget(ctx.Client);
         }
 
@@ -252,9 +248,7 @@ internal sealed class OnBoardingApplicationCommands(
 
             if (QuestionnaireSessionPolicy.ShouldRearmAutoKick(disposition))
             {
-                application.IsAutoKickEnabled = true;
-                await db.SaveAsync(application);
-                await db.SaveAsync(dbMember);
+                await dbMember.SetAutoKickEnabledAsync(db, true);
 
                 if (disposition == QuestionnaireReplyDisposition.Cancelled)
                 {
@@ -290,6 +284,29 @@ internal sealed class OnBoardingApplicationCommands(
 
             responses.Add(answer ?? string.Empty);
         }
+
+        // The questionnaire can take minutes; the snapshot loaded at the start is stale by now. Reload and make
+        // sure the member is still an active applicant before persisting or promoting anything.
+        GuildMember? fresh = await db.Find<GuildMember>().OneAsync(dbMember.ID);
+        if (fresh?.Application is null ||
+            fresh.Application.ID != application.ID ||
+            fresh.HasLeftGuild ||
+            fresh.Status == MemberStatus.StrangerRoleRemoved)
+        {
+            logger.LogWarning("{Member} finished the questionnaire but the application is no longer active",
+                ctx.RequireMember());
+            await interactionChannel.SendMessageAsync(new DiscordEmbedBuilder
+            {
+                Title = "Application no longer active",
+                Description =
+                    $"{ctx.RequireMember().Mention} your application is no longer active, so your answers were not submitted.",
+                Color = DiscordColor.IndianRed
+            });
+            return;
+        }
+
+        dbMember = fresh;
+        application = fresh.Application;
 
         List<OnboardingAnswer> answers = new(questionnaire.Questions.Count);
         for (int i = 0; i < questionnaire.Questions.Count; i++)
@@ -396,25 +413,23 @@ internal sealed class OnBoardingApplicationCommands(
             logger.LogError(ex, "Failed to send submission message");
         }
 
-        application.QuestionnaireSubmittedAt = DateTime.UtcNow;
-        if (decision.Outcome != OnboardingDecisionOutcome.Disabled)
-        {
-            application.Decision = decision.ToRecord(previouslyAttempted || willPromote, autoPromoted: false);
-        }
+        OnboardingDecisionRecord? decisionRecord = decision.Outcome != OnboardingDecisionOutcome.Disabled
+            ? decision.ToRecord(previouslyAttempted || willPromote, autoPromoted: false)
+            : null;
 
         // Persist the submission timestamp so the Promote button remains visible
         // after a bot restart and so the auto-kick query filter stays correct.
-        await db.SaveAsync(application);
-        await db.SaveAsync(dbMember);
-        if (!alreadyPromoted)
-        {
-            await dbMember.TransitionToAsync(db, MemberStatus.QuestionnaireSubmitted);
-        }
+        // Targeted update: only the embedded application fields change.
+        await dbMember.SetQuestionnaireSubmittedAsync(db, DateTime.UtcNow, decisionRecord);
+
+        // Conditional transition: if the member was kicked/left/promoted meanwhile the automation must not run.
+        bool statusRecorded = alreadyPromoted ||
+                              await dbMember.TryTransitionAsync(db, MemberStatus.QuestionnaireSubmitted);
 
         OnboardingAutomationEffect effect = OnboardingAutomationEffect.Held;
         try
         {
-            effect = alreadyPromoted
+            effect = alreadyPromoted || !statusRecorded
                 ? OnboardingAutomationEffect.Held
                 : await automation.ExecuteAsync(
                     decision,
@@ -430,8 +445,7 @@ internal sealed class OnBoardingApplicationCommands(
             if (effect == OnboardingAutomationEffect.Promoted && application.Decision is not null)
             {
                 application.Decision.AutoPromoted = true;
-                await db.SaveAsync(application);
-                await db.SaveAsync(dbMember);
+                await dbMember.SetApplicationDecisionAsync(db, application.Decision);
             }
 
             if (submissionMessage is not null &&

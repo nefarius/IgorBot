@@ -46,7 +46,8 @@ internal partial class ApplicationWorkflow
                 e.RolesAfter.Any(role => role.Id == guildConfig.MemberRoleId))
             {
                 logger.LogInformation("Full member role set for {Member}", e.Member);
-                await member.TransitionToAsync(db, MemberStatus.FullMember);
+                // Conditional: already-promoted or departed members are left alone.
+                await member.TryTransitionAsync(db, MemberStatus.FullMember);
                 return;
             }
 
@@ -130,8 +131,14 @@ internal partial class ApplicationWorkflow
     {
         logger.LogInformation("Stranger role removed for {Member}", member);
 
-        member.IsOnboardingInProgress = false;
-        await member.TransitionToAsync(db, MemberStatus.StrangerRoleRemoved);
+        // Conditional: a concurrent promotion (FullMember) or departure wins. The cleanup below still runs
+        // either way, because the channel and widget are obsolete in all of those cases.
+        // The in-progress flag is owned by NewMemberHandler and is deliberately not touched here.
+        if (!await member.TryTransitionAsync(db, MemberStatus.StrangerRoleRemoved))
+        {
+            logger.LogInformation(
+                "StrangerRoleRemoved for {Member} not recorded: persisted status already moved on", member);
+        }
 
         // Remove channel
         NewbieChannel? newbieChannel = member.Channel;
@@ -140,13 +147,28 @@ internal partial class ApplicationWorkflow
         {
             DiscordChannel? discordChannel = e.Guild.FindChannel(newbieChannel.ChannelId);
 
-            if (discordChannel is not null)
+            try
             {
-                logger.LogInformation("Removing channel {Channel}", discordChannel);
+                if (discordChannel is not null)
+                {
+                    logger.LogInformation("Removing channel {Channel}", discordChannel);
 
-                await discordChannel.DeleteAsync($"{e.Member} is no longer a stranger");
+                    try
+                    {
+                        await discordChannel.DeleteAsync($"{e.Member} is no longer a stranger");
+                    }
+                    catch (NotFoundException)
+                    {
+                        logger.LogWarning("Channel {ChannelId} was already deleted", newbieChannel.ChannelId);
+                    }
+                }
 
+                // Deleted, already gone or not in the cache: the DB reference is obsolete.
                 await member.DeleteChannel(db);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Failed to remove newbie channel for {Member}", member);
             }
         }
 
@@ -162,9 +184,9 @@ internal partial class ApplicationWorkflow
 
                 await member.DeleteApplicationWidget(db, client);
             }
-            catch (NotFoundException ex)
+            catch (Exception ex)
             {
-                logger.LogError(ex, "Couldn't find status message");
+                logger.LogError(ex, "Couldn't remove application widget for {Member}", member);
             }
         }
     }

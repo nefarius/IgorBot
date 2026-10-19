@@ -147,7 +147,10 @@ public sealed class ConfigCommands(IGuildConfigService guildConfigService)
             }
         }
 
-        await guildConfigService.SaveAsync(config);
+        if (!await TrySaveAsync(ctx, config))
+        {
+            return;
+        }
 
         DiscordEmbedBuilder embed = new()
         {
@@ -250,12 +253,38 @@ public sealed class ConfigCommands(IGuildConfigService guildConfigService)
             return;
         }
 
-        await guildConfigService.SaveAsync(config);
+        if (!await TrySaveAsync(ctx, config))
+        {
+            return;
+        }
 
         await ctx.EditResponseAsync(new DiscordMessageBuilder().AddEmbed(new DiscordEmbedBuilder
         {
             Title = "Updated", Description = $"Set {option} successfully.", Color = new DiscordColor(0x00FF00)
         }));
+    }
+
+    /// <summary>
+    ///     Saves the edited snapshot; reports a concurrent modification instead of silently overwriting it.
+    /// </summary>
+    private async Task<bool> TrySaveAsync(SlashCommandContext ctx, GuildConfig config)
+    {
+        try
+        {
+            await guildConfigService.SaveAsync(config);
+            return true;
+        }
+        catch (ConfigConflictException)
+        {
+            await ctx.EditResponseAsync(new DiscordMessageBuilder().AddEmbed(new DiscordEmbedBuilder
+            {
+                Title = "Configuration changed",
+                Description = "The configuration was changed by someone else while you were editing. " +
+                              "Nothing was saved; please run the command again.",
+                Color = new DiscordColor(0xFFAA00)
+            }));
+            return false;
+        }
     }
 
     private static GuildEntityFacts Describe(DiscordGuild guild, ulong id)

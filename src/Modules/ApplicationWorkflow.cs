@@ -187,8 +187,14 @@ internal partial class ApplicationWorkflow(
         // Pre-mark in DB so that the GuildMemberRemoved event that fires immediately
         // after BanAsync sees the correct terminal status even if this process restarts.
         MemberStatus previousStatus = entry.Status;
-        await entry.TransitionToAsync(db, MemberStatus.BannedByModerator,
-            reason: args.User.ToString(), actorId: args.User.Id);
+        if (!await entry.TryTransitionAsync(db, MemberStatus.BannedByModerator,
+                reason: args.User.ToString(), actorId: args.User.Id))
+        {
+            logger.LogWarning("Ban of {Member} by {User} rejected: status changed concurrently", member, args.User);
+            await args.Interaction.EditOriginalResponseAsync(BuildRestoredWidget(args.Message)
+                .WithContent("This member was already handled by someone else; the panel may be outdated."));
+            return;
+        }
 
         try
         {
@@ -202,7 +208,8 @@ internal partial class ApplicationWorkflow(
                 member, previousStatus);
             try
             {
-                await entry.TransitionToAsync(db, previousStatus,
+                await entry.TryTransitionAsync(db, previousStatus,
+                    allowedFrom: [MemberStatus.BannedByModerator],
                     reason: $"rollback after failed ban by {args.User}", actorId: args.User.Id);
             }
             catch (Exception rollbackEx)
@@ -228,8 +235,14 @@ internal partial class ApplicationWorkflow(
         // Pre-mark in DB so that the GuildMemberRemoved event that fires immediately
         // after RemoveAsync sees the correct terminal status even if this process restarts.
         MemberStatus previousStatus = entry.Status;
-        await entry.TransitionToAsync(db, MemberStatus.KickedByModerator,
-            reason: args.User.ToString(), actorId: args.User.Id);
+        if (!await entry.TryTransitionAsync(db, MemberStatus.KickedByModerator,
+                reason: args.User.ToString(), actorId: args.User.Id))
+        {
+            logger.LogWarning("Kick of {Member} by {User} rejected: status changed concurrently", member, args.User);
+            await args.Interaction.EditOriginalResponseAsync(BuildRestoredWidget(args.Message)
+                .WithContent("This member was already handled by someone else; the panel may be outdated."));
+            return;
+        }
 
         try
         {
@@ -243,7 +256,8 @@ internal partial class ApplicationWorkflow(
                 member, previousStatus);
             try
             {
-                await entry.TransitionToAsync(db, previousStatus,
+                await entry.TryTransitionAsync(db, previousStatus,
+                    allowedFrom: [MemberStatus.KickedByModerator],
                     reason: $"rollback after failed kick by {args.User}", actorId: args.User.Id);
             }
             catch (Exception rollbackEx)
@@ -266,10 +280,7 @@ internal partial class ApplicationWorkflow(
     {
         logger.LogInformation("Disabling auto-kick for {Member}", entry);
 
-        entry.Application!.IsAutoKickEnabled = false;
-        await db.SaveAsync(entry.Application);
-
-        await db.SaveAsync(entry);
+        await entry.SetAutoKickEnabledAsync(db, false);
 
         await entry.RespondToInteraction(args, client);
     }

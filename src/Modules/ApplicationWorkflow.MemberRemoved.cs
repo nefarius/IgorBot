@@ -92,7 +92,12 @@ internal partial class ApplicationWorkflow
                     "Classifying {Member} as voluntary leave (path={Path}, status was {Status})",
                     e.Member, path, member.Status);
 
-                await member.TransitionToAsync(db, MemberStatus.LeftVoluntarily, reason);
+                // Conditional: a rejoin or a more specific terminal status written meanwhile must win.
+                if (!await member.TryTransitionAsync(db, MemberStatus.LeftVoluntarily, reason: reason))
+                {
+                    logger.LogInformation(
+                        "Voluntary-leave transition for {Member} skipped: status changed concurrently", e.Member);
+                }
             }
             else
             {
@@ -102,8 +107,7 @@ internal partial class ApplicationWorkflow
                 logger.LogInformation(
                     "Preserving terminal status {Status} for {Member}, stamping LeftAt only",
                     member.Status, e.Member);
-                member.LeftAt = DateTime.UtcNow;
-                await db.SaveAsync(member);
+                await member.StampLeftAtAsync(db);
             }
 
             // Remove newbie channel (only strangers in onboarding have one)
@@ -122,14 +126,24 @@ internal partial class ApplicationWorkflow
                     {
                         logger.LogInformation("Removing channel {Channel}", discordChannel);
 
-                        await discordChannel.DeleteAsync($"{e.Member} has been removed");
+                        try
+                        {
+                            await discordChannel.DeleteAsync($"{e.Member} has been removed");
+                        }
+                        catch (NotFoundException)
+                        {
+                            logger.LogWarning("Temporary channel {ChannelId} was already deleted",
+                                newbieChannel.ChannelId);
+                        }
                     }
 
+                    // The Discord channel is gone (deleted, missing or never cached): drop the DB reference.
                     await member.DeleteChannel(db);
                 }
-                catch (ServerErrorException)
+                catch (Exception ex)
                 {
-                    logger.LogWarning("Couldn't find temporary channel to delete");
+                    // Keep the DB reference so a later run can retry; never abort the widget cleanup below.
+                    logger.LogError(ex, "Failed to remove temporary channel for {Member}", e.Member);
                 }
             }
 

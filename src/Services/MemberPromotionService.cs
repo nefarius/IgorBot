@@ -38,7 +38,14 @@ internal sealed class MemberPromotionService(DB db, ILogger<MemberPromotionServi
             throw;
         }
 
-        await entry.TransitionToAsync(db, MemberStatus.FullMember, reason: reason, actorId: actorId);
+        // Conditional: the role events may already have recorded the promotion (same status is a no-op),
+        // but a member who left or was removed in the meantime must not be resurrected as FullMember.
+        if (!await entry.TryTransitionAsync(db, MemberStatus.FullMember, reason: reason, actorId: actorId))
+        {
+            logger.LogWarning(
+                "Promotion of {Member} did not update the status: persisted status is no longer promotable",
+                member);
+        }
         if (actorId.HasValue)
         {
             logger.LogInformation("{ActorId} promoted {Member}", actorId, member);
