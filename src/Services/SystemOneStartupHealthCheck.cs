@@ -2,6 +2,9 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 
+using Polly;
+using Polly.Retry;
+
 namespace IgorBot.Services;
 
 /// <summary>
@@ -10,6 +13,9 @@ namespace IgorBot.Services;
 internal sealed class SystemOneStartupHealthCheck : IHostedService
 {
     private const int MaximumHealthBodyLength = 1024;
+    private const int MaximumRetryAttempts = 6;
+    private static readonly TimeSpan DefaultRetryDelay = TimeSpan.FromSeconds(2);
+    private readonly TimeSpan _retryDelay;
     private readonly SystemOneSettings _settings;
     private readonly ILogger<SystemOneStartupHealthCheck> _logger;
     private readonly HttpMessageHandler? _handler;
@@ -18,15 +24,17 @@ internal sealed class SystemOneStartupHealthCheck : IHostedService
     private Task? _probe;
 
     public SystemOneStartupHealthCheck(SystemOneSettings settings, ILogger<SystemOneStartupHealthCheck> logger)
-        : this(settings, logger, null)
+        : this(settings, logger, null, DefaultRetryDelay)
     {
     }
 
     internal SystemOneStartupHealthCheck(
         SystemOneSettings settings,
         ILogger<SystemOneStartupHealthCheck> logger,
-        HttpMessageHandler? handler)
+        HttpMessageHandler? handler,
+        TimeSpan? retryDelay = null)
     {
+        _retryDelay = retryDelay ?? DefaultRetryDelay;
         _settings = settings;
         _logger = logger;
         _handler = handler;
@@ -90,9 +98,12 @@ internal sealed class SystemOneStartupHealthCheck : IHostedService
         Uri endpoint = HealthUri(baseUri);
         string reportedEndpoint = SafeEndpoint(endpoint);
         using HttpClient client = CreateClient();
+        ResiliencePipeline<HttpResponseMessage> pipeline = CreatePipeline(reportedEndpoint);
         try
         {
-            using HttpResponseMessage response = await SendAsync(client, endpoint, cancellationToken);
+            using HttpResponseMessage response = await pipeline.ExecuteAsync(
+                async ct => await SendAsync(client, endpoint, ct),
+                cancellationToken);
             if ((int)response.StatusCode is < 200 or > 299)
             {
                 _logger.LogWarning(
@@ -132,6 +143,45 @@ internal sealed class SystemOneStartupHealthCheck : IHostedService
         {
             _logger.LogWarning(ex, "System One endpoint {Endpoint} could not be reached", reportedEndpoint);
         }
+    }
+
+    private ResiliencePipeline<HttpResponseMessage> CreatePipeline(string reportedEndpoint) =>
+        new ResiliencePipelineBuilder<HttpResponseMessage>()
+            .AddRetry(new RetryStrategyOptions<HttpResponseMessage>
+            {
+                MaxRetryAttempts = MaximumRetryAttempts,
+                BackoffType = DelayBackoffType.Exponential,
+                UseJitter = true,
+                Delay = _retryDelay,
+                MaxDelay = TimeSpan.FromSeconds(30),
+                ShouldHandle = args => ValueTask.FromResult(IsTransient(args.Outcome, args.Context.CancellationToken)),
+                OnRetry = args =>
+                {
+                    string reason = args.Outcome.Exception?.GetType().Name ??
+                                    $"HTTP {(int)args.Outcome.Result!.StatusCode}";
+                    args.Outcome.Result?.Dispose();
+                    _logger.LogInformation(
+                        "System One endpoint {Endpoint} not reachable yet ({Reason}), retry {Attempt} of {Maximum} in {Delay}",
+                        reportedEndpoint,
+                        reason,
+                        args.AttemptNumber + 1,
+                        MaximumRetryAttempts,
+                        args.RetryDelay);
+                    return ValueTask.CompletedTask;
+                }
+            })
+            .Build();
+
+    private static bool IsTransient(Outcome<HttpResponseMessage> outcome, CancellationToken cancellationToken)
+    {
+        if (outcome.Exception is not null)
+        {
+            return outcome.Exception is HttpRequestException ||
+                   (outcome.Exception is OperationCanceledException && !cancellationToken.IsCancellationRequested);
+        }
+
+        int status = (int)outcome.Result!.StatusCode;
+        return status is 408 or 429 or >= 500;
     }
 
     private async Task<HttpResponseMessage> SendAsync(

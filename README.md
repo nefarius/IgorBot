@@ -101,7 +101,7 @@ Individual features can be enabled or disabled per guild:
 
 System One can classify a completed Member questionnaire and automatically promote high-confidence `normal` submissions. `bot`, `reject`, ambiguous, and failed classifications stay in the existing moderator queue. The integration never kicks or bans.
 
-The endpoint is bot-wide. Leave `Bot:SystemOne:BaseUrl` empty to keep the client disabled. For a local PS5LM server, set the server root (`http://host:8081`, not the `/v1/systemone` path) and leave the token empty. For hosted System One, set `Bot:SystemOne:ApiToken`; Igor sends it as `Authorization: Bearer <token>`. Put that token in `Bot__SystemOne__ApiToken` through the environment or user secrets rather than in a committed JSON file.
+The endpoint is bot-wide. Leave `Bot:SystemOne:BaseUrl` empty to keep the client disabled. For a local PS5LM server, set the server root (`http://host:8081`, not the `/v1/systemone` path) and leave the token empty. For hosted System One, set `Bot:SystemOne:ApiToken`; Igor sends it as `Authorization: Bearer <token>`. Put that token in `Bot__SystemOne__ApiToken` through the environment or user secrets rather than in a committed JSON file. The startup health check runs in the background and retries transient failures (timeouts, connection errors, HTTP 408/429/5xx) with exponential backoff for roughly 2 to 3 minutes with the default 10-second request timeout, for example while a VPN tunnel comes up, before it logs a warning. Larger `Bot:SystemOne:TimeoutSeconds` values extend the period before a warning is logged.
 
 | Setting | Description | Default |
 |---------|-------------|---------|

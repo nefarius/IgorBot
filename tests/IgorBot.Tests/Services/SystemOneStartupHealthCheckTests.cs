@@ -84,12 +84,27 @@ public sealed class SystemOneStartupHealthCheckTests
 
         await RunUntilSettled(check);
 
-        LogEntry entry = logger.Entries.Should().ContainSingle().Subject;
+        LogEntry entry = Warnings(logger).Should().ContainSingle().Subject;
         entry.Level.Should().Be(LogLevel.Warning);
         entry.Message.Should().Contain("http://127.0.0.1:9/health");
         entry.Message.Should().Contain("503");
         entry.Exception.Should().BeNull();
-        handler.Calls.Should().Be(1);
+        handler.Calls.Should().Be(7);
+    }
+
+    [Fact]
+    public async Task RetriedResponses_AreDisposedBeforeTheNextRequest()
+    {
+        DisposalTrackingHandler handler = new();
+        CapturingLogger logger = new();
+        SystemOneStartupHealthCheck check = Create(handler, logger);
+
+        await RunUntilSettled(check);
+
+        handler.Calls.Should().Be(7);
+        handler.DisposedBeforeEveryRetry.Should().BeTrue();
+        handler.Content!.IsDisposed.Should().BeTrue();
+        Warnings(logger).Should().ContainSingle().Which.Message.Should().Contain("503");
     }
 
     [Fact]
@@ -107,7 +122,7 @@ public sealed class SystemOneStartupHealthCheckTests
         await RunUntilSettled(check);
 
         watch.Elapsed.Should().BeLessThan(TimeSpan.FromMilliseconds(500));
-        LogEntry entry = logger.Entries.Should().ContainSingle().Subject;
+        LogEntry entry = Warnings(logger).Should().ContainSingle().Subject;
         entry.Level.Should().Be(LogLevel.Warning);
         entry.Message.Should().Contain("503");
         entry.Message.Should().NotContain("could not be reached");
@@ -174,7 +189,7 @@ public sealed class SystemOneStartupHealthCheckTests
 
         await RunUntilSettled(check);
 
-        LogEntry entry = logger.Entries.Should().ContainSingle().Subject;
+        LogEntry entry = Warnings(logger).Should().ContainSingle().Subject;
         entry.Level.Should().Be(LogLevel.Warning);
         entry.Exception.Should().BeOfType<HttpRequestException>();
         entry.Message.Should().Contain("could not be reached");
@@ -189,7 +204,7 @@ public sealed class SystemOneStartupHealthCheckTests
 
         await RunUntilSettled(check);
 
-        LogEntry entry = logger.Entries.Should().ContainSingle().Subject;
+        LogEntry entry = Warnings(logger).Should().ContainSingle().Subject;
         entry.Level.Should().Be(LogLevel.Warning);
         entry.Exception.Should().BeOfType<TaskCanceledException>();
     }
@@ -203,7 +218,7 @@ public sealed class SystemOneStartupHealthCheckTests
 
         await RunUntilSettled(check).WaitAsync(TimeSpan.FromSeconds(4));
 
-        LogEntry entry = logger.Entries.Should().ContainSingle().Subject;
+        LogEntry entry = Warnings(logger).Should().ContainSingle().Subject;
         entry.Level.Should().Be(LogLevel.Warning);
         entry.Message.Should().Contain("could not be reached");
     }
@@ -245,6 +260,52 @@ public sealed class SystemOneStartupHealthCheckTests
         await check.StopAsync(CancellationToken.None);
     }
 
+    [Fact]
+    public async Task TransientTimeout_IsRetriedUntilTheEndpointResponds()
+    {
+        RecordingHandler handler = new() { Error = new TaskCanceledException("timed out"), ErrorCalls = 2 };
+        CapturingLogger logger = new();
+        SystemOneStartupHealthCheck check = Create(handler, logger);
+
+        await RunUntilSettled(check);
+
+        handler.Calls.Should().Be(3);
+        logger.Entries.Count(e => e.Level == LogLevel.Information && e.Message.Contains("retry")).Should().Be(2);
+        Warnings(logger).Should().BeEmpty();
+        logger.Entries[^1].Message.Should().Be("Reached System One endpoint http://127.0.0.1:9/health");
+    }
+
+    [Fact]
+    public async Task ClientError_IsNotRetried()
+    {
+        RecordingHandler handler = new() { StatusCode = HttpStatusCode.NotFound };
+        CapturingLogger logger = new();
+        SystemOneStartupHealthCheck check = Create(handler, logger);
+
+        await RunUntilSettled(check);
+
+        handler.Calls.Should().Be(1);
+        Warnings(logger).Should().ContainSingle().Which.Message.Should().Contain("404");
+    }
+
+    [Fact]
+    public async Task StopDuringBackoff_CancelsWithoutAWarning()
+    {
+        RecordingHandler handler = new() { Error = new HttpRequestException("down") };
+        CapturingLogger logger = new();
+        SystemOneStartupHealthCheck check = Create(handler, logger, retryDelay: TimeSpan.FromMinutes(5));
+
+        await check.StartAsync(CancellationToken.None);
+        await handler.Started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await check.StopAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5));
+
+        Warnings(logger).Should().BeEmpty();
+        handler.Calls.Should().Be(1);
+    }
+
+    private static List<LogEntry> Warnings(CapturingLogger logger) =>
+        logger.Entries.Where(e => e.Level == LogLevel.Warning).ToList();
+
     private static async Task RunUntilSettled(SystemOneStartupHealthCheck check)
     {
         await check.StartAsync(CancellationToken.None);
@@ -257,7 +318,8 @@ public sealed class SystemOneStartupHealthCheckTests
         CapturingLogger logger,
         string baseUrl = "http://127.0.0.1:9",
         string? token = null,
-        int timeoutSeconds = 2)
+        int timeoutSeconds = 2,
+        TimeSpan? retryDelay = null)
     {
         SystemOneSettings settings = SystemOneSettings.Create(new SystemOneConfig
         {
@@ -265,7 +327,7 @@ public sealed class SystemOneStartupHealthCheckTests
             ApiToken = token,
             TimeoutSeconds = timeoutSeconds
         });
-        return new SystemOneStartupHealthCheck(settings, logger, handler);
+        return new SystemOneStartupHealthCheck(settings, logger, handler, retryDelay ?? TimeSpan.Zero);
     }
 
     private sealed record LogEntry(LogLevel Level, string Message, Exception? Exception);
@@ -301,6 +363,8 @@ public sealed class SystemOneStartupHealthCheckTests
 
         public Exception? Error { get; init; }
 
+        public int ErrorCalls { get; init; } = int.MaxValue;
+
         public bool Hold { get; init; }
 
         public bool HoldBody { get; init; }
@@ -327,7 +391,7 @@ public sealed class SystemOneStartupHealthCheckTests
             }
 
             cancellationToken.ThrowIfCancellationRequested();
-            if (Error is not null)
+            if (Error is not null && Calls <= ErrorCalls)
             {
                 throw Error;
             }
@@ -339,6 +403,38 @@ public sealed class SystemOneStartupHealthCheckTests
             {
                 Content = content
             };
+        }
+    }
+
+    private sealed class DisposalTrackingHandler : HttpMessageHandler
+    {
+        public int Calls { get; private set; }
+        public bool DisposedBeforeEveryRetry { get; private set; } = true;
+        public DisposalTrackingContent? Content { get; private set; }
+
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            Calls++;
+            DisposedBeforeEveryRetry &= Content is null || Content.IsDisposed;
+            Content = new DisposalTrackingContent();
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable) { Content = Content });
+        }
+    }
+
+    private sealed class DisposalTrackingContent : StringContent
+    {
+        public DisposalTrackingContent() : base("")
+        {
+        }
+
+        public bool IsDisposed { get; private set; }
+
+        protected override void Dispose(bool disposing)
+        {
+            IsDisposed = true;
+            base.Dispose(disposing);
         }
     }
 
