@@ -64,12 +64,12 @@
       },
       "MongoDB.Entities": {
         "type": "Direct",
-        "requested": "[25.1.0, )",
-        "resolved": "25.1.0",
-        "contentHash": "6g0JrsM/pJykSRVZ2hLtoPUdMap7XJLhxdp0+iGmyxo6iLDC4Tt0On1/wDVx71Rx/aRQ0tDPZamnUQodF7HSwA==",
+        "requested": "[26.0.0, )",
+        "resolved": "26.0.0",
+        "contentHash": "gpj4Y+vBIlWWA+kwEae3BxKCww1JQEkmQ4nh16kNQzO8nP2fSJWV5oadZ2jZmNqaUQMW37pKis0ZV7oUFWT4Vw==",
         "dependencies": {
-          "MongoDB.Driver": "3.8.1",
-          "SharpCompress": "0.48.1"
+          "MongoDB.Driver": "3.12.0",
+          "SharpCompress": "0.50.5"
         }
       },
       "xunit": {
@@ -403,18 +403,18 @@
       },
       "MongoDB.Bson": {
         "type": "Transitive",
-        "resolved": "3.8.1",
-        "contentHash": "b4jm2QxBQcB3zBBM+l0Jdjmn8TYBB+J0QDNaJypkmR1qDC6v5w8IMeYaFPvn/kqo0PvCUGVSQkXm0nVCBjjNYg=="
+        "resolved": "3.12.0",
+        "contentHash": "2iYGykWDl6Wkx2GHjWaPEGAS49lxQN5YFFT1a7l/pKraMo1gqT4aZckhwu53WMinQTc10R4FxUHoo7X9M20GFg=="
       },
       "MongoDB.Driver": {
         "type": "Transitive",
-        "resolved": "3.8.1",
-        "contentHash": "UgmjqgJdxiiiDedoYZBBcYKjblS4I8RvxIF5rZmDQN97xAhRVolN5q70LzkamKwbrDLt944+24eD3uL96A6Ozg==",
+        "resolved": "3.12.0",
+        "contentHash": "KiUb/h/p5JZ15Vmxa5uuJKHzbsjGkN9aH6RrAtwTUGTelhgypZ784hKjdu8IM18ag93Ck/i9GgyP/erb17Cbqw==",
         "dependencies": {
           "DnsClient": "1.6.1",
           "Microsoft.Extensions.Logging.Abstractions": "2.0.0",
-          "MongoDB.Bson": "3.8.1",
-          "SharpCompress": "0.30.1",
+          "MongoDB.Bson": "3.12.0",
+          "SharpCompress": "0.48.1",
           "Snappier": "1.3.1",
           "ZstdSharp.Port": "0.7.3"
         }
@@ -455,8 +455,8 @@
       },
       "SharpCompress": {
         "type": "Transitive",
-        "resolved": "0.48.1",
-        "contentHash": "SqGaVniGG943Gph/gHhUQUiZPyC7y0tXZyMf0/B2oGsMav9dqs7JJOuUA+xOkwKYaWM2TM7aZQjNK91f4bX71A=="
+        "resolved": "0.50.5",
+        "contentHash": "wAEAxPV67rmS3IlIm+tvGNPJXEtZNqlwkZrwJZAvz0AagZP0qLtT4mM2hk8S+uO0Kx+wYoy/FsADQpHwsN5y3g=="
       },
       "Snappier": {
         "type": "Transitive",
@@ -537,7 +537,7 @@
           "DSharpPlus.Interactivity": "[5.0.0-nightly-02613, )",
           "Microsoft.Extensions.Hosting": "[10.0.12, )",
           "Microsoft.VisualStudio.Azure.Containers.Tools.Targets": "[1.23.0, )",
-          "MongoDB.Entities": "[25.1.0, )",
+          "MongoDB.Entities": "[26.0.0, )",
           "OllamaSharp": "[5.5.0, )",
           "Polly.Core": "[8.7.0, )",
           "Serilog.Extensions.Logging": "[10.0.0, )",
