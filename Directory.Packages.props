@@ -11,7 +11,7 @@
         <PackageVersion Include="DSharpPlus.Interactivity" Version="5.0.0-nightly-02613"/>
         <PackageVersion Include="EphemeralMongo" Version="3.2.0"/>
         <PackageVersion Include="FluentAssertions" Version="8.11.0"/>
-        <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.13"/>
+        <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.14"/>
         <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.12"/>
         <PackageVersion Include="Microsoft.Extensions.Logging" Version="10.0.12"/>
         <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.14"/>
