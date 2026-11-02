@@ -6,8 +6,8 @@
     <ItemGroup>
         <PackageVersion Include="Coravel" Version="6.0.2"/>
         <PackageVersion Include="coverlet.collector" Version="10.1.0"/>
-        <PackageVersion Include="DSharpPlus" Version="5.0.0-nightly-02613"/>
-        <PackageVersion Include="DSharpPlus.Commands" Version="5.0.0-nightly-02613"/>
+        <PackageVersion Include="DSharpPlus" Version="5.0.0-nightly-02614"/>
+        <PackageVersion Include="DSharpPlus.Commands" Version="5.0.0-nightly-02614"/>
         <PackageVersion Include="DSharpPlus.Interactivity" Version="5.0.0-nightly-02613"/>
         <PackageVersion Include="EphemeralMongo" Version="3.3.0"/>
         <PackageVersion Include="FluentAssertions" Version="8.11.0"/>

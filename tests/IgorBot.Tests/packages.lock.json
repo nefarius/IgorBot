@@ -532,14 +532,14 @@
         "type": "Project",
         "dependencies": {
           "Coravel": "[6.0.2, )",
-          "DSharpPlus": "[5.0.0-nightly-02613, )",
-          "DSharpPlus.Commands": "[5.0.0-nightly-02613, )",
+          "DSharpPlus": "[5.0.0-nightly-02614, )",
+          "DSharpPlus.Commands": "[5.0.0-nightly-02614, )",
           "DSharpPlus.Interactivity": "[5.0.0-nightly-02613, )",
           "Microsoft.Extensions.Hosting": "[10.0.12, )",
           "Microsoft.VisualStudio.Azure.Containers.Tools.Targets": "[1.23.0, )",
           "MongoDB.Entities": "[25.1.0, )",
           "OllamaSharp": "[5.5.0, )",
-          "Polly.Core": "[8.8.0, )",
+          "Polly.Core": "[8.9.0, )",
           "Serilog.Extensions.Logging": "[10.0.0, )",
           "Serilog.Settings.Configuration": "[10.0.1, )",
           "Serilog.Sinks.Console": "[6.1.1, )"
@@ -560,9 +560,9 @@
       },
       "DSharpPlus": {
         "type": "CentralTransitive",
-        "requested": "[5.0.0-nightly-02613, )",
-        "resolved": "5.0.0-nightly-02613",
-        "contentHash": "7x41e8mhTL4zBW5TU0RUGiPpKsJxupC96GDYjevHWFsALw1F8CyJGUq6PKnYXcDPg85ncJo7ccD9f7/2Rh6zYQ==",
+        "requested": "[5.0.0-nightly-02614, )",
+        "resolved": "5.0.0-nightly-02614",
+        "contentHash": "1dHlSZxMUMtWfXEBY90BOF64F8ROnrNDI0ykPZFun3raSYVHo1XIhcV3p9Zap+sPLICMv2G5uhlQGQ2QOh/NpA==",
         "dependencies": {
           "CommunityToolkit.HighPerformance": "8.4.2",
           "Microsoft.Extensions.Caching.Memory": "10.0.11",
@@ -578,11 +578,11 @@
       },
       "DSharpPlus.Commands": {
         "type": "CentralTransitive",
-        "requested": "[5.0.0-nightly-02613, )",
-        "resolved": "5.0.0-nightly-02613",
-        "contentHash": "ZtrtXgRh4w0R3uWWZV/8BcPF4N10Ry+6dpL7QXoEUjJDn8/mZAyyPpCc4ZIKSWq7KRNki4TUc4L3M++IJ9pNxQ==",
+        "requested": "[5.0.0-nightly-02614, )",
+        "resolved": "5.0.0-nightly-02614",
+        "contentHash": "jXqim63Mk6XJjosWTe7rw9QMKflrCYdNCgFVAFF6Fhtw0BKfACq8y2vmD0oQlET7uSmYeS/mqXRiSNaszyhnNg==",
         "dependencies": {
-          "DSharpPlus": "5.0.0-nightly-02613",
+          "DSharpPlus": "5.0.0-nightly-02614",
           "Microsoft.Extensions.Logging": "10.0.11",
           "Raffinert.FuzzySharp": "3.0.6",
           "Ulid": "1.4.1"
@@ -646,9 +646,9 @@
       },
       "Polly.Core": {
         "type": "CentralTransitive",
-        "requested": "[8.8.0, )",
-        "resolved": "8.8.0",
-        "contentHash": "TewV9uNFsoRFggoFbTAGFwsMYPuckA+wTIpQPyhLL9BANRPQRENz2S4bwATrB3HBOakN5oKLFIllPiDnVecmJg=="
+        "requested": "[8.9.0, )",
+        "resolved": "8.9.0",
+        "contentHash": "Imm3q+XvH+8fiOdCkp+GggDQuxN3e4VznbRxODjjJxCurmAIfUEO4dKcPx8RCwocTkvP6Udw2DyXtC+45tu3jA=="
       },
       "Serilog.Extensions.Logging": {
         "type": "CentralTransitive",
