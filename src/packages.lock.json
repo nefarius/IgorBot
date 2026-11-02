@@ -17,9 +17,9 @@
       },
       "DSharpPlus": {
         "type": "Direct",
-        "requested": "[5.0.0-nightly-02613, )",
-        "resolved": "5.0.0-nightly-02613",
-        "contentHash": "7x41e8mhTL4zBW5TU0RUGiPpKsJxupC96GDYjevHWFsALw1F8CyJGUq6PKnYXcDPg85ncJo7ccD9f7/2Rh6zYQ==",
+        "requested": "[5.0.0-nightly-02614, )",
+        "resolved": "5.0.0-nightly-02614",
+        "contentHash": "1dHlSZxMUMtWfXEBY90BOF64F8ROnrNDI0ykPZFun3raSYVHo1XIhcV3p9Zap+sPLICMv2G5uhlQGQ2QOh/NpA==",
         "dependencies": {
           "CommunityToolkit.HighPerformance": "8.4.2",
           "Microsoft.Extensions.Caching.Memory": "10.0.11",
