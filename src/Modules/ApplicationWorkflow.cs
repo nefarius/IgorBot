@@ -287,11 +287,21 @@ internal partial class ApplicationWorkflow(
     ///     Keeps the panel embed and drops every button, then reports the lookup failure ephemerally.
     ///     A content-only edit would replace the embed, which is what made a stale click look like the panel vanished.
     /// </summary>
-    private static async Task ReportMissingEntryAsync(ComponentInteractionCreatedEventArgs args, string error)
+    private async Task ReportMissingEntryAsync(ComponentInteractionCreatedEventArgs args, string error)
     {
         await args.Interaction.EditOriginalResponseAsync(BuildInertWidget(args.Message));
-        await args.Interaction.CreateFollowupMessageAsync(
-            new DiscordFollowupMessageBuilder().WithContent(error).AsEphemeral(true));
+
+        // The panel is already inert. A follow-up failure must not reach the outer catch,
+        // which would put the original buttons back via BuildRestoredWidget.
+        try
+        {
+            await args.Interaction.CreateFollowupMessageAsync(
+                new DiscordFollowupMessageBuilder().WithContent(error).AsEphemeral(true));
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to publish the missing-entry notice; leaving the status panel inert");
+        }
     }
 
     /// <summary>

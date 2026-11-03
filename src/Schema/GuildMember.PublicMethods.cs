@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+
 using DSharpPlus;
 using DSharpPlus.Entities;
 using DSharpPlus.Exceptions;
@@ -14,6 +16,12 @@ namespace IgorBot.Schema;
 
 internal sealed partial class GuildMember
 {
+    /// <summary>
+    ///     One gate per member so a status-panel refresh and an application deletion, which run on
+    ///     different instances, cannot interleave their read and Discord edit.
+    /// </summary>
+    private static readonly ConcurrentDictionary<string, SemaphoreSlim> ApplicationWidgetGates = new();
+
     /// <summary>
     ///     Transitions this member to a new <see cref="MemberStatus" />, recording a history event,
     ///     mirroring to the legacy timestamp fields for backwards compatibility, and persisting.
@@ -643,17 +651,25 @@ internal sealed partial class GuildMember
     ///     Reloads the member first so a snapshot taken at click time cannot put buttons back
     ///     onto a panel whose application was deleted by a concurrent role or removal event.
     /// </summary>
-    public async Task RespondToInteraction(ComponentInteractionCreatedEventArgs args, DiscordClient client, DB db)
+    public Task RespondToInteraction(ComponentInteractionCreatedEventArgs args, DiscordClient client, DB db)
     {
-        GuildMember source = await db.Find<GuildMember>().OneAsync(ID) ?? this;
-        await args.Interaction.EditOriginalResponseAsync(source.GetInteractionResponse(client));
+        return WithApplicationWidgetGateAsync(async () =>
+        {
+            GuildMember source = await db.Find<GuildMember>().OneAsync(ID) ?? this;
+            await args.Interaction.EditOriginalResponseAsync(source.GetInteractionResponse(client));
+        });
     }
 
     /// <summary>
     ///     Updates the application widget with the last status and removes the application association with this member from
     ///     the DB.
     /// </summary>
-    public async Task DeleteApplicationWidget(DB db, DiscordClient client)
+    public Task DeleteApplicationWidget(DB db, DiscordClient client)
+    {
+        return WithApplicationWidgetGateAsync(() => DeleteApplicationWidgetCore(db, client));
+    }
+
+    private async Task DeleteApplicationWidgetCore(DB db, DiscordClient client)
     {
         if (Application is null)
         {
@@ -674,6 +690,20 @@ internal sealed partial class GuildMember
         await ClearApplicationReferenceAsync(db, application);
         await db.DeleteAsync(application);
         Application = null;
+    }
+
+    private async Task WithApplicationWidgetGateAsync(Func<Task> work)
+    {
+        SemaphoreSlim gate = ApplicationWidgetGates.GetOrAdd(ID, static _ => new SemaphoreSlim(1, 1));
+        await gate.WaitAsync();
+        try
+        {
+            await work();
+        }
+        finally
+        {
+            gate.Release();
+        }
     }
 
     /// <summary>

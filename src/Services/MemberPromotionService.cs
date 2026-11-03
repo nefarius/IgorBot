@@ -38,11 +38,41 @@ internal sealed class MemberPromotionService(DB db, ILogger<MemberPromotionServi
             throw;
         }
 
-        // Role events may already have moved the persisted status (for example to StrangerRoleRemoved)
-        // while this call still holds the snapshot from click time. Reload so the history "from" status
-        // matches the database. A member who left or was removed in the meantime must not be resurrected.
-        GuildMember current = await db.Find<GuildMember>().OneAsync(entry.ID) ?? entry;
-        if (!await current.TryTransitionAsync(db, MemberStatus.FullMember, reason: reason, actorId: actorId))
+        // Record FullMember only from the status just loaded. A compare-and-set against every
+        // promotable status would accept a newer write and store this snapshot as the history "from".
+        // On that conflict, reload and retry once from the refreshed status.
+        bool recorded = false;
+        for (int attempt = 0; attempt < 2 && !recorded; attempt++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            GuildMember? current = await db.Find<GuildMember>().OneAsync(entry.ID);
+            if (current is null)
+            {
+                break;
+            }
+
+            if (current.Status == MemberStatus.FullMember)
+            {
+                recorded = true;
+                break;
+            }
+
+            IReadOnlyCollection<MemberStatus>? promotableFrom =
+                MemberTransitionPolicy.AllowedFrom(MemberStatus.FullMember);
+            if (promotableFrom is null || !promotableFrom.Contains(current.Status))
+            {
+                break;
+            }
+
+            recorded = await current.TryTransitionAsync(
+                db,
+                MemberStatus.FullMember,
+                allowedFrom: [current.Status],
+                reason: reason,
+                actorId: actorId);
+        }
+
+        if (!recorded)
         {
             logger.LogWarning(
                 "Promotion of {Member} did not update the status: persisted status is no longer promotable",
