@@ -1,5 +1,3 @@
-using System.Collections.Concurrent;
-
 using DSharpPlus;
 using DSharpPlus.Entities;
 using DSharpPlus.Exceptions;
@@ -18,9 +16,12 @@ internal sealed partial class GuildMember
 {
     /// <summary>
     ///     One gate per member so a status-panel refresh and an application deletion, which run on
-    ///     different instances, cannot interleave their read and Discord edit.
+    ///     different instances, cannot interleave their read and Discord edit. An entry lives only
+    ///     while an operation holds the gate or is waiting for it.
     /// </summary>
-    private static readonly ConcurrentDictionary<string, SemaphoreSlim> ApplicationWidgetGates = new();
+    private static readonly Dictionary<string, ApplicationWidgetGate> ApplicationWidgetGates = new();
+
+    private static readonly object ApplicationWidgetGateSync = new();
 
     /// <summary>
     ///     Transitions this member to a new <see cref="MemberStatus" />, recording a history event,
@@ -608,9 +609,28 @@ internal sealed partial class GuildMember
     }
 
     /// <summary>
-    ///     Updates the Discord message according to the state of this object.
+    ///     Updates the Discord message from the persisted member.
+    ///     Reloads under the per-member widget gate and does nothing when that member no longer has an
+    ///     application, so a stale snapshot cannot put buttons back on a panel that was already cleared.
     /// </summary>
-    public async Task UpdateApplicationWidget(DiscordClient client, bool isDeleted = false)
+    public Task UpdateApplicationWidget(DB db, DiscordClient client, bool isDeleted = false)
+    {
+        return WithApplicationWidgetGateAsync(async () =>
+        {
+            GuildMember? source = await db.Find<GuildMember>().OneAsync(ID);
+            if (source?.Application is null)
+            {
+                return;
+            }
+
+            await source.EditApplicationWidgetMessageAsync(client, isDeleted);
+        });
+    }
+
+    /// <summary>
+    ///     Writes this instance's widget to Discord. Caller must already hold the member's widget gate.
+    /// </summary>
+    private async Task EditApplicationWidgetMessageAsync(DiscordClient client, bool isDeleted)
     {
         if (Application is null)
         {
@@ -628,12 +648,9 @@ internal sealed partial class GuildMember
             status.AddActionRowComponent(ButtonComponents);
         }
 
-        if (!isDeleted)
+        if (!isDeleted && Application.ButtonComponents.Any())
         {
-            if (Application.ButtonComponents.Any())
-            {
-                status.AddActionRowComponent(Application.ButtonComponents);
-            }
+            status.AddActionRowComponent(Application.ButtonComponents);
         }
 
         DiscordGuild guild = client.Guilds[GuildId];
@@ -682,7 +699,8 @@ internal sealed partial class GuildMember
 
         try
         {
-            await UpdateApplicationWidget(client, true);
+            // Already inside the member gate. The public refresh takes that gate itself and would deadlock.
+            await EditApplicationWidgetMessageAsync(client, isDeleted: true);
         }
         catch (NotFoundException)
         {
@@ -698,16 +716,74 @@ internal sealed partial class GuildMember
 
     private async Task WithApplicationWidgetGateAsync(Func<Task> work)
     {
-        SemaphoreSlim gate = ApplicationWidgetGates.GetOrAdd(ID, static _ => new SemaphoreSlim(1, 1));
-        await gate.WaitAsync();
+        ApplicationWidgetGate gate = EnterApplicationWidgetGate(ID);
         try
         {
-            await work();
+            await gate.Semaphore.WaitAsync();
+            try
+            {
+                await work();
+            }
+            finally
+            {
+                gate.Semaphore.Release();
+            }
         }
         finally
         {
-            gate.Release();
+            ExitApplicationWidgetGate(ID, gate);
         }
+    }
+
+    /// <summary>
+    ///     Counts this operation, including the time it spends waiting, and creates the gate if needed.
+    /// </summary>
+    private static ApplicationWidgetGate EnterApplicationWidgetGate(string memberId)
+    {
+        lock (ApplicationWidgetGateSync)
+        {
+            if (!ApplicationWidgetGates.TryGetValue(memberId, out ApplicationWidgetGate? gate))
+            {
+                gate = new ApplicationWidgetGate();
+                ApplicationWidgetGates.Add(memberId, gate);
+            }
+
+            gate.References++;
+            return gate;
+        }
+    }
+
+    /// <summary>
+    ///     Drops this operation's count and removes the gate only when nothing is holding or waiting on it.
+    /// </summary>
+    private static void ExitApplicationWidgetGate(string memberId, ApplicationWidgetGate gate)
+    {
+        lock (ApplicationWidgetGateSync)
+        {
+            gate.References--;
+            if (gate.References > 0)
+            {
+                return;
+            }
+
+            if (ApplicationWidgetGates.TryGetValue(memberId, out ApplicationWidgetGate? current) &&
+                ReferenceEquals(current, gate))
+            {
+                ApplicationWidgetGates.Remove(memberId);
+            }
+
+            gate.Semaphore.Dispose();
+        }
+    }
+
+    private sealed class ApplicationWidgetGate
+    {
+        public SemaphoreSlim Semaphore { get; } = new(1, 1);
+
+        /// <summary>
+        ///     Operations that hold the semaphore or are queued on it.
+        /// </summary>
+        public int References;
     }
 
     /// <summary>
