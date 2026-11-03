@@ -81,8 +81,7 @@ internal partial class ApplicationWorkflow(
                             if (dbMember is null)
                             {
                                 logger.LogError("Guild member for this application not found in DB");
-                                await args.Interaction.EditOriginalResponseAsync(
-                                    new DiscordWebhookBuilder().WithContent("Member entry not found in database!"));
+                                await ReportMissingEntryAsync(args, "Member entry not found in database!");
                                 break;
                             }
                         }
@@ -92,8 +91,7 @@ internal partial class ApplicationWorkflow(
                         if (application is null)
                         {
                             logger.LogError("DB Entry with {Id} not found", route.DatabaseId);
-                            await args.Interaction.EditOriginalResponseAsync(
-                                new DiscordWebhookBuilder().WithContent("Application entry not found in database!"));
+                            await ReportMissingEntryAsync(args, "Application entry not found in database!");
                             break;
                         }
 
@@ -174,7 +172,7 @@ internal partial class ApplicationWorkflow(
     {
         await promotionService.PromoteAsync(
             args.Guild, member, entry, guildConfig, actorId: args.User.Id, reason: null);
-        await entry.RespondToInteraction(args, client);
+        await entry.RespondToInteraction(args, client, db);
     }
 
     private async Task HandleStrangerBan(ComponentInteractionCreatedEventArgs args, DiscordClient client,
@@ -222,7 +220,7 @@ internal partial class ApplicationWorkflow(
             throw;
         }
 
-        await entry.RespondToInteraction(args, client);
+        await entry.RespondToInteraction(args, client, db);
     }
 
     private async Task HandleStrangerKick(ComponentInteractionCreatedEventArgs args, DiscordClient client,
@@ -270,7 +268,7 @@ internal partial class ApplicationWorkflow(
             throw;
         }
 
-        await entry.RespondToInteraction(args, client);
+        await entry.RespondToInteraction(args, client, db);
     }
 
     private async Task HandleStrangerDisableAutoKick(
@@ -282,7 +280,18 @@ internal partial class ApplicationWorkflow(
 
         await entry.SetAutoKickEnabledAsync(db, false);
 
-        await entry.RespondToInteraction(args, client);
+        await entry.RespondToInteraction(args, client, db);
+    }
+
+    /// <summary>
+    ///     Keeps the panel embed and drops every button, then reports the lookup failure ephemerally.
+    ///     A content-only edit would replace the embed, which is what made a stale click look like the panel vanished.
+    /// </summary>
+    private static async Task ReportMissingEntryAsync(ComponentInteractionCreatedEventArgs args, string error)
+    {
+        await args.Interaction.EditOriginalResponseAsync(BuildInertWidget(args.Message));
+        await args.Interaction.CreateFollowupMessageAsync(
+            new DiscordFollowupMessageBuilder().WithContent(error).AsEphemeral(true));
     }
 
     /// <summary>
@@ -346,6 +355,22 @@ internal partial class ApplicationWorkflow(
             {
                 builder.AddActionRowComponent(cloned);
             }
+        }
+
+        return builder;
+    }
+
+    /// <summary>
+    ///     Builds a webhook edit that keeps the current embeds and sends an empty component list,
+    ///     so a stale custom ID cannot be clicked again and the panel itself stays in the channel.
+    /// </summary>
+    private static DiscordWebhookBuilder BuildInertWidget(DiscordMessage message)
+    {
+        DiscordWebhookBuilder builder = new();
+
+        foreach (DiscordEmbed embed in message.Embeds)
+        {
+            builder.AddEmbed(embed);
         }
 
         return builder;

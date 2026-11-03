@@ -38,9 +38,11 @@ internal sealed class MemberPromotionService(DB db, ILogger<MemberPromotionServi
             throw;
         }
 
-        // Conditional: the role events may already have recorded the promotion (same status is a no-op),
-        // but a member who left or was removed in the meantime must not be resurrected as FullMember.
-        if (!await entry.TryTransitionAsync(db, MemberStatus.FullMember, reason: reason, actorId: actorId))
+        // Role events may already have moved the persisted status (for example to StrangerRoleRemoved)
+        // while this call still holds the snapshot from click time. Reload so the history "from" status
+        // matches the database. A member who left or was removed in the meantime must not be resurrected.
+        GuildMember current = await db.Find<GuildMember>().OneAsync(entry.ID) ?? entry;
+        if (!await current.TryTransitionAsync(db, MemberStatus.FullMember, reason: reason, actorId: actorId))
         {
             logger.LogWarning(
                 "Promotion of {Member} did not update the status: persisted status is no longer promotable",

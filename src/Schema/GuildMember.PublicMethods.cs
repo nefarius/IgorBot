@@ -640,10 +640,13 @@ internal sealed partial class GuildMember
 
     /// <summary>
     ///     Respond to an interaction with an updated status widget.
+    ///     Reloads the member first so a snapshot taken at click time cannot put buttons back
+    ///     onto a panel whose application was deleted by a concurrent role or removal event.
     /// </summary>
-    public async Task RespondToInteraction(ComponentInteractionCreatedEventArgs args, DiscordClient client)
+    public async Task RespondToInteraction(ComponentInteractionCreatedEventArgs args, DiscordClient client, DB db)
     {
-        await args.Interaction.EditOriginalResponseAsync(GetInteractionResponse(client));
+        GuildMember source = await db.Find<GuildMember>().OneAsync(ID) ?? this;
+        await args.Interaction.EditOriginalResponseAsync(source.GetInteractionResponse(client));
     }
 
     /// <summary>
