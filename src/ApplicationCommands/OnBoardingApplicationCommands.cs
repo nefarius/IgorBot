@@ -184,7 +184,7 @@ internal sealed class OnBoardingApplicationCommands(
         if (QuestionnaireSessionPolicy.ShouldDisableAutoKickWhileAnswering())
         {
             await dbMember.SetAutoKickEnabledAsync(db, false);
-            await dbMember.UpdateApplicationWidget(ctx.Client);
+            await dbMember.UpdateApplicationWidget(db, ctx.Client);
         }
 
         //
@@ -487,7 +487,7 @@ internal sealed class OnBoardingApplicationCommands(
         {
             // The status widget is the moderator approve/reject surface. Refresh it even when
             // System One is down or a later notification fails.
-            await RefreshModeratorWidgetAsync(dbMember, ctx.Client, logger);
+            await RefreshModeratorWidgetAsync(db, dbMember, ctx.Client, logger);
         }
 
         #endregion
@@ -515,13 +515,14 @@ internal sealed class OnBoardingApplicationCommands(
         }
     }
 
-    private static async Task RefreshModeratorWidgetAsync(GuildMember dbMember, DiscordClient client, ILogger logger)
+    private static async Task RefreshModeratorWidgetAsync(
+        DB db, GuildMember dbMember, DiscordClient client, ILogger logger)
     {
         logger.LogInformation("Updating status message {Id}", dbMember.Application?.MessageId);
 
         try
         {
-            await dbMember.UpdateApplicationWidget(client);
+            await dbMember.UpdateApplicationWidget(db, client);
         }
         catch (NotFoundException ex)
         {

@@ -244,7 +244,7 @@ internal sealed class NewMemberHandler(
                 // Existing widget predates the new channel, refresh it so it links to it.
                 try
                 {
-                    await dbMember.UpdateApplicationWidget(client);
+                    await dbMember.UpdateApplicationWidget(db, client);
                 }
                 catch (Exception ex)
                 {

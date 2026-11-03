@@ -172,7 +172,7 @@ internal partial class ApplicationWorkflow
 
                         // Refresh the widget so buttons are removed and final state is shown;
                         // do NOT delete it — mods need to see the panel after the action.
-                        await member.UpdateApplicationWidget(sender);
+                        await member.UpdateApplicationWidget(db, sender);
                         return;
                     }
 
