@@ -656,7 +656,11 @@ internal sealed partial class GuildMember
         return WithApplicationWidgetGateAsync(async () =>
         {
             GuildMember source = await db.Find<GuildMember>().OneAsync(ID) ?? this;
-            await args.Interaction.EditOriginalResponseAsync(source.GetInteractionResponse(client));
+            // Kick and ban stay: their ids name the member, not a particular panel.
+            // Promote and disable-auto-kick name an application message, so they belong only on that message.
+            bool panelMatchesApplication = source.Application?.MessageId == args.Message.Id;
+            await args.Interaction.EditOriginalResponseAsync(
+                source.GetInteractionResponse(client, panelMatchesApplication));
         });
     }
 

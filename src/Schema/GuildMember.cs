@@ -79,7 +79,11 @@ internal sealed partial class GuildMember : IEntity
     /// <summary>
     ///     Builds an interaction response.
     /// </summary>
-    private DiscordWebhookBuilder GetInteractionResponse(DiscordClient client)
+    /// <param name="includeApplicationActions">
+    ///     When <see langword="false" />, the clicked panel is not the member's current application message.
+    ///     Member actions stay; another application's buttons are not copied onto it.
+    /// </param>
+    private DiscordWebhookBuilder GetInteractionResponse(DiscordClient client, bool includeApplicationActions)
     {
         DiscordWebhookBuilder builder = new();
 
@@ -92,7 +96,7 @@ internal sealed partial class GuildMember : IEntity
             builder.AddActionRowComponent(ButtonComponents);
         }
 
-        if (Application is not null && Application.ButtonComponents.Any())
+        if (includeApplicationActions && Application is not null && Application.ButtonComponents.Any())
         {
             builder.AddActionRowComponent(Application.ButtonComponents);
         }
