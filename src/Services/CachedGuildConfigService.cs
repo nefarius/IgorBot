@@ -53,6 +53,8 @@ internal sealed class CachedGuildConfigService(IGuildConfigService inner, ILogge
         return inner.GetAllAsync(ct);
     }
 
+    public Task<GuildConfig?> GetFreshAsync(ulong guildId, CancellationToken ct = default) => inner.GetFreshAsync(guildId, ct);
+
     public async Task SaveAsync(GuildConfig config, CancellationToken ct = default)
     {
         try

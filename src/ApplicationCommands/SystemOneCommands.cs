@@ -8,14 +8,16 @@ using DSharpPlus.Commands.Processors.SlashCommands;
 using DSharpPlus.Entities;
 
 using IgorBot.Services;
+using IgorBot.Core;
+using IgorBot.Util;
 
 namespace IgorBot.ApplicationCommands;
 
 [Command("systemone"), Description("Check the System One decision endpoint. Administrator only.")]
-[RequirePermissions(DiscordPermission.Administrator)]
+[RequirePermissions(botPermissions: [], userPermissions: [DiscordPermission.Administrator])]
 [SuppressMessage("ReSharper", "UnusedMember.Global")]
 [SuppressMessage("ReSharper", "ClassNeverInstantiated.Global")]
-internal sealed class SystemOneCommands(ISystemOneProbe probe)
+internal sealed class SystemOneCommands(ISystemOneProbe probe, IGuildConfigService configs, IMemberRoleClient roles)
 {
     [Command("test"), Description("Send a sample decision and report whether the endpoint answers.")]
     public async Task Test(SlashCommandContext ctx)
@@ -43,6 +45,34 @@ internal sealed class SystemOneCommands(ISystemOneProbe probe)
         };
 
         embed.AddField("Result", report.Status.ToString(), true);
+        try
+        {
+            GuildConfig? config = await configs.GetFreshAsync(ctx.RequireGuild().Id);
+            if (config?.Questionnaires.TryGetValue(QuestionnaireKeys.Member, out Questionnaire? questionnaire) == true)
+            {
+                embed.AddField("Questionnaire screening", questionnaire.Automation.Enabled ? "Enabled" : "Disabled", true);
+                embed.AddField("Auto-promote at", Percent(questionnaire.Automation.AutoPromoteNormalProbability), true);
+                embed.AddField("Promotion readiness", await roles.CheckPromotionAsync(config, CancellationToken.None) ?? "Ready");
+                DiscordChannel channel = await ctx.RequireGuild().GetChannelAsync(questionnaire.SubmissionChannelId);
+                DiscordMember bot = await ctx.RequireGuild().GetMemberAsync(ctx.Client.CurrentUser!.Id, true);
+                DiscordPermissions permissions = channel.PermissionsFor(bot);
+                embed.AddField("Submission channel access",
+                    permissions.HasPermission(DiscordPermission.ViewChannel) &&
+                    permissions.HasPermission(DiscordPermission.ReadMessageHistory) &&
+                    permissions.HasPermission(DiscordPermission.SendMessages) &&
+                    permissions.HasPermission(DiscordPermission.EmbedLinks)
+                        ? "Ready" : "Needs View Channel, Read Message History, Send Messages and Embed Links");
+            }
+            else
+            {
+                embed.AddField("Questionnaire screening", "Member questionnaire not configured");
+            }
+        }
+        catch (Exception ex)
+        {
+            embed.AddField("Configuration readiness", $"Could not verify roles or submission channel ({ex.GetType().Name}). Check configured IDs, permissions and the bot log.");
+            ctx.Client.Logger.LogWarning(ex, "System One configuration readiness check failed for guild {GuildId}", ctx.RequireGuild().Id);
+        }
         embed.AddField("Authorization", report.UsedAuthorization ? "Bearer token configured" : "None", true);
         if (!string.IsNullOrWhiteSpace(report.Endpoint))
         {

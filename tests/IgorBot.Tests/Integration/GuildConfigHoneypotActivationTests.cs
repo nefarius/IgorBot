@@ -1,8 +1,10 @@
 using FluentAssertions;
 
 using IgorBot.Core;
+using IgorBot.Schema;
 using IgorBot.Services;
 
+using MongoDB.Driver;
 using MongoDB.Entities;
 
 namespace IgorBot.Tests.Integration;
@@ -25,6 +27,38 @@ public sealed class GuildConfigHoneypotActivationTests : IAsyncLifetime
     }
 
     public Task DisposeAsync() => Task.CompletedTask;
+
+    [Fact]
+    public async Task SaveAsync_LegacyDocumentWithoutVersion_EnablesScreeningAndRejectsStaleSnapshot()
+    {
+        await _sut.SaveAsync(MinimalConfig(channelId: 10));
+        await _db.Collection<GuildConfigEntity>().UpdateOneAsync(
+            e => e.ID == GuildId.ToString(),
+            Builders<GuildConfigEntity>.Update.Unset(e => e.ConfigVersion));
+
+        GuildConfig update = (await _sut.GetAsync(GuildId))!;
+        GuildConfig stale = (await _sut.GetAsync(GuildId))!;
+        update.ConfigVersion.Should().Be(0);
+        update.Questionnaires[QuestionnaireKeys.Member] = new Questionnaire
+        {
+            Name = "On-boarding",
+            Id = "member",
+            Automation = new QuestionnaireAutomation { Enabled = true }
+        };
+
+        await _sut.SaveAsync(update);
+
+        GuildConfig loaded = (await _sut.GetAsync(GuildId))!;
+        loaded.ConfigVersion.Should().Be(1);
+        loaded.Questionnaires[QuestionnaireKeys.Member].Automation.Enabled.Should().BeTrue();
+        loaded.HoneypotChannelId.Should().Be(10UL);
+        update.ConfigVersion.Should().Be(1);
+
+        stale.IdleKickTimeSpan = TimeSpan.FromMinutes(15);
+        Func<Task> act = () => _sut.SaveAsync(stale);
+        await act.Should().ThrowAsync<ConfigConflictException>();
+        (await _sut.GetAsync(GuildId))!.Questionnaires[QuestionnaireKeys.Member].Automation.Enabled.Should().BeTrue();
+    }
 
     [Fact]
     public async Task SaveAsync_NewHoneypotChannel_StampsActivation()

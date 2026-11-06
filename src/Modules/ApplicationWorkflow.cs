@@ -171,7 +171,7 @@ internal partial class ApplicationWorkflow(
         DiscordMember member, GuildConfig guildConfig)
     {
         await promotionService.PromoteAsync(
-            args.Guild, member, entry, guildConfig, actorId: args.User.Id, reason: null);
+            entry, guildConfig, actorId: args.User.Id, reason: null);
         await entry.RespondToInteraction(args, client, db);
     }
 

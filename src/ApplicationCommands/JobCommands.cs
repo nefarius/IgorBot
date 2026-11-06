@@ -31,7 +31,10 @@ public enum ManualJob
     HoneypotReconciliation,
 
     [ChoiceDisplayName("Kick stale strangers")]
-    KickStale
+    KickStale,
+
+    [ChoiceDisplayName("Pending applicant screening")]
+    PendingApplicantScreening
 }
 
 [Command("jobs"), Description("Run scheduled maintenance jobs on demand. Administrator only.")]
@@ -50,6 +53,9 @@ internal sealed class JobCommands(IQueue queue, ILogger<JobCommands> logger)
 
         switch (job)
         {
+            case ManualJob.PendingApplicantScreening:
+                queue.QueueCancellableInvocable<PendingApplicantScreeningInvokable>();
+                break;
             case ManualJob.LurkerReconciliation:
                 queue.QueueCancellableInvocable<LurkerReconciliationInvokable>();
                 break;

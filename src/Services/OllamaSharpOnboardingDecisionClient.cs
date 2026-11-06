@@ -52,13 +52,12 @@ internal sealed class OllamaSharpOnboardingDecisionClient : IOnboardingDecisionC
             throw new InvalidOperationException("System One response did not contain a verdict.");
         }
 
-        double? confidence = double.IsFinite(choice.Confidence) ? choice.Confidence : null;
         return new SystemOneClassification
         {
             Model = string.IsNullOrWhiteSpace(response.Model) ? _model : response.Model,
             Label = choice.Choice,
             Probabilities = choice.Probabilities,
-            Confidence = confidence
+            Confidence = choice.Confidence
         };
     }
 

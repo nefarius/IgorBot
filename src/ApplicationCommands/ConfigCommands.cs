@@ -1,5 +1,9 @@
 using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
+
+using Coravel.Queuing.Interfaces;
+
+using IgorBot.Invocables;
 using System.Globalization;
 
 using DSharpPlus.Commands;
@@ -15,10 +19,10 @@ using IgorBot.Util;
 namespace IgorBot.ApplicationCommands;
 
 [Command("config"), Description("Configure the bot for this server. Administrator only.")]
-[RequirePermissions(DiscordPermission.Administrator)]
+[RequirePermissions(botPermissions: [], userPermissions: [DiscordPermission.Administrator])]
 [SuppressMessage("ReSharper", "UnusedMember.Global")]
 [SuppressMessage("ReSharper", "ClassNeverInstantiated.Global")]
-public sealed class ConfigCommands(IGuildConfigService guildConfigService)
+public sealed class ConfigCommands(IGuildConfigService guildConfigService, IQueue queue)
 {
     [Command("setup"), Description("Initial setup or overwrite configuration for this server.")]
     public async Task Setup(
@@ -121,7 +125,7 @@ public sealed class ConfigCommands(IGuildConfigService guildConfigService)
     {
         await ctx.DeferResponseAsync();
 
-        GuildConfig? existing = await guildConfigService.GetAsync(ctx.RequireGuild().Id);
+        GuildConfig? existing = await guildConfigService.GetFreshAsync(ctx.RequireGuild().Id);
         GuildConfig config;
 
         if (existing is not null)
@@ -173,7 +177,7 @@ public sealed class ConfigCommands(IGuildConfigService guildConfigService)
     {
         await ctx.DeferResponseAsync(true);
 
-        GuildConfig? config = await guildConfigService.GetAsync(ctx.RequireGuild().Id);
+        GuildConfig? config = await guildConfigService.GetFreshAsync(ctx.RequireGuild().Id);
 
         if (config is null)
         {
@@ -229,7 +233,7 @@ public sealed class ConfigCommands(IGuildConfigService guildConfigService)
     {
         await ctx.DeferResponseAsync(true);
 
-        GuildConfig? config = await guildConfigService.GetAsync(ctx.RequireGuild().Id);
+        GuildConfig? config = await guildConfigService.GetFreshAsync(ctx.RequireGuild().Id);
 
         if (config is null)
         {
@@ -263,6 +267,13 @@ public sealed class ConfigCommands(IGuildConfigService guildConfigService)
         {
             Title = "Updated", Description = $"Set {option} successfully.", Color = new DiscordColor(0x00FF00)
         }));
+
+        if (option == ConfigOption.QuestionnaireScreening &&
+            config.Questionnaires.TryGetValue(QuestionnaireKeys.Member, out Questionnaire? questionnaire) &&
+            questionnaire.Automation.Enabled)
+        {
+            queue.QueueCancellableInvocable<PendingApplicantScreeningInvokable>();
+        }
     }
 
     /// <summary>

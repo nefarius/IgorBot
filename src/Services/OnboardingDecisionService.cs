@@ -18,11 +18,13 @@ internal sealed class OnboardingDecisionService(
         QuestionnaireAutomation automation = questionnaire.Automation;
         if (!automation.Enabled)
         {
+            logger.LogInformation("System One skipped guild {GuildId} member {MemberId}: questionnaire screening disabled", guildId, memberId);
             return OnboardingDecisionPolicy.Disabled(evaluatedAt);
         }
 
         if (!settings.IsConfigured)
         {
+            logger.LogWarning("System One skipped guild {GuildId} member {MemberId}: endpoint not configured", guildId, memberId);
             return OnboardingDecisionPolicy.Unavailable(evaluatedAt, "System One endpoint is not configured.");
         }
 

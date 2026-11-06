@@ -68,7 +68,20 @@ internal sealed partial class GuildMember
     {
         if (Status == next)
         {
-            return true;
+            // A stale in-memory status must not make a conditional transition report success.
+            if (allowedFrom is null && extraMatch is null)
+            {
+                return true;
+            }
+
+            FilterDefinitionBuilder<GuildMember> filters = Builders<GuildMember>.Filter;
+            FilterDefinition<GuildMember> unchanged = filters.Eq(m => m.ID, ID) & filters.Eq(m => m.Status, next);
+            if (extraMatch is not null)
+            {
+                unchanged &= extraMatch(filters);
+            }
+
+            return await db.Collection<GuildMember>().CountDocumentsAsync(unchanged, new CountOptions { Limit = 1 }) == 1;
         }
 
         Log.Information(
@@ -251,6 +264,7 @@ internal sealed partial class GuildMember
 
         Application = null;
         Channel = null;
+        LastOnboardingDecision = null;
     }
 
     /// <summary>
@@ -328,29 +342,57 @@ internal sealed partial class GuildMember
     ///     Persists the questionnaire submission timestamp and optional screening decision on the embedded
     ///     application.
     /// </summary>
-    public async Task SetQuestionnaireSubmittedAsync(DB db, DateTime submittedAt, OnboardingDecisionRecord? decision)
+    public async Task<bool> SetQuestionnaireSubmittedAsync(DB db, DateTime submittedAt, OnboardingDecisionRecord? decision,
+        ulong? submissionChannelId = null, ulong? submissionMessageId = null)
     {
-        if (Application is null)
+        if (Application is null || Application.Decision is { AutomationAttempted: true } ||
+            Status is not (MemberStatus.Unknown or MemberStatus.Onboarding or MemberStatus.QuestionnaireSubmitted) ||
+            submissionChannelId is null or 0 || submissionMessageId is null or 0)
         {
-            return;
+            return false;
         }
 
         Update<GuildMember> update = db.Update<GuildMember>()
             .MatchID(ID)
-            .Match(f => f.Eq(m => m.Application!.ID, Application.ID))
-            .Modify(m => m.Application!.QuestionnaireSubmittedAt, (DateTime?)submittedAt);
+            .Match(f => f.Eq(m => m.Application!.ID, Application.ID) &
+                        f.Eq(m => m.Application!.QuestionnaireSubmittedAt, Application.QuestionnaireSubmittedAt) &
+                        f.Eq(m => m.Application!.Decision, Application.Decision) &
+                        (Status == MemberStatus.Unknown
+                            ? f.Eq(m => m.Status, Status) | f.Exists(m => m.Status, false)
+                            : f.Eq(m => m.Status, Status)))
+            .Modify(m => m.Application!.QuestionnaireSubmittedAt, (DateTime?)submittedAt)
+            .Modify(m => m.Application!.SubmissionChannelId, submissionChannelId)
+            .Modify(m => m.Application!.SubmissionMessageId, submissionMessageId)
+            .Modify(m => m.Application!.Decision, decision)
+            .Modify(m => m.LastOnboardingDecision, decision);
 
-        if (decision is not null)
+        MemberStatusEvent? submittedEvent = null;
+        if (Status != MemberStatus.QuestionnaireSubmitted)
         {
-            update = update.Modify(m => m.Application!.Decision, decision);
+            submittedEvent = new MemberStatusEvent { From = Status, To = MemberStatus.QuestionnaireSubmitted, At = submittedAt };
+            update = update.Modify(m => m.Status, MemberStatus.QuestionnaireSubmitted)
+                .Modify(m => m.StatusChangedAt, (DateTime?)submittedAt)
+                .Modify(m => m.StatusReason, (string?)null)
+                .Modify(b => b.Push(m => m.StatusHistory, submittedEvent));
         }
 
-        await update.ExecuteAsync();
+        if ((await update.ExecuteAsync()).MatchedCount == 0)
+        {
+            return false;
+        }
         Application.QuestionnaireSubmittedAt = submittedAt;
-        if (decision is not null)
+        Application.SubmissionChannelId = submissionChannelId;
+        Application.SubmissionMessageId = submissionMessageId;
+        Application.Decision = decision;
+        LastOnboardingDecision = decision;
+        if (submittedEvent is not null)
         {
-            Application.Decision = decision;
+            StatusHistory.Add(submittedEvent);
+            Status = MemberStatus.QuestionnaireSubmitted;
+            StatusChangedAt = submittedAt;
+            StatusReason = null;
         }
+        return true;
     }
 
     /// <summary>
@@ -365,8 +407,11 @@ internal sealed partial class GuildMember
 
         await db.Update<GuildMember>()
             .MatchID(ID)
-            .Match(f => f.Eq(m => m.Application!.ID, Application.ID))
+            .Match(f => f.Eq(m => m.Application!.ID, Application.ID) &
+                        f.Eq(m => m.Application!.QuestionnaireSubmittedAt, Application.QuestionnaireSubmittedAt) &
+                        f.Eq(m => m.Application!.Decision!.EvaluatedAt, decision.EvaluatedAt))
             .Modify(m => m.Application!.Decision, decision)
+            .Modify(m => m.LastOnboardingDecision, decision)
             .ExecuteAsync();
         Application.Decision = decision;
     }

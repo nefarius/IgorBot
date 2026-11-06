@@ -5,6 +5,7 @@ using DSharpPlus.Exceptions;
 
 using IgorBot.Core;
 using IgorBot.Schema;
+using IgorBot.Services;
 using IgorBot.Util;
 
 namespace IgorBot.Modules;
@@ -43,19 +44,23 @@ internal partial class ApplicationWorkflow
             cancellationToken.ThrowIfCancellationRequested();
             // Full member role added
             if (e.RolesBefore.All(role => role.Id != guildConfig.MemberRoleId) &&
-                e.RolesAfter.Any(role => role.Id == guildConfig.MemberRoleId))
+                e.RolesAfter.Any(role => role.Id == guildConfig.MemberRoleId) &&
+                e.RolesAfter.All(role => role.Id != guildConfig.StrangerRoleId))
             {
                 logger.LogInformation("Full member role set for {Member}", e.Member);
                 // Conditional: already-promoted or departed members are left alone.
                 await member.TryTransitionAsync(db, MemberStatus.FullMember);
-                return;
+                if (e.RolesBefore.All(role => role.Id != guildConfig.StrangerRoleId))
+                {
+                    return;
+                }
             }
 
             // Stranger role was removed
             if (e.RolesBefore.Any(role => role.Id == guildConfig.StrangerRoleId) &&
                 e.RolesAfter.All(role => role.Id != guildConfig.StrangerRoleId))
             {
-                await ProcessStrangerRoleRemoved(sender, e, member);
+                await ProcessStrangerRoleRemoved(sender, e, member, guildConfig);
 
                 return;
             }
@@ -126,7 +131,8 @@ internal partial class ApplicationWorkflow
     private async Task ProcessStrangerRoleRemoved(
         DiscordClient client,
         GuildMemberUpdatedEventArgs e,
-        GuildMember member
+        GuildMember member,
+        GuildConfig guildConfig
     )
     {
         logger.LogInformation("Stranger role removed for {Member}", member);
@@ -134,10 +140,18 @@ internal partial class ApplicationWorkflow
         // Conditional: a concurrent promotion (FullMember) or departure wins. The cleanup below still runs
         // either way, because the channel and widget are obsolete in all of those cases.
         // The in-progress flag is owned by NewMemberHandler and is deliberately not touched here.
-        if (!await member.TryTransitionAsync(db, MemberStatus.StrangerRoleRemoved))
+        bool hasMemberRole = e.RolesAfter.Any(role => role.Id == guildConfig.MemberRoleId);
+        bool recorded = await member.TryTransitionAsync(db, hasMemberRole ? MemberStatus.FullMember : MemberStatus.StrangerRoleRemoved);
+        if (!recorded)
         {
             logger.LogInformation(
                 "StrangerRoleRemoved for {Member} not recorded: persisted status already moved on", member);
+        }
+
+        if (hasMemberRole && recorded && member.Application?.Decision is { Outcome: "AutoPromote", AutomationAttempted: true } decision)
+        {
+            decision.AutoPromoted = true;
+            await member.SetApplicationDecisionAsync(db, decision);
         }
 
         // Remove channel

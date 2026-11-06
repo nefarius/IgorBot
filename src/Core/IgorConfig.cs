@@ -121,9 +121,8 @@ public sealed class GuildConfig
     public bool EnableOnboardingWorkflow { get; set; } = true;
 
     /// <summary>
-    ///     Version of the stored document this snapshot was loaded from. <c>0</c> means "not loaded from storage":
-    ///     saving then overwrites. A non-zero value makes <c>SaveAsync</c> fail with
-    ///     <see cref="ConfigConflictException" /> when somebody else saved in the meantime.
+    ///     Version of the stored document this snapshot was loaded from. Zero also represents a legacy
+    ///     document with no version field. Saves compare this token unless OverwriteExisting is explicit.
     /// </summary>
     public int ConfigVersion { get; set; }
 

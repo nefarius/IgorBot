@@ -1,5 +1,3 @@
-using DSharpPlus.Entities;
-
 using IgorBot.Core;
 using IgorBot.Schema;
 using IgorBot.Util;
@@ -8,111 +6,113 @@ using MongoDB.Entities;
 
 namespace IgorBot.Services;
 
-internal sealed class MemberPromotionService(DB db, ILogger<MemberPromotionService> logger) : IMemberPromotionService
+internal sealed class MemberPromotionService(DB db, IMemberRoleClient roles, ILogger<MemberPromotionService> logger)
+    : IMemberPromotionService
 {
-    public async Task PromoteAsync(
-        DiscordGuild guild,
-        DiscordMember member,
-        GuildMember entry,
-        GuildConfig guildConfig,
-        ulong? actorId,
-        string? reason,
+    public async Task PromoteAsync(GuildMember entry, GuildConfig guildConfig, ulong? actorId, string? reason,
         CancellationToken cancellationToken = default)
     {
+        if (!await SingleFlight.RunAsync($"member-promotion:{entry.ID}",
+                () => PromoteCoreAsync(entry, guildConfig, actorId, reason, cancellationToken), logger))
+        {
+            throw new InvalidOperationException("Another promotion for this member is in progress.");
+        }
+    }
+
+    private async Task PromoteCoreAsync(GuildMember entry, GuildConfig guildConfig, ulong? actorId, string? reason,
+        CancellationToken cancellationToken)
+    {
         cancellationToken.ThrowIfCancellationRequested();
-        DiscordRole strangerRole = guild.Roles[guildConfig.StrangerRoleId];
-        DiscordRole memberRole = guild.Roles[guildConfig.MemberRoleId];
-
-        // Perform Discord mutations before persisting so the DB is only updated
-        // when both role operations have actually succeeded.
-        await member.GrantRoleAsync(memberRole);
-
-        try
+        GuildMember? current = await db.Find<GuildMember>().OneAsync(entry.ID, cancellationToken);
+        if (current is not null && current.JoinedAt != entry.JoinedAt)
         {
-            await member.RevokeRoleAsync(strangerRole);
+            throw new InvalidOperationException("Member rejoined after this application was loaded.");
         }
-        catch (Exception ex)
+        if (current?.Status == MemberStatus.FullMember)
         {
-            logger.LogError(ex, "RevokeRoleAsync failed for {Member} after GrantRoleAsync succeeded; " +
-                                "member role has been granted but stranger role was not removed", member);
-            throw;
+            MemberRoleSnapshot existing = await roles.GetAsync(entry.GuildId, entry.MemberId, cancellationToken);
+            if (existing.RoleIds.Contains(guildConfig.MemberRoleId) && !existing.RoleIds.Contains(guildConfig.StrangerRoleId))
+            {
+                return;
+            }
+
+            throw new InvalidOperationException("Stored FullMember status does not match Discord roles; moderator repair required.");
         }
 
-        // Record FullMember only from the status just loaded. A compare-and-set against every
-        // promotable status would accept a newer write and store this snapshot as the history "from".
-        // On that conflict, reload and retry once from the refreshed status.
+        if (current is null || current.JoinedAt != entry.JoinedAt ||
+            MemberTransitionPolicy.AllowedFrom(MemberStatus.FullMember)?.Contains(current.Status) != true ||
+            (reason == OnboardingDecisionLabels.AutoPromoteReason &&
+             (current.Status != MemberStatus.QuestionnaireSubmitted || current.Application?.ID != entry.Application?.ID ||
+              current.Application?.QuestionnaireSubmittedAt != entry.Application?.QuestionnaireSubmittedAt)))
+        {
+            throw new InvalidOperationException("Application changed before promotion.");
+        }
+
+        if (guildConfig.MemberRoleId == 0 || guildConfig.StrangerRoleId == 0 ||
+            guildConfig.MemberRoleId == guildConfig.StrangerRoleId)
+        {
+            throw new InvalidOperationException("Distinct stranger and member roles must be configured.");
+        }
+
+        await roles.SetRoleAsync(entry.GuildId, entry.MemberId, guildConfig.MemberRoleId, true, cancellationToken);
+        current = await db.Find<GuildMember>().OneAsync(entry.ID, cancellationToken);
+        if (current is null || current.JoinedAt != entry.JoinedAt ||
+            MemberTransitionPolicy.AllowedFrom(MemberStatus.FullMember)?.Contains(current.Status) != true)
+        {
+            throw new InvalidOperationException("Member lifecycle changed while granting the member role.");
+        }
+        await roles.SetRoleAsync(entry.GuildId, entry.MemberId, guildConfig.StrangerRoleId, false, cancellationToken);
+
+        MemberRoleSnapshot verified = await roles.GetAsync(entry.GuildId, entry.MemberId, cancellationToken);
+        if (!verified.RoleIds.Contains(guildConfig.MemberRoleId) || verified.RoleIds.Contains(guildConfig.StrangerRoleId))
+        {
+            throw new InvalidOperationException("Discord did not confirm the promotion role changes.");
+        }
+
         bool recorded = false;
         for (int attempt = 0; attempt < 2 && !recorded; attempt++)
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            GuildMember? current = await db.Find<GuildMember>().OneAsync(entry.ID);
-            if (current is null)
+            current = await db.Find<GuildMember>().OneAsync(entry.ID, cancellationToken);
+            if (current?.Status == MemberStatus.FullMember)
+            {
+                if (current.JoinedAt != entry.JoinedAt)
+                {
+                    break;
+                }
+                recorded = true; // Gateway events may have recorded the same role change.
+                break;
+            }
+
+            if (current is null || MemberTransitionPolicy.AllowedFrom(MemberStatus.FullMember)?.Contains(current.Status) != true)
             {
                 break;
             }
 
-            if (current.Status == MemberStatus.FullMember)
-            {
-                recorded = true;
-                break;
-            }
-
-            IReadOnlyCollection<MemberStatus>? promotableFrom =
-                MemberTransitionPolicy.AllowedFrom(MemberStatus.FullMember);
-            if (promotableFrom is null || !promotableFrom.Contains(current.Status))
+            if (current.JoinedAt != entry.JoinedAt ||
+                (reason == OnboardingDecisionLabels.AutoPromoteReason &&
+                 (current.Application?.ID != entry.Application?.ID ||
+                  current.Application?.QuestionnaireSubmittedAt != entry.Application?.QuestionnaireSubmittedAt)))
             {
                 break;
             }
 
-            recorded = await current.TryTransitionAsync(
-                db,
-                MemberStatus.FullMember,
-                allowedFrom: [current.Status],
-                reason: reason,
-                actorId: actorId);
+            recorded = await current.TryTransitionAsync(db, MemberStatus.FullMember, [current.Status], reason, actorId,
+                f => f.Eq(m => m.JoinedAt, entry.JoinedAt));
         }
 
         if (!recorded)
         {
-            logger.LogWarning(
-                "Promotion of {Member} did not update the status: persisted status is no longer promotable",
-                member);
-        }
-        if (actorId.HasValue)
-        {
-            logger.LogInformation("{ActorId} promoted {Member}", actorId, member);
-        }
-        else
-        {
-            logger.LogInformation("Automatic promotion of {Member}: {Reason}", member, reason);
+            throw new InvalidOperationException("Member lifecycle changed during promotion; acceptance was not recorded.");
         }
 
-        if (!string.IsNullOrEmpty(guildConfig.MemberWelcomeTemplate))
+        logger.LogInformation("Promotion completed for {MemberId}: actor={ActorId} reason={Reason}", entry.ID, actorId, reason);
+        try
         {
-            try
-            {
-                DiscordChannel? welcomeChannel = guild.FindChannel(guildConfig.MemberWelcomeMessageChannelId);
-                if (welcomeChannel is null)
-                {
-                    logger.LogWarning(
-                        "Member welcome channel {ChannelId} is not cached for guild {GuildId}",
-                        guildConfig.MemberWelcomeMessageChannelId, guild.Id);
-                }
-                else
-                {
-                    await welcomeChannel.SendMessageAsync(
-                        string.Format(guildConfig.MemberWelcomeTemplate, member.Mention));
-                }
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Failed to deliver welcome message");
-            }
+            await roles.WelcomeAsync(entry, guildConfig, cancellationToken);
         }
-        else
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            logger.LogWarning("MemberWelcomeTemplate is not configured for guild {GuildId}, skipping welcome message",
-                guild.Id);
+            logger.LogWarning(ex, "Promotion succeeded but welcome delivery failed for {MemberId}", entry.ID);
         }
     }
 }
