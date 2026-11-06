@@ -14,7 +14,7 @@ internal static class OnboardingDecisionFormatter
     {
         if (decision.Outcome == OnboardingDecisionOutcome.Unavailable)
         {
-            return "Recommendation: manual review\nClassifier unavailable.";
+            return "Recommendation: manual review\nScreening unavailable. " + decision.Failure;
         }
 
         return string.Join('\n',

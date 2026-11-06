@@ -25,6 +25,9 @@ internal sealed partial class GuildMember
     /// </summary>
     public StrangerApplicationEmbed? Application { get; private set; }
 
+    /// <summary>Last screening result, retained after the application widget is detached.</summary>
+    public OnboardingDecisionRecord? LastOnboardingDecision { get; set; }
+
     /// <summary>
     ///     The current active newbie channel assigned to this member.
     /// </summary>

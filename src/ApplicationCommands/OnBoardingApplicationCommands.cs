@@ -25,9 +25,7 @@ namespace IgorBot.ApplicationCommands;
 internal sealed class OnBoardingApplicationCommands(
     DB db,
     IGuildConfigService guildConfigService,
-    IOnboardingDecisionService decisions,
-    IMemberPromotionService promotions,
-    IOnboardingAutomationExecutor automation)
+    IPendingApplicantScreeningService screening)
 {
     [RequirePermissions(DiscordPermission.SendMessages)]
     [Command("member"), Description("Apply for regular membership.")]
@@ -291,7 +289,7 @@ internal sealed class OnBoardingApplicationCommands(
         if (fresh?.Application is null ||
             fresh.Application.ID != application.ID ||
             fresh.HasLeftGuild ||
-            fresh.Status == MemberStatus.StrangerRoleRemoved)
+            fresh.Status is MemberStatus.StrangerRoleRemoved or MemberStatus.FullMember)
         {
             logger.LogWarning("{Member} finished the questionnaire but the application is no longer active",
                 ctx.RequireMember());
@@ -305,26 +303,15 @@ internal sealed class OnBoardingApplicationCommands(
             return;
         }
 
-        dbMember = fresh;
-        application = fresh.Application;
-
-        List<OnboardingAnswer> answers = new(questionnaire.Questions.Count);
-        for (int i = 0; i < questionnaire.Questions.Count; i++)
+        if (fresh.Status == MemberStatus.QuestionnaireSubmitted && fresh.Application.Decision is { } previousDecision &&
+            (previousDecision.AutomationAttempted || previousDecision.Outcome is not ("Unavailable" or "Disabled")))
         {
-            answers.Add(new OnboardingAnswer(questionnaire.Questions[i].Content, responses[i]));
+            await interactionChannel.SendMessageAsync("Your application has already been reviewed. Please wait for a moderator.");
+            return;
         }
 
-        OnboardingDecisionResult decision = await ClassifyForModeratorReviewAsync(
-            questionnaire, answers, guild.Id, member.Id, logger);
-        bool previouslyAttempted = application.Decision is { AutomationAttempted: true };
-        bool alreadyPromoted = dbMember.Status == MemberStatus.FullMember;
-        bool hasStrangerRole = QuestionnaireSessionPolicy.HasStrangerRole(
-            member.Roles.Select(role => role.Id), guildConfig.StrangerRoleId);
-        OnboardingAutomationState automationState = new(
-            previouslyAttempted || alreadyPromoted,
-            dbMember.Status,
-            hasStrangerRole);
-        bool willPromote = OnboardingAutomationPlanner.ShouldPromote(decision, automationState);
+        dbMember = fresh;
+        application = fresh.Application;
 
         DiscordEmbedBuilder submissionEmbed = new()
         {
@@ -348,16 +335,13 @@ internal sealed class OnBoardingApplicationCommands(
                     QuestionnaireSessionPolicy.DisplayAnswer(responses[i]));
             }
 
-            if (decision.Outcome != OnboardingDecisionOutcome.Disabled)
-            {
-                submissionEmbed.AddField(
-                    OnboardingDecisionFormatter.FieldName,
-                    OnboardingDecisionFormatter.Format(decision, willPromote, autoPromoted: false, promotionFailed: false));
-            }
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "Failed to add fields to submission embed");
+            await dbMember.SetAutoKickEnabledAsync(db, true);
+            await interactionChannel.SendMessageAsync("Your answers could not fit in the submission. Please retry with shorter answers or contact a moderator.");
+            return;
         }
 
         //
@@ -411,108 +395,53 @@ internal sealed class OnBoardingApplicationCommands(
         catch (Exception ex)
         {
             logger.LogError(ex, "Failed to send submission message");
+            await dbMember.SetAutoKickEnabledAsync(db, true);
+            await interactionChannel.SendMessageAsync("I could not submit your answers. Please contact a moderator or try again.");
+            return;
         }
 
-        OnboardingDecisionRecord? decisionRecord = decision.Outcome != OnboardingDecisionOutcome.Disabled
-            ? decision.ToRecord(previouslyAttempted || willPromote, autoPromoted: false)
-            : null;
+        // Commit only against the application that collected these answers. The shared screening workflow
+        // reads the successfully posted message and current config/roles, just like backlog recovery.
+        DateTime submittedAt = DateTime.UtcNow;
+        if (!await dbMember.SetQuestionnaireSubmittedAsync(db, submittedAt, null,
+                submissionChannel.Id, submissionMessage.Id))
+        {
+            await interactionChannel.SendMessageAsync("Your application changed while submitting; please contact a moderator.");
+            return;
+        }
 
-        // Persist the submission timestamp so the Promote button remains visible
-        // after a bot restart and so the auto-kick query filter stays correct.
-        // Targeted update: only the embedded application fields change.
-        await dbMember.SetQuestionnaireSubmittedAsync(db, DateTime.UtcNow, decisionRecord);
-
-        // Conditional transition: if the member was kicked/left/promoted meanwhile the automation must not run.
-        bool statusRecorded = alreadyPromoted ||
-                              await dbMember.TryTransitionAsync(db, MemberStatus.QuestionnaireSubmitted);
-
-        OnboardingAutomationEffect effect = OnboardingAutomationEffect.Held;
+        bool statusRecorded = await dbMember.TryTransitionAsync(db, MemberStatus.QuestionnaireSubmitted,
+            extraMatch: f => f.Eq(m => m.Application!.ID, application.ID) &
+                             f.Eq(m => m.Application!.QuestionnaireSubmittedAt, (DateTime?)submittedAt));
         try
         {
-            effect = alreadyPromoted || !statusRecorded
-                ? OnboardingAutomationEffect.Held
-                : await automation.ExecuteAsync(
-                    decision,
-                    automationState,
-                    () => promotions.PromoteAsync(
-                        guild,
-                        member,
-                        dbMember,
-                        guildConfig,
-                        actorId: null,
-                        OnboardingDecisionLabels.AutoPromoteReason));
-
-            if (effect == OnboardingAutomationEffect.Promoted && application.Decision is not null)
-            {
-                application.Decision.AutoPromoted = true;
-                await dbMember.SetApplicationDecisionAsync(db, application.Decision);
-            }
-
-            if (submissionMessage is not null &&
-                decision.Outcome != OnboardingDecisionOutcome.Disabled &&
-                effect != OnboardingAutomationEffect.Held)
-            {
-                try
-                {
-                    ReplaceScreeningField(
-                        submissionEmbed,
-                        OnboardingDecisionFormatter.Format(
-                            decision,
-                            willPromote,
-                            autoPromoted: effect == OnboardingAutomationEffect.Promoted,
-                            promotionFailed: effect == OnboardingAutomationEffect.PromotionFailed));
-                    await submissionMessage.ModifyAsync(new DiscordMessageBuilder().AddEmbed(submissionEmbed));
-                }
-                catch (Exception ex)
-                {
-                    logger.LogError(ex, "Failed to update screening field");
-                }
-            }
-
-            string applicantText = alreadyPromoted || effect == OnboardingAutomationEffect.Promoted
-                ? $"Nicely done {member.Mention}, I've submitted your answers to {submissionChannel.Mention}. You've been accepted."
-                : $"Nicely done {member.Mention}, I've submitted your answers to {submissionChannel.Mention}. " +
-                  "Please be patient until a moderator acknowledges it.";
-
+            // Send before promotion: removing the stranger role may immediately delete the newbie channel.
             await interactionChannel.SendMessageAsync(new DiscordEmbedBuilder
             {
                 Title = "Questionnaire submitted",
-                Description = applicantText,
+                Description = $"Nicely done {member.Mention}, I've submitted your answers to {submissionChannel.Mention} for review.",
                 Color = new DiscordColor(0x00FF00)
             });
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Could not acknowledge submission to {Member}; screening will continue", member);
+        }
 
+        try
+        {
+            if (statusRecorded)
+            {
+                await screening.ScreenMemberAsync(dbMember.ID);
+            }
             logger.LogInformation("{Member} finished application command", ctx.RequireMember());
         }
         finally
         {
-            // The status widget is the moderator approve/reject surface. Refresh it even when
-            // System One is down or a later notification fails.
             await RefreshModeratorWidgetAsync(db, dbMember, ctx.Client, logger);
         }
 
         #endregion
-    }
-
-    private async Task<OnboardingDecisionResult> ClassifyForModeratorReviewAsync(
-        Questionnaire questionnaire,
-        IReadOnlyList<OnboardingAnswer> answers,
-        ulong guildId,
-        ulong memberId,
-        ILogger logger)
-    {
-        try
-        {
-            return await decisions.EvaluateAsync(questionnaire, answers, guildId, memberId);
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(
-                ex,
-                "System One screening failed for guild {GuildId} member {MemberId}; leaving the application for moderators",
-                guildId,
-                memberId);
-            return OnboardingDecisionPolicy.Unavailable(DateTime.UtcNow, "System One request failed.");
-        }
     }
 
     private static async Task RefreshModeratorWidgetAsync(
@@ -534,16 +463,4 @@ internal sealed class OnBoardingApplicationCommands(
         }
     }
 
-    private static void ReplaceScreeningField(DiscordEmbedBuilder embed, string value)
-    {
-        for (int i = embed.Fields.Count - 1; i >= 0; i--)
-        {
-            if (embed.Fields[i].Name == OnboardingDecisionFormatter.FieldName)
-            {
-                embed.RemoveFieldAt(i);
-            }
-        }
-
-        embed.AddField(OnboardingDecisionFormatter.FieldName, value);
-    }
 }

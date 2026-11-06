@@ -36,10 +36,11 @@ internal sealed class OnboardingDecisionRecord
         {
             if (Outcome == "Unavailable")
             {
-                return ManualReviewText;
+                return "Recommendation: manual review\nScreening unavailable. " + Failure;
             }
 
-            string action = AutoPromoted ? "automatically promoted" : "manual review";
+            string action = AutoPromoted ? "automatically promoted" :
+                AutomationAttempted && Failure is not null ? "automatic promotion failed; manual review" : "manual review";
             return string.Join('\n',
             [
                 $"Recommendation: {Label} ({Percent(Probability(Label))})",

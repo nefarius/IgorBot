@@ -50,6 +50,11 @@ internal sealed class StrangerApplicationEmbed : IEntity
     /// </summary>
     public DateTime? QuestionnaireSubmittedAt { get; set; }
 
+    // References only; questionnaire answers remain in Discord.
+    public ulong? SubmissionChannelId { get; set; }
+
+    public ulong? SubmissionMessageId { get; set; }
+
     /// <summary>
     ///     Latest System One screening result for this application.
     /// </summary>

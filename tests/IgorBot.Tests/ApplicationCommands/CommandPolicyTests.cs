@@ -1,5 +1,10 @@
 using FluentAssertions;
 
+using System.Reflection;
+
+using DSharpPlus.Commands.ContextChecks;
+using DSharpPlus.Entities;
+
 using IgorBot.ApplicationCommands;
 using IgorBot.Core;
 
@@ -7,6 +12,17 @@ namespace IgorBot.Tests.ApplicationCommands;
 
 public sealed class CommandAccessPolicyTests
 {
+    [Theory]
+    [InlineData(typeof(ConfigCommands))]
+    [InlineData(typeof(SystemOneCommands))]
+    [InlineData(typeof(JobCommands))]
+    public void ActualCommandAttributes_RequireUserAdministratorWithoutRequiringBotAdministrator(Type command)
+    {
+        RequirePermissionsAttribute permissions = command.GetCustomAttribute<RequirePermissionsAttribute>()!;
+        permissions.UserPermissions.HasPermission(DiscordPermission.Administrator).Should().BeTrue();
+        permissions.BotPermissions.HasPermission(DiscordPermission.Administrator).Should().BeFalse();
+    }
+
     [Fact]
     public void Config_RequiresAdministrator()
     {

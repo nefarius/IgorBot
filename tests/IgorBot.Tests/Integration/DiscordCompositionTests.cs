@@ -40,6 +40,9 @@ public sealed class DiscordCompositionTests(MongoFixture mongo)
         services.AddSingleton<ISystemOneProbe, SystemOneProbe>();
         services.AddSingleton<IOnboardingAutomationExecutor, OnboardingAutomationExecutor>();
         services.AddSingleton<IMemberPromotionService, UnusedPromotionService>();
+        services.AddSingleton<IPendingApplicantScreeningService, PendingApplicantScreeningService>();
+        services.AddSingleton<IMemberRoleClient, DiscordMemberRoleClient>();
+        services.AddSingleton<IApplicantSubmissionClient, DiscordApplicantSubmissionClient>();
         services.AddSingleton<IDiscordReadinessService, DiscordReadinessService>();
         services.AddSingleton<IHostApplicationLifetime, IdleHostLifetime>();
         IgorDiscordRegistration.AddIgorDiscord(services, "composition-test-token");
@@ -109,8 +112,6 @@ public sealed class DiscordCompositionTests(MongoFixture mongo)
     private sealed class UnusedPromotionService : IMemberPromotionService
     {
         public Task PromoteAsync(
-            DiscordGuild guild,
-            DiscordMember member,
             GuildMember entry,
             GuildConfig guildConfig,
             ulong? actorId,

@@ -11,6 +11,7 @@ internal sealed class IgorCoreModule(
     ILogger<IgorCoreModule> logger,
     IDiscordReadinessService readiness,
     ILurkerReconciliationService reconciliation,
+    IPendingApplicantScreeningService screening,
     IHostApplicationLifetime lifetime)
     : IEventHandler<GuildDownloadCompletedEventArgs>, IEventHandler<GuildAvailableEventArgs>
 {
@@ -37,6 +38,13 @@ internal sealed class IgorCoreModule(
     // Per-guild scans are single-flight, so the overlapping download/available events are harmless.
     private void TriggerReconciliation(ulong guildId)
     {
+        ObservableBackgroundWork.Run(
+            ct => screening.ScreenGuildAsync(guildId, ct),
+            lifetime.ApplicationStopping,
+            logger,
+            "pending-applicant-screening",
+            cancelInFlightOnStop: true);
+
         ObservableBackgroundWork.Run(
             ct => reconciliation.ReconcileGuildAsync(guildId, ct),
             lifetime.ApplicationStopping,

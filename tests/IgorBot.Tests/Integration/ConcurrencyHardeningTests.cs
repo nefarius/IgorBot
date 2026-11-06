@@ -87,6 +87,9 @@ public sealed class ConcurrencyHardeningTests : IAsyncLifetime
         (GuildMember member, _) = await GuildMember.EnsureExistsAsync(
             _db, 1UL, 103UL, "user", "<@103>", MemberStatus.New, "join");
         await member.TransitionToAsync(_db, MemberStatus.LeftVoluntarily, "left");
+        await _db.Update<GuildMember>().MatchID(member.ID)
+            .Modify(m => m.LastOnboardingDecision, new OnboardingDecisionRecord { Outcome = "ManualReview", Label = "reject" })
+            .ExecuteAsync();
 
         GuildMember loaded = (await _db.Find<GuildMember>().OneAsync(member.ID))!;
         (await loaded.ReactivateAsync(_db)).Should().BeTrue();
@@ -94,6 +97,8 @@ public sealed class ConcurrencyHardeningTests : IAsyncLifetime
         GuildMember after = (await _db.Find<GuildMember>().OneAsync(member.ID))!;
         after.Status.Should().Be(MemberStatus.New);
         after.LeftAt.Should().BeNull();
+        after.LastOnboardingDecision.Should().BeNull();
+        loaded.LastOnboardingDecision.Should().BeNull();
         after.StatusHistory.Select(e => e.To).Should().Equal(MemberStatus.LeftVoluntarily, MemberStatus.New);
     }
 

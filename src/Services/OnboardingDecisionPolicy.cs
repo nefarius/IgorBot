@@ -84,10 +84,14 @@ internal static class OnboardingDecisionPolicy
                 return false;
             }
 
-            probabilities[label] = probability;
+            if (!OnboardingDecisionLabels.DisplayOrder.Contains(label, StringComparer.OrdinalIgnoreCase) ||
+                !probabilities.TryAdd(label, probability))
+            {
+                return false;
+            }
         }
 
-        if (classification.Confidence is not null && !double.IsFinite(classification.Confidence.Value))
+        if (classification.Confidence is not null && !IsProbability(classification.Confidence.Value))
         {
             return false;
         }
@@ -100,7 +104,9 @@ internal static class OnboardingDecisionPolicy
             }
         }
 
-        if (!probabilities.TryGetValue(classification.Label, out _))
+        if (!probabilities.TryGetValue(classification.Label, out double selectedProbability) ||
+            Math.Abs(probabilities.Values.Sum() - 1) > 0.001 ||
+            probabilities.Values.Any(p => p > selectedProbability + 0.000001))
         {
             return false;
         }

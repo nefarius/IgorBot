@@ -6,16 +6,19 @@ using DSharpPlus.Commands;
 using DSharpPlus.Commands.ContextChecks;
 using DSharpPlus.Commands.Processors.SlashCommands;
 using DSharpPlus.Entities;
+using DSharpPlus.Exceptions;
 
 using IgorBot.Services;
+using IgorBot.Core;
+using IgorBot.Util;
 
 namespace IgorBot.ApplicationCommands;
 
 [Command("systemone"), Description("Check the System One decision endpoint. Administrator only.")]
-[RequirePermissions(DiscordPermission.Administrator)]
+[RequirePermissions(botPermissions: [], userPermissions: [DiscordPermission.Administrator])]
 [SuppressMessage("ReSharper", "UnusedMember.Global")]
 [SuppressMessage("ReSharper", "ClassNeverInstantiated.Global")]
-internal sealed class SystemOneCommands(ISystemOneProbe probe)
+internal sealed class SystemOneCommands(ISystemOneProbe probe, IGuildConfigService configs, IMemberRoleClient roles)
 {
     [Command("test"), Description("Send a sample decision and report whether the endpoint answers.")]
     public async Task Test(SlashCommandContext ctx)
@@ -43,6 +46,63 @@ internal sealed class SystemOneCommands(ISystemOneProbe probe)
         };
 
         embed.AddField("Result", report.Status.ToString(), true);
+        try
+        {
+            GuildConfig? config = await configs.GetFreshAsync(ctx.RequireGuild().Id);
+            if (config?.Questionnaires.TryGetValue(QuestionnaireKeys.Member, out Questionnaire? questionnaire) == true)
+            {
+                embed.AddField("Questionnaire screening", questionnaire.Automation.Enabled ? "Enabled" : "Disabled", true);
+                embed.AddField("Auto-promote at", Percent(questionnaire.Automation.AutoPromoteNormalProbability), true);
+                await AddReadinessChecksAsync(embed,
+                    () => roles.CheckPromotionAsync(config, CancellationToken.None),
+                    async () =>
+                    {
+                        if (questionnaire.SubmissionChannelId == 0)
+                        {
+                            return "Submission channel is not configured";
+                        }
+
+                        DiscordGuild guild = ctx.RequireGuild();
+                        DiscordChannel channel;
+                        try
+                        {
+                            channel = guild.FindChannel(questionnaire.SubmissionChannelId) ??
+                                      await guild.GetChannelAsync(questionnaire.SubmissionChannelId);
+                        }
+                        catch (NotFoundException)
+                        {
+                            return "Configured submission channel does not exist";
+                        }
+                        catch (InvalidOperationException)
+                        {
+                            return "Configured submission channel belongs to a different server";
+                        }
+
+                        if (channel.GuildId != guild.Id)
+                        {
+                            return "Configured submission channel belongs to a different server";
+                        }
+
+                        DiscordMember bot = await ctx.RequireGuild().GetMemberAsync(ctx.Client.CurrentUser!.Id, true);
+                        DiscordPermissions permissions = channel.PermissionsFor(bot);
+                        return permissions.HasPermission(DiscordPermission.ViewChannel) &&
+                               permissions.HasPermission(DiscordPermission.ReadMessageHistory) &&
+                               permissions.HasPermission(DiscordPermission.SendMessages) &&
+                               permissions.HasPermission(DiscordPermission.EmbedLinks)
+                            ? "Ready" : "Needs View Channel, Read Message History, Send Messages and Embed Links";
+                    }, ex => ctx.Client.Logger.LogWarning(ex,
+                        "System One readiness check failed for guild {GuildId}", ctx.RequireGuild().Id));
+            }
+            else
+            {
+                embed.AddField("Questionnaire screening", "Member questionnaire not configured");
+            }
+        }
+        catch (Exception ex)
+        {
+            embed.AddField("Configuration readiness", $"Could not verify roles or submission channel ({ex.GetType().Name}). Check configured IDs, permissions and the bot log.");
+            ctx.Client.Logger.LogWarning(ex, "System One configuration readiness check failed for guild {GuildId}", ctx.RequireGuild().Id);
+        }
         embed.AddField("Authorization", report.UsedAuthorization ? "Bearer token configured" : "None", true);
         if (!string.IsNullOrWhiteSpace(report.Endpoint))
         {
@@ -72,6 +132,30 @@ internal sealed class SystemOneCommands(ISystemOneProbe probe)
         }
 
         await ctx.EditResponseAsync(new DiscordMessageBuilder().AddEmbed(embed));
+    }
+
+    internal static async Task AddReadinessChecksAsync(DiscordEmbedBuilder embed,
+        Func<Task<string?>> promotionCheck, Func<Task<string>> submissionCheck, Action<Exception> logFailure)
+    {
+        try
+        {
+            embed.AddField("Promotion readiness", await promotionCheck() ?? "Ready");
+        }
+        catch (Exception ex)
+        {
+            logFailure(ex);
+            embed.AddField("Promotion readiness", $"Could not verify ({ex.GetType().Name}). Check the bot log.");
+        }
+
+        try
+        {
+            embed.AddField("Submission channel access", await submissionCheck());
+        }
+        catch (Exception ex)
+        {
+            logFailure(ex);
+            embed.AddField("Submission channel access", $"Could not verify ({ex.GetType().Name}). Check the bot log.");
+        }
     }
 
     private static string FormatProbabilities(IReadOnlyDictionary<string, double> probabilities)

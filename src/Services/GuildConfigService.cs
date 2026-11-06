@@ -79,8 +79,17 @@ internal sealed class GuildConfigService(DB db) : IGuildConfigService
                 }
             }
 
+            FilterDefinitionBuilder<GuildConfigEntity> filters = Builders<GuildConfigEntity>.Filter;
+            FilterDefinition<GuildConfigEntity> versionMatch = filters.Eq(e => e.ConfigVersion, previous.ConfigVersion);
+            if (previous.ConfigVersion == 0)
+            {
+                // Legacy documents deserialize a missing version as zero. Match that absence too,
+                // while still rejecting a concurrent save that has stamped a positive version.
+                versionMatch |= filters.Exists(e => e.ConfigVersion, false);
+            }
+
             ReplaceOneResult result = await db.Replace<GuildConfigEntity>()
-                .Match(e => e.ID == entity.ID && e.ConfigVersion == previous.ConfigVersion)
+                .Match(filters.Eq(e => e.ID, entity.ID) & versionMatch)
                 .WithEntity(entity)
                 .ExecuteAsync(ct);
 

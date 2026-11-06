@@ -12,6 +12,9 @@ public interface IGuildConfigService
     /// </summary>
     Task<GuildConfig?> GetAsync(ulong guildId, CancellationToken ct = default);
 
+    /// <summary>Bypasses local caches for admission decisions and configuration edits.</summary>
+    Task<GuildConfig?> GetFreshAsync(ulong guildId, CancellationToken ct = default) => GetAsync(guildId, ct);
+
     /// <summary>
     ///     Gets all configured guilds.
     /// </summary>

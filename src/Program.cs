@@ -97,6 +97,9 @@ IHostBuilder builder = Host.CreateDefaultBuilder(args)
         services.AddHostedService<SystemOneStartupHealthCheck>();
         services.AddSingleton<IOnboardingAutomationExecutor, OnboardingAutomationExecutor>();
         services.AddSingleton<IMemberPromotionService, MemberPromotionService>();
+        services.AddSingleton<IMemberRoleClient, DiscordMemberRoleClient>();
+        services.AddSingleton<IApplicantSubmissionClient, DiscordApplicantSubmissionClient>();
+        services.AddSingleton<IPendingApplicantScreeningService, PendingApplicantScreeningService>();
 
         IgorDiscordRegistration.AddIgorDiscord(services, config.Discord.Token);
 
@@ -107,6 +110,10 @@ IHost host = builder.Build();
 
 host.Services.UseScheduler(scheduler =>
     {
+        scheduler.Schedule<PendingApplicantScreeningInvokable>()
+            .EveryFiveMinutes()
+            .PreventOverlapping(nameof(PendingApplicantScreeningInvokable));
+
         scheduler
             .Schedule<KickStaleInvokable>()
             .EveryMinute();
@@ -158,4 +165,5 @@ void ConfigureScheduler(IServiceCollection serviceCollection)
     serviceCollection.AddTransient<OrphanEmbedReconciliationInvokable>();
     serviceCollection.AddTransient<HoneypotReconciliationInvokable>();
     serviceCollection.AddTransient<LurkerReconciliationInvokable>();
+    serviceCollection.AddTransient<PendingApplicantScreeningInvokable>();
 }

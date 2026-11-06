@@ -70,6 +70,11 @@ internal sealed class SystemOneProbe(SystemOneSettings settings, IOnboardingDeci
         try
         {
             SystemOneClassification classification = await client.ClassifyAsync(Sample, cancellationToken);
+            OnboardingDecisionResult validation = OnboardingDecisionPolicy.FromClassification(classification, 0.8, DateTime.UtcNow);
+            if (validation.Outcome == OnboardingDecisionOutcome.Unavailable)
+            {
+                throw new InvalidOperationException(validation.Failure);
+            }
             watch.Stop();
             return new SystemOneProbeReport
             {
