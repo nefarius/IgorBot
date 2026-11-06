@@ -1,5 +1,7 @@
-﻿services:
-  # main bot app
+services:
+  # Copy this file and appsettings.Production.example.json to the same deployment directory.
+  # Rename the settings file to appsettings.Production.json; see README.md and docs/operations.md.
+  # Main bot app
   igor-bot-app:
     image: containinger/igor-bot:latest
     container_name: igor-bot-app
@@ -11,9 +13,14 @@
     environment:
       - TZ=Europe/Vienna
       - Bot__Discord__Token=<bot-token-here>
-      # - Bot__SystemOne__BaseUrl=http://192.168.30.187:8081
+      # Override the bundled database address only when using a different MongoDB host:
+      # - ConnectionStrings__MongoDB=mongodb://database-host:27017/
+      # Optional System One connection: use a server root reachable from this container.
+      # Recreate the app after environment changes; then enable Questionnaire screening via /config set.
+      # - Bot__SystemOne__BaseUrl=http://console-host:8081
       # - Bot__SystemOne__Model=loaded
       # - Bot__SystemOne__ApiToken=<system-one-bearer-token>
+      # - Bot__SystemOne__TimeoutSeconds=10
     labels:
       - traefik.enable=false
     logging:
