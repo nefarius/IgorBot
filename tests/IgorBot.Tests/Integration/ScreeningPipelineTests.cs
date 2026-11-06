@@ -289,6 +289,7 @@ public sealed class ScreeningPipelineTests(MongoFixture mongo)
             .Modify(m => m.Application!.Decision, decision).Modify(m => m.LastOnboardingDecision, decision).ExecuteAsync();
         GuildMember snapshot = await pipeline.LoadAsync();
         DateTime? submitted = snapshot.Application!.QuestionnaireSubmittedAt;
+        OnboardingDecisionRecord previousDecision = snapshot.LastOnboardingDecision!;
 
         (await snapshot.SetQuestionnaireSubmittedAsync(pipeline.Db, DateTime.UtcNow.AddMinutes(1), null, 7, 9))
             .Should().Be(canRetry);
@@ -297,6 +298,9 @@ public sealed class ScreeningPipelineTests(MongoFixture mongo)
         {
             saved.Application!.Decision.Should().BeNull();
             saved.Application.SubmissionMessageId.Should().Be(9);
+            snapshot.Application.Decision.Should().BeNull();
+            snapshot.LastOnboardingDecision.Should().BeSameAs(previousDecision);
+            saved.LastOnboardingDecision.Should().BeEquivalentTo(previousDecision);
         }
         else
         {
@@ -306,6 +310,29 @@ public sealed class ScreeningPipelineTests(MongoFixture mongo)
             saved.Application.QuestionnaireSubmittedAt.Should().Be(submitted);
             saved.Application.SubmissionMessageId.Should().Be(8);
         }
+    }
+
+    [Theory]
+    [InlineData("Unavailable")]
+    [InlineData("Disabled")]
+    public async Task Resubmission_WithDecision_UpdatesActiveAndLastResultsInStorageAndMemory(string previousOutcome)
+    {
+        using Pipeline pipeline = await CreateAsync();
+        await pipeline.SubmitAsync();
+        OnboardingDecisionRecord previous = new() { Outcome = previousOutcome, EvaluatedAt = DateTime.UtcNow.AddMinutes(-1) };
+        await pipeline.Db.Update<GuildMember>().MatchID(pipeline.MemberId)
+            .Modify(m => m.Application!.Decision, previous).Modify(m => m.LastOnboardingDecision, previous).ExecuteAsync();
+        GuildMember snapshot = await pipeline.LoadAsync();
+        OnboardingDecisionRecord decision = new() { Outcome = "ManualReview", Label = "normal", EvaluatedAt = DateTime.UtcNow };
+
+        (await snapshot.SetQuestionnaireSubmittedAsync(pipeline.Db, DateTime.UtcNow, decision, 7, 9)).Should().BeTrue();
+        snapshot.Application!.Decision.Should().BeSameAs(decision);
+        snapshot.LastOnboardingDecision.Should().BeSameAs(decision);
+        GuildMember saved = await pipeline.LoadAsync();
+        saved.Application!.Decision!.Outcome.Should().Be("ManualReview");
+        saved.LastOnboardingDecision!.Outcome.Should().Be("ManualReview");
+        saved.LastOnboardingDecision.Label.Should().Be("normal");
+        saved.LastOnboardingDecision.EvaluatedAt.Should().BeAfter(previous.EvaluatedAt);
     }
 
     [Fact]

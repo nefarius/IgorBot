@@ -6,6 +6,7 @@ using DSharpPlus.Commands;
 using DSharpPlus.Commands.ContextChecks;
 using DSharpPlus.Commands.Processors.SlashCommands;
 using DSharpPlus.Entities;
+using DSharpPlus.Exceptions;
 
 using IgorBot.Services;
 using IgorBot.Core;
@@ -56,7 +57,32 @@ internal sealed class SystemOneCommands(ISystemOneProbe probe, IGuildConfigServi
                     () => roles.CheckPromotionAsync(config, CancellationToken.None),
                     async () =>
                     {
-                        DiscordChannel channel = await ctx.RequireGuild().GetChannelAsync(questionnaire.SubmissionChannelId);
+                        if (questionnaire.SubmissionChannelId == 0)
+                        {
+                            return "Submission channel is not configured";
+                        }
+
+                        DiscordGuild guild = ctx.RequireGuild();
+                        DiscordChannel channel;
+                        try
+                        {
+                            channel = guild.FindChannel(questionnaire.SubmissionChannelId) ??
+                                      await guild.GetChannelAsync(questionnaire.SubmissionChannelId);
+                        }
+                        catch (NotFoundException)
+                        {
+                            return "Configured submission channel does not exist";
+                        }
+                        catch (InvalidOperationException)
+                        {
+                            return "Configured submission channel belongs to a different server";
+                        }
+
+                        if (channel.GuildId != guild.Id)
+                        {
+                            return "Configured submission channel belongs to a different server";
+                        }
+
                         DiscordMember bot = await ctx.RequireGuild().GetMemberAsync(ctx.Client.CurrentUser!.Id, true);
                         DiscordPermissions permissions = channel.PermissionsFor(bot);
                         return permissions.HasPermission(DiscordPermission.ViewChannel) &&

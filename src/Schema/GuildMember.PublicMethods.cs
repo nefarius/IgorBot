@@ -365,8 +365,11 @@ internal sealed partial class GuildMember
             .Modify(m => m.Application!.QuestionnaireSubmittedAt, (DateTime?)submittedAt)
             .Modify(m => m.Application!.SubmissionChannelId, submissionChannelId)
             .Modify(m => m.Application!.SubmissionMessageId, submissionMessageId)
-            .Modify(m => m.Application!.Decision, decision)
-            .Modify(m => m.LastOnboardingDecision, decision);
+            .Modify(m => m.Application!.Decision, decision);
+        if (decision is not null)
+        {
+            update = update.Modify(m => m.LastOnboardingDecision, decision);
+        }
 
         MemberStatusEvent? submittedEvent = null;
         if (Status != MemberStatus.QuestionnaireSubmitted)
@@ -386,7 +389,10 @@ internal sealed partial class GuildMember
         Application.SubmissionChannelId = submissionChannelId;
         Application.SubmissionMessageId = submissionMessageId;
         Application.Decision = decision;
-        LastOnboardingDecision = decision;
+        if (decision is not null)
+        {
+            LastOnboardingDecision = decision;
+        }
         if (submittedEvent is not null)
         {
             StatusHistory.Add(submittedEvent);
