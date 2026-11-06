@@ -303,6 +303,13 @@ internal sealed class OnBoardingApplicationCommands(
             return;
         }
 
+        if (fresh.Status == MemberStatus.QuestionnaireSubmitted && fresh.Application.Decision is { } previousDecision &&
+            (previousDecision.AutomationAttempted || previousDecision.Outcome is not ("Unavailable" or "Disabled")))
+        {
+            await interactionChannel.SendMessageAsync("Your application has already been reviewed. Please wait for a moderator.");
+            return;
+        }
+
         dbMember = fresh;
         application = fresh.Application;
 

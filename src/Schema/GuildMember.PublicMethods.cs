@@ -345,7 +345,9 @@ internal sealed partial class GuildMember
     public async Task<bool> SetQuestionnaireSubmittedAsync(DB db, DateTime submittedAt, OnboardingDecisionRecord? decision,
         ulong? submissionChannelId = null, ulong? submissionMessageId = null)
     {
-        if (Application is null || Application.Decision is { AutomationAttempted: true } ||
+        if (Application is null ||
+            (Application.Decision is { } previousDecision &&
+             (previousDecision.AutomationAttempted || previousDecision.Outcome is not ("Unavailable" or "Disabled"))) ||
             Status is not (MemberStatus.Unknown or MemberStatus.Onboarding or MemberStatus.QuestionnaireSubmitted) ||
             submissionChannelId is null or 0 || submissionMessageId is null or 0)
         {
@@ -550,6 +552,7 @@ internal sealed partial class GuildMember
             .Modify(m => m.RemovedByModeration, false)
             .Modify(m => m.Application, (StrangerApplicationEmbed?)null)
             .Modify(m => m.Channel, (NewbieChannel?)null)
+            .Modify(m => m.LastOnboardingDecision, (OnboardingDecisionRecord?)null)
             .ExecuteAsync();
 
         if (result.MatchedCount == 0)

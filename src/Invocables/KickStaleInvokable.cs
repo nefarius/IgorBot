@@ -100,7 +100,7 @@ internal class KickStaleInvokable(
 
                     try
                     {
-                        member = await guild.GetMemberAsync(guildMember.MemberId);
+                        member = await guild.GetMemberAsync(guildMember.MemberId, true);
                     }
                     catch (NotFoundException)
                     {
@@ -108,6 +108,13 @@ internal class KickStaleInvokable(
                             guildMember.MemberId);
                         await guildMember.TryTransitionAsync(
                             db, MemberStatus.AutoKicked, reason: "idle timeout (already left)");
+                        continue;
+                    }
+
+                    // The role event disabling the idle timer can lag behind the REST mutation.
+                    if (member.Roles.Any(role => role.Id == config1.MemberRoleId))
+                    {
+                        await guildMember.SetAutoKickEnabledAsync(db, false);
                         continue;
                     }
 

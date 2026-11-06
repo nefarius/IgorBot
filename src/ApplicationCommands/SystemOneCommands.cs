@@ -52,16 +52,20 @@ internal sealed class SystemOneCommands(ISystemOneProbe probe, IGuildConfigServi
             {
                 embed.AddField("Questionnaire screening", questionnaire.Automation.Enabled ? "Enabled" : "Disabled", true);
                 embed.AddField("Auto-promote at", Percent(questionnaire.Automation.AutoPromoteNormalProbability), true);
-                embed.AddField("Promotion readiness", await roles.CheckPromotionAsync(config, CancellationToken.None) ?? "Ready");
-                DiscordChannel channel = await ctx.RequireGuild().GetChannelAsync(questionnaire.SubmissionChannelId);
-                DiscordMember bot = await ctx.RequireGuild().GetMemberAsync(ctx.Client.CurrentUser!.Id, true);
-                DiscordPermissions permissions = channel.PermissionsFor(bot);
-                embed.AddField("Submission channel access",
-                    permissions.HasPermission(DiscordPermission.ViewChannel) &&
-                    permissions.HasPermission(DiscordPermission.ReadMessageHistory) &&
-                    permissions.HasPermission(DiscordPermission.SendMessages) &&
-                    permissions.HasPermission(DiscordPermission.EmbedLinks)
-                        ? "Ready" : "Needs View Channel, Read Message History, Send Messages and Embed Links");
+                await AddReadinessChecksAsync(embed,
+                    () => roles.CheckPromotionAsync(config, CancellationToken.None),
+                    async () =>
+                    {
+                        DiscordChannel channel = await ctx.RequireGuild().GetChannelAsync(questionnaire.SubmissionChannelId);
+                        DiscordMember bot = await ctx.RequireGuild().GetMemberAsync(ctx.Client.CurrentUser!.Id, true);
+                        DiscordPermissions permissions = channel.PermissionsFor(bot);
+                        return permissions.HasPermission(DiscordPermission.ViewChannel) &&
+                               permissions.HasPermission(DiscordPermission.ReadMessageHistory) &&
+                               permissions.HasPermission(DiscordPermission.SendMessages) &&
+                               permissions.HasPermission(DiscordPermission.EmbedLinks)
+                            ? "Ready" : "Needs View Channel, Read Message History, Send Messages and Embed Links";
+                    }, ex => ctx.Client.Logger.LogWarning(ex,
+                        "System One readiness check failed for guild {GuildId}", ctx.RequireGuild().Id));
             }
             else
             {
@@ -102,6 +106,30 @@ internal sealed class SystemOneCommands(ISystemOneProbe probe, IGuildConfigServi
         }
 
         await ctx.EditResponseAsync(new DiscordMessageBuilder().AddEmbed(embed));
+    }
+
+    internal static async Task AddReadinessChecksAsync(DiscordEmbedBuilder embed,
+        Func<Task<string?>> promotionCheck, Func<Task<string>> submissionCheck, Action<Exception> logFailure)
+    {
+        try
+        {
+            embed.AddField("Promotion readiness", await promotionCheck() ?? "Ready");
+        }
+        catch (Exception ex)
+        {
+            logFailure(ex);
+            embed.AddField("Promotion readiness", $"Could not verify ({ex.GetType().Name}). Check the bot log.");
+        }
+
+        try
+        {
+            embed.AddField("Submission channel access", await submissionCheck());
+        }
+        catch (Exception ex)
+        {
+            logFailure(ex);
+            embed.AddField("Submission channel access", $"Could not verify ({ex.GetType().Name}). Check the bot log.");
+        }
     }
 
     private static string FormatProbabilities(IReadOnlyDictionary<string, double> probabilities)

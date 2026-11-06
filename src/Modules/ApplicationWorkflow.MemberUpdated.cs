@@ -42,6 +42,12 @@ internal partial class ApplicationWorkflow
         ObservableBackgroundWork.Run(async cancellationToken =>
         {
             cancellationToken.ThrowIfCancellationRequested();
+            if (await ProtectPartialPromotionAsync(db, member, guildConfig,
+                    e.RolesAfter.Select(role => role.Id).ToArray()))
+            {
+                return;
+            }
+
             // Full member role added
             if (e.RolesBefore.All(role => role.Id != guildConfig.MemberRoleId) &&
                 e.RolesAfter.Any(role => role.Id == guildConfig.MemberRoleId) &&
@@ -115,6 +121,14 @@ internal partial class ApplicationWorkflow
 
             await ProcessStrangerAssignment(e.Guild, guildConfig, member);
         }, lifetime.ApplicationStopping, logger, "member-updated");
+    }
+
+    internal static async Task<bool> ProtectPartialPromotionAsync(MongoDB.Entities.DB db, GuildMember member,
+        GuildConfig config, IReadOnlyCollection<ulong> roleIds)
+    {
+        if (!roleIds.Contains(config.MemberRoleId) || !roleIds.Contains(config.StrangerRoleId)) return false;
+        await member.SetAutoKickEnabledAsync(db, false);
+        return true;
     }
 
     /// <summary>

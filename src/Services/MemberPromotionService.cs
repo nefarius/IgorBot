@@ -54,14 +54,56 @@ internal sealed class MemberPromotionService(DB db, IMemberRoleClient roles, ILo
             throw new InvalidOperationException("Distinct stranger and member roles must be configured.");
         }
 
-        await roles.SetRoleAsync(entry.GuildId, entry.MemberId, guildConfig.MemberRoleId, true, cancellationToken);
+        MemberRoleSnapshot before = await roles.GetAsync(entry.GuildId, entry.MemberId, cancellationToken);
+        bool grantedMemberRole = !before.RoleIds.Contains(guildConfig.MemberRoleId);
+        if (grantedMemberRole)
+        {
+            await roles.SetRoleAsync(entry.GuildId, entry.MemberId, guildConfig.MemberRoleId, true, cancellationToken);
+        }
         current = await db.Find<GuildMember>().OneAsync(entry.ID, cancellationToken);
         if (current is null || current.JoinedAt != entry.JoinedAt ||
             MemberTransitionPolicy.AllowedFrom(MemberStatus.FullMember)?.Contains(current.Status) != true)
         {
             throw new InvalidOperationException("Member lifecycle changed while granting the member role.");
         }
-        await roles.SetRoleAsync(entry.GuildId, entry.MemberId, guildConfig.StrangerRoleId, false, cancellationToken);
+        try
+        {
+            await roles.SetRoleAsync(entry.GuildId, entry.MemberId, guildConfig.StrangerRoleId, false, cancellationToken);
+        }
+        catch (Exception removalError)
+        {
+            bool removalConfirmed = false;
+            try
+            {
+                // A failed response may follow a successful Discord mutation. Reconcile that first.
+                // Cleanup remains best-effort even when the original request was cancelled.
+                MemberRoleSnapshot observed = await roles.GetAsync(entry.GuildId, entry.MemberId, CancellationToken.None);
+                removalConfirmed = observed.RoleIds.Contains(guildConfig.MemberRoleId) &&
+                                   !observed.RoleIds.Contains(guildConfig.StrangerRoleId);
+                if (!removalConfirmed && grantedMemberRole && observed.RoleIds.Contains(guildConfig.MemberRoleId))
+                {
+                    GuildMember? latest = await db.Find<GuildMember>().OneAsync(entry.ID);
+                    if (latest is not null && latest.JoinedAt == entry.JoinedAt &&
+                        MemberTransitionPolicy.AllowedFrom(MemberStatus.FullMember)?.Contains(latest.Status) == true &&
+                        latest.Application?.ID == entry.Application?.ID &&
+                        latest.Application?.QuestionnaireSubmittedAt == entry.Application?.QuestionnaireSubmittedAt)
+                    {
+                        await roles.SetRoleAsync(entry.GuildId, entry.MemberId, guildConfig.MemberRoleId, false, CancellationToken.None);
+                        logger.LogInformation("Rolled back newly granted member role for {MemberId} after stranger role removal failed", entry.ID);
+                    }
+                }
+            }
+            catch (Exception compensationError)
+            {
+                logger.LogError(compensationError, "Could not reconcile partial promotion for {MemberId}; moderator repair required", entry.ID);
+            }
+
+            if (!removalConfirmed)
+            {
+                logger.LogWarning(removalError, "Stranger role removal failed for {MemberId}; promotion not completed", entry.ID);
+                throw;
+            }
+        }
 
         MemberRoleSnapshot verified = await roles.GetAsync(entry.GuildId, entry.MemberId, cancellationToken);
         if (!verified.RoleIds.Contains(guildConfig.MemberRoleId) || verified.RoleIds.Contains(guildConfig.StrangerRoleId))

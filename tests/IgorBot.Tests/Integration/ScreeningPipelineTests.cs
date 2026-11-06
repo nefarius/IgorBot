@@ -5,6 +5,7 @@ using System.Text.Json;
 using FluentAssertions;
 
 using IgorBot.Core;
+using IgorBot.Modules;
 using IgorBot.Schema;
 using IgorBot.Services;
 
@@ -268,6 +269,109 @@ public sealed class ScreeningPipelineTests(MongoFixture mongo)
         saved.LastOnboardingDecision.Failure.Should().Contain("permissions");
         pipeline.Roles.Welcomes.Should().Be(0);
         pipeline.Http.Calls.Should().Be(1);
+        pipeline.Roles.Current.Should().Equal(10UL);
+    }
+
+    [Theory]
+    [InlineData("ManualReview", "normal", false)]
+    [InlineData("ManualReview", "bot", false)]
+    [InlineData("ManualReview", "reject", false)]
+    [InlineData("AutoPromote", "normal", false)]
+    [InlineData("Unavailable", null, true)]
+    [InlineData("Disabled", null, true)]
+    public async Task Resubmission_PreservesCompletedDecisionsButAllowsUnavailableRetries(
+        string outcome, string? label, bool canRetry)
+    {
+        using Pipeline pipeline = await CreateAsync();
+        await pipeline.SubmitAsync();
+        OnboardingDecisionRecord decision = new() { Outcome = outcome, Label = label, EvaluatedAt = DateTime.UtcNow };
+        await pipeline.Db.Update<GuildMember>().MatchID(pipeline.MemberId)
+            .Modify(m => m.Application!.Decision, decision).Modify(m => m.LastOnboardingDecision, decision).ExecuteAsync();
+        GuildMember snapshot = await pipeline.LoadAsync();
+        DateTime? submitted = snapshot.Application!.QuestionnaireSubmittedAt;
+
+        (await snapshot.SetQuestionnaireSubmittedAsync(pipeline.Db, DateTime.UtcNow.AddMinutes(1), null, 7, 9))
+            .Should().Be(canRetry);
+        GuildMember saved = await pipeline.LoadAsync();
+        if (canRetry)
+        {
+            saved.Application!.Decision.Should().BeNull();
+            saved.Application.SubmissionMessageId.Should().Be(9);
+        }
+        else
+        {
+            saved.Application!.Decision!.Outcome.Should().Be(outcome);
+            saved.Application.Decision.Label.Should().Be(label);
+            saved.LastOnboardingDecision!.Outcome.Should().Be(outcome);
+            saved.Application.QuestionnaireSubmittedAt.Should().Be(submitted);
+            saved.Application.SubmissionMessageId.Should().Be(8);
+        }
+    }
+
+    [Fact]
+    public async Task PartialPromotion_DisablesIdleKickWithoutMarkingFullMember()
+    {
+        using Pipeline pipeline = await CreateAsync();
+        GuildMember stale = await pipeline.LoadAsync();
+        GuildConfig config = (await pipeline.Configs.GetFreshAsync(1))!;
+        (await ApplicationWorkflow.ProtectPartialPromotionAsync(pipeline.Db, stale, config, [10UL, 20UL])).Should().BeTrue();
+        GuildMember saved = await pipeline.LoadAsync();
+        saved.Status.Should().Be(MemberStatus.Onboarding);
+        saved.Application!.IsAutoKickEnabled.Should().BeFalse();
+        (await stale.TryTransitionAsync(pipeline.Db, MemberStatus.AutoKicked,
+            extraMatch: f => f.Eq(m => m.Application!.IsAutoKickEnabled, true))).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task RemovalFailure_PreservesMemberRoleThatExistedBeforePromotion()
+    {
+        using Pipeline pipeline = await CreateAsync();
+        await pipeline.SubmitAsync();
+        pipeline.Roles.Current.Add(20);
+        pipeline.Roles.FailingRole = 10;
+        MemberPromotionService service = new(pipeline.Db, pipeline.Roles, NullLogger<MemberPromotionService>.Instance);
+        Func<Task> promote = async () => await service.PromoteAsync(await pipeline.LoadAsync(),
+            (await pipeline.Configs.GetFreshAsync(1))!, null, null);
+        await promote.Should().ThrowAsync<UnauthorizedAccessException>();
+        pipeline.Roles.Current.Should().BeEquivalentTo([10UL, 20UL]);
+        pipeline.Roles.Changes.Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData(MemberStatus.New)]
+    [InlineData(MemberStatus.LeftVoluntarily)]
+    [InlineData(MemberStatus.BannedByModerator)]
+    [InlineData(MemberStatus.FullMember)]
+    public async Task RemovalFailure_DoesNotCompensateAcrossLifecycleChanges(MemberStatus next)
+    {
+        using Pipeline pipeline = await CreateAsync();
+        await pipeline.SubmitAsync();
+        pipeline.Roles.FailingRole = 10;
+        pipeline.Roles.BeforeFailure = async () =>
+        {
+            GuildMember changed = await pipeline.LoadAsync();
+            if (next == MemberStatus.New) await changed.ReactivateAsync(pipeline.Db);
+            else await changed.TransitionToAsync(pipeline.Db, next);
+        };
+        await pipeline.Screening.ScreenMemberAsync(pipeline.MemberId);
+        pipeline.Roles.Changes.Should().Equal((20UL, true));
+        pipeline.Roles.Current.Should().Contain(20);
+        (await pipeline.LoadAsync()).Status.Should().Be(next);
+        pipeline.Roles.Welcomes.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task LostRemovalResponse_IsReconciledAsSuccessWithoutCompensation()
+    {
+        using Pipeline pipeline = await CreateAsync();
+        await pipeline.SubmitAsync();
+        pipeline.Roles.FailingRole = 10;
+        pipeline.Roles.BeforeFailure = () => { pipeline.Roles.Current.Remove(10); return Task.CompletedTask; };
+        (await pipeline.Screening.ScreenMemberAsync(pipeline.MemberId)).Should().Be(OnboardingAutomationEffect.Promoted);
+        (await pipeline.LoadAsync()).Status.Should().Be(MemberStatus.FullMember);
+        pipeline.Roles.Changes.Should().Equal((20UL, true));
+        pipeline.Roles.Current.Should().Equal(20UL);
+        pipeline.Roles.Welcomes.Should().Be(1);
     }
 
     [Fact]
@@ -429,6 +533,7 @@ public sealed class ScreeningPipelineTests(MongoFixture mongo)
         public ulong? FailingRole { get; set; }
         public string? PromotionProblem { get; set; }
         public Func<Task>? AfterRemove { get; set; }
+        public Func<Task>? BeforeFailure { get; set; }
         public int Welcomes { get; private set; }
         public bool IsGuildAvailable(ulong guildId) => true;
         public Task<string?> CheckPromotionAsync(GuildConfig config, CancellationToken ct) => Task.FromResult(PromotionProblem);
@@ -436,7 +541,11 @@ public sealed class ScreeningPipelineTests(MongoFixture mongo)
             Task.FromResult(new MemberRoleSnapshot(false, Current.ToArray()));
         public async Task SetRoleAsync(ulong guildId, ulong memberId, ulong roleId, bool grant, CancellationToken ct)
         {
-            if (roleId == FailingRole) throw new UnauthorizedAccessException("Missing ManageRoles or role hierarchy");
+            if (roleId == FailingRole)
+            {
+                if (BeforeFailure is not null) await BeforeFailure();
+                throw new UnauthorizedAccessException("Missing ManageRoles or role hierarchy");
+            }
             Changes.Add((roleId, grant));
             if (grant) Current.Add(roleId); else Current.Remove(roleId);
             if (!grant && AfterRemove is not null) await AfterRemove();
