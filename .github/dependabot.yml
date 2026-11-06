@@ -1,7 +1,54 @@
 version: 2
 
 updates:
+  # Central package versions and the solution's project/lock files.
   - package-ecosystem: "nuget"
     directory: "/"
     schedule:
       interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Europe/Vienna"
+    open-pull-requests-limit: 5
+    groups:
+      # These packages share a nightly release and must be reviewed together.
+      dsharpplus:
+        patterns:
+          - "DSharpPlus*"
+      nuget-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # Covers both version-tagged actions and SHA-pinned actions in workflows.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Europe/Vienna"
+    open-pull-requests-limit: 5
+    groups:
+      actions-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # Keep the SDK and runtime base images in the root Dockerfile together.
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Europe/Vienna"
+    open-pull-requests-limit: 5
+    groups:
+      dotnet-images:
+        patterns:
+          - "*"
