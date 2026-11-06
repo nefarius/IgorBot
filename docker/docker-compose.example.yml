@@ -17,6 +17,8 @@ services:
       # - ConnectionStrings__MongoDB=mongodb://database-host:27017/
       # Optional System One connection: use a server root reachable from this container.
       # Recreate the app after environment changes; then enable Questionnaire screening via /config set.
+      # HTTP is for protected local connections only. Across untrusted networks, use HTTPS or an encrypted tunnel:
+      # bearer tokens and questionnaire answers can otherwise be exposed.
       # - Bot__SystemOne__BaseUrl=http://console-host:8081
       # - Bot__SystemOne__Model=loaded
       # - Bot__SystemOne__ApiToken=<system-one-bearer-token>

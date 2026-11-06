@@ -79,7 +79,7 @@ After inviting the bot to your server, run `/config setup` in Discord (Administr
 
 `/config setup` **replaces the existing guild configuration**, including its questionnaire and screening settings. Use it for initial setup or an intentional reset; use `/config set` for individual changes.
 
-Setup creates a Member questionnaire with one rules question, a three-minute timeout per answer, screening disabled, and submissions directed to the stranger status channel. It does not create the five-question questionnaire shown in the full appsettings example. For custom questions, a different submission channel, or DM delivery, see [questionnaire configuration](docs/operations.md#custom-questionnaires).
+Setup creates a Member questionnaire with one rules question, a three-minute timeout per answer, screening disabled, and submissions directed to the stranger status channel. It does not create the five-question questionnaire shown in the full appsettings example. Screening expects a good-faith reason for joining; a rules-only answer without that information may be sent for manual review. For custom questions, a different submission channel, or DM delivery, see [questionnaire configuration](docs/operations.md#custom-questionnaires).
 
 Use `/config view` to inspect the current configuration and `/config set` to update individual options. Available
 options include: stranger role, member role, application category, stranger status channel, member welcome channel,
@@ -113,7 +113,7 @@ Individual features can be enabled or disabled per guild:
 
 System One can approve high-confidence `normal` applications automatically. Screening is opt-in for each Member questionnaire; configuring an endpoint alone does not enable it. `bot`, `reject`, uncertain results, and failures remain available for moderator review. Screening itself never kicks or bans.
 
-1. Set `Bot__SystemOne__BaseUrl` to the System One server root and restart/recreate the app. For PS5LM, use a URL such as `http://console-host:8081`, not the `/v1/systemone` path. Hosted services may also need a model name and `Bot__SystemOne__ApiToken`.
+1. Set `Bot__SystemOne__BaseUrl` to the System One server root and restart/recreate the app. For PS5LM, use a URL such as `http://console-host:8081`, not the `/v1/systemone` path. HTTP is for protected local connections only; across untrusted networks, use HTTPS or an encrypted tunnel to avoid exposing bearer tokens and questionnaire answers. Hosted services may also need a model name and `Bot__SystemOne__ApiToken`.
 2. Set **Questionnaire screening context** and **Questionnaire auto-promote threshold** through `/config set` as needed. The default threshold is `0.80` (80%); enter a decimal probability, not a percentage string.
 3. Run `/systemone test` to test inference and inspect screening settings, role permissions/hierarchy, and submission-channel access. The test does not change anyone's membership.
 4. Enable **Questionnaire screening** through `/config set` with value `true`. Enabling it queues a waiting-applicant scan automatically.

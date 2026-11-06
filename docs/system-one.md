@@ -15,6 +15,8 @@ Connection settings apply to the whole bot and are read at startup:
 
 In Docker Compose, the corresponding environment names use double underscores:
 
+HTTP is for protected local connections only. Across untrusted networks, use HTTPS or an encrypted tunnel; otherwise bearer tokens and questionnaire answers may be exposed.
+
 ```yaml
 environment:
   - Bot__SystemOne__BaseUrl=http://console-host:8081
@@ -29,7 +31,9 @@ The background startup probe checks `/health` and retries transient connection e
 
 ## Configure the questionnaire
 
-The server needs an enabled onboarding workflow and a Member questionnaire. `/config setup` creates a minimal rules-only questionnaire; a custom multi-question application requires [bootstrap or persisted questionnaire configuration](operations.md#custom-questionnaires).
+The server needs an enabled onboarding workflow and a Member questionnaire. Use `/config setup` only for initial setup or an intentional reset: it replaces the guild configuration, resets the questionnaire to a minimal rules-only question, and disables screening. Use `/config set` for supported changes to an existing configuration; a custom multi-question application requires [bootstrap or persisted questionnaire configuration](operations.md#custom-questionnaires).
+
+Screening expects a good-faith reason for joining as well as acknowledgement of the rules. A rules-only answer without that information may be sent for manual review. Ask why the applicant wants to join when configuring a questionnaire for automatic screening.
 
 Use `/config set` and select these options:
 

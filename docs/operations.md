@@ -62,7 +62,9 @@ Igor uses the MongoDB database named `IgorBot`. Guild configuration is represent
 
 The startup bootstrap migration reads `Bot:Guilds` and imports guild IDs not already stored. It runs on subsequent startups too, but skips existing guild configuration. Thus appsettings is an initial seed, not the ongoing source of truth for guild settings. The full [appsettings example](../src/appsettings.Example.json) is useful before the first import; replace all its illustrative IDs.
 
-A separate `GuildMemberStatusMigration` derives canonical lifecycle states for legacy member records. `Bot:Migration:DryRun` defaults to `false`; set it to `true` to inspect that migration's proposed changes and histogram without writing the status migration. It is **not** a dry run of the bot: Discord connection, other startup work, and guild bootstrap migration still run. Set it back to `false` and restart to apply the status migration. Records already carrying a non-Unknown status are skipped.
+A separate `GuildMemberStatusMigration` derives canonical lifecycle states for legacy member records. `Bot:Migration:DryRun` defaults to `false`; set it to `true` to inspect that migration without writing its status changes. The histogram is logged at Information, but individual proposed status changes are logged at Debug. To inspect those proposals, enable Debug logging before startup, for example with `Serilog__MinimumLevel__Default=Debug` in the environment or `Serilog:MinimumLevel:Default` set to `Debug` in appsettings.
+
+This is **not** a dry run of the bot: Discord connection, other startup work, and guild bootstrap migration still run. Set `Bot:Migration:DryRun` back to `false` and restart to apply the status migration. Records already carrying a non-Unknown status are skipped.
 
 Rejoins use an atomic lifecycle reset, detach old channel/application references, and clear the previous screening result. Completed screening decisions survive normal widget cleanup; recoverable retries with no new decision retain the previous result until replacement.
 
