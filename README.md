@@ -115,7 +115,7 @@ System One can approve high-confidence `normal` applications automatically. Scre
 
 1. Set `Bot__SystemOne__BaseUrl` to the System One server root and restart/recreate the app. For PS5LM, use a URL such as `http://console-host:8081`, not the `/v1/systemone` path. HTTP is for protected local connections only; across untrusted networks, use HTTPS or an encrypted tunnel to avoid exposing bearer tokens and questionnaire answers. Hosted services may also need a model name and `Bot__SystemOne__ApiToken`.
 2. Set **Questionnaire screening context** and **Questionnaire auto-promote threshold** through `/config set` as needed. The default threshold is `0.80` (80%); enter a decimal probability, not a percentage string.
-3. Run `/systemone test` to test inference and inspect screening settings, role permissions/hierarchy, and submission-channel access. The test does not change anyone's membership.
+3. Run `/systemone test` to test inference and inspect screening settings, role permissions/hierarchy, and submission-channel access. The test does not change anyone's membership. Use `/systemone simulate` with a synthetic application to exercise the current screening context and threshold; it also changes no membership data.
 4. Enable **Questionnaire screening** through `/config set` with value `true`. Enabling it queues a waiting-applicant scan automatically.
 5. To trigger a scan yourself, run `/jobs run` and choose **Pending applicant screening**. Job progress is logged by the bot.
 

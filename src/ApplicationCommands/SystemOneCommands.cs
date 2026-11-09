@@ -3,6 +3,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 
 using DSharpPlus.Commands;
+using DSharpPlus.Commands.ArgumentModifiers;
 using DSharpPlus.Commands.ContextChecks;
 using DSharpPlus.Commands.Processors.SlashCommands;
 using DSharpPlus.Entities;
@@ -52,7 +53,7 @@ internal sealed class SystemOneCommands(ISystemOneProbe probe, IGuildConfigServi
             if (config?.Questionnaires.TryGetValue(QuestionnaireKeys.Member, out Questionnaire? questionnaire) == true)
             {
                 embed.AddField("Questionnaire screening", questionnaire.Automation.Enabled ? "Enabled" : "Disabled", true);
-                embed.AddField("Auto-promote at", Percent(questionnaire.Automation.AutoPromoteNormalProbability), true);
+                embed.AddField("Auto-promote at", SystemOneReportText.Percent(questionnaire.Automation.AutoPromoteNormalProbability), true);
                 await AddReadinessChecksAsync(embed,
                     () => roles.CheckPromotionAsync(config, CancellationToken.None),
                     async () =>
@@ -111,7 +112,7 @@ internal sealed class SystemOneCommands(ISystemOneProbe probe, IGuildConfigServi
 
         if (!string.IsNullOrWhiteSpace(report.Model))
         {
-            embed.AddField("Model", Trim(report.Model), true);
+            embed.AddField("Model", SystemOneReportText.Trim(report.Model), true);
         }
 
         if (report.Status != SystemOneProbeStatus.NotConfigured)
@@ -121,17 +122,74 @@ internal sealed class SystemOneCommands(ISystemOneProbe probe, IGuildConfigServi
 
         if (report.Status == SystemOneProbeStatus.Succeeded)
         {
-            embed.AddField("Verdict", Trim(report.Label ?? "n/a"), true);
-            embed.AddField("Confidence", Percent(report.Confidence), true);
-            embed.AddField("Probabilities", Trim(FormatProbabilities(report.Probabilities)));
+            embed.AddField("Verdict", SystemOneReportText.Trim(report.Label ?? "n/a"), true);
+            embed.AddField("Confidence", SystemOneReportText.Percent(report.Confidence), true);
+            embed.AddField("Probabilities", SystemOneReportText.Trim(SystemOneReportText.FormatProbabilities(report.Probabilities)));
         }
 
         if (!string.IsNullOrWhiteSpace(report.Failure))
         {
-            embed.AddField("Failure", Trim(report.Failure));
+            embed.AddField("Failure", SystemOneReportText.Trim(report.Failure));
         }
 
         await ctx.EditResponseAsync(new DiscordMessageBuilder().AddEmbed(embed));
+    }
+
+    [Command("simulate"), Description("Classify a synthetic application with the current screening context.")]
+    public async Task Simulate(
+        SlashCommandContext ctx,
+        [Parameter("application"), Description("Synthetic application text; no member or role is changed")]
+        [MinMaxLength(1, SystemOneSimulation.MaximumApplicationLength)]
+        string application)
+    {
+        await ctx.DeferResponseAsync(true);
+        ulong guildId = ctx.RequireGuild().Id;
+        GuildConfig? config;
+        try
+        {
+            config = await configs.GetFreshAsync(guildId);
+        }
+        catch (Exception ex)
+        {
+            ctx.Client.Logger.LogWarning(ex,
+                "System One simulation could not load configuration for guild {GuildId}", guildId);
+            await ctx.EditResponseAsync(new DiscordMessageBuilder().AddEmbed(
+                SystemOneSimulation.Failure("The current server configuration could not be loaded. No membership data was changed.")));
+            return;
+        }
+
+        if (config?.Questionnaires.TryGetValue(QuestionnaireKeys.Member, out Questionnaire? questionnaire) != true ||
+            questionnaire is null)
+        {
+            await ctx.EditResponseAsync(new DiscordMessageBuilder().AddEmbed(new DiscordEmbedBuilder
+            {
+                Title = "System One simulation",
+                Description = "The Member questionnaire is not configured. No membership data was changed.",
+                Color = new DiscordColor(0xFFAA00)
+            }));
+            return;
+        }
+
+        try
+        {
+            OnboardingSubmission submission = SystemOneSimulation.CreateSubmission(questionnaire, application);
+            SystemOneProbeReport report = await probe.SimulateAsync(
+                submission, questionnaire.Automation.AutoPromoteNormalProbability);
+            await ctx.EditResponseAsync(new DiscordMessageBuilder().AddEmbed(
+                SystemOneSimulation.Format(report, questionnaire.Automation.Enabled)));
+        }
+        catch (ArgumentException ex)
+        {
+            await ctx.EditResponseAsync(new DiscordMessageBuilder().AddEmbed(
+                SystemOneSimulation.Failure($"{ex.Message} No membership data was changed.")));
+        }
+        catch (Exception ex)
+        {
+            ctx.Client.Logger.LogWarning(ex, "System One simulation failed for guild {GuildId}", guildId);
+            await ctx.EditResponseAsync(new DiscordMessageBuilder().AddEmbed(
+                SystemOneSimulation.Failure(
+                    $"The simulation could not be completed ({ex.GetType().Name}). No membership data was changed.")));
+        }
     }
 
     internal static async Task AddReadinessChecksAsync(DiscordEmbedBuilder embed,
@@ -158,7 +216,106 @@ internal sealed class SystemOneCommands(ISystemOneProbe probe, IGuildConfigServi
         }
     }
 
-    private static string FormatProbabilities(IReadOnlyDictionary<string, double> probabilities)
+}
+
+internal static class SystemOneSimulation
+{
+    /// <summary>
+    ///     Discord accepts at most 6000 characters for a slash-command string option.
+    ///     System One also requires the shared state to be nonempty.
+    /// </summary>
+    public const int MaximumApplicationLength = 6000;
+
+    public static OnboardingSubmission CreateSubmission(Questionnaire questionnaire, string application)
+    {
+        string text = application.Trim();
+        if (text.Length == 0)
+        {
+            throw new ArgumentException("Provide the synthetic application.");
+        }
+
+        if (text.Length > MaximumApplicationLength)
+        {
+            throw new ArgumentException(
+                $"Synthetic application must be {MaximumApplicationLength} characters or fewer.");
+        }
+
+        return new OnboardingSubmission
+        {
+            QuestionnaireName = questionnaire.Name,
+            Description = questionnaire.Description,
+            Context = questionnaire.Automation.Context,
+            Answers = [new OnboardingAnswer("Synthetic application", text)]
+        };
+    }
+
+    public static DiscordEmbed Failure(string description) =>
+        new DiscordEmbedBuilder
+        {
+            Title = "System One simulation",
+            Description = description,
+            Color = new DiscordColor(0xFF0000)
+        }.Build();
+
+    public static DiscordEmbed Format(SystemOneProbeReport report, bool screeningEnabled)
+    {
+        DiscordEmbedBuilder embed = new()
+        {
+            Title = "System One simulation",
+            Description = report.Status switch
+            {
+                SystemOneProbeStatus.Succeeded =>
+                    "The endpoint classified this synthetic application. No member, application, database record, or role was changed.",
+                SystemOneProbeStatus.NotConfigured =>
+                    "Bot:SystemOne:BaseUrl is empty, so no request was sent. No membership data was changed.",
+                _ => "The endpoint did not return a usable decision. No membership data was changed."
+            },
+            Color = report.Status switch
+            {
+                SystemOneProbeStatus.Succeeded => new DiscordColor(0x00FF00),
+                SystemOneProbeStatus.NotConfigured => new DiscordColor(0xFFAA00),
+                _ => new DiscordColor(0xFF0000)
+            }
+        };
+
+        embed.AddField("Result", report.Status.ToString(), true);
+        embed.AddField("Recommendation", SystemOneReportText.Trim(report.Label ?? "n/a"), true);
+        embed.AddField("Action", Action(report, screeningEnabled), true);
+        embed.AddField("Threshold", SystemOneReportText.Percent(report.Threshold), true);
+        embed.AddField("Confidence", SystemOneReportText.Percent(report.Confidence), true);
+        embed.AddField("Probabilities", SystemOneReportText.Trim(SystemOneReportText.FormatProbabilities(report.Probabilities)));
+        if (!string.IsNullOrWhiteSpace(report.Model))
+        {
+            embed.AddField("Model", SystemOneReportText.Trim(report.Model), true);
+        }
+
+        if (!string.IsNullOrWhiteSpace(report.Failure))
+        {
+            embed.AddField("Failure", SystemOneReportText.Trim(report.Failure));
+        }
+
+        return embed.Build();
+    }
+
+    private static string Action(SystemOneProbeReport report, bool screeningEnabled)
+    {
+        string action = report.Outcome switch
+        {
+            OnboardingDecisionOutcome.AutoPromote => screeningEnabled
+                ? "automatic promotion"
+                : "automatic promotion if screening is enabled",
+            OnboardingDecisionOutcome.ManualReview => "manual review",
+            _ => "n/a"
+        };
+
+        return screeningEnabled ? action : $"screening is disabled; {action}";
+    }
+
+}
+
+internal static class SystemOneReportText
+{
+    public static string FormatProbabilities(IReadOnlyDictionary<string, double> probabilities)
     {
         if (probabilities.Count == 0)
         {
@@ -168,8 +325,8 @@ internal sealed class SystemOneCommands(ISystemOneProbe probe, IGuildConfigServi
         return string.Join(", ", probabilities.Select(pair => $"{pair.Key} {Percent(pair.Value)}"));
     }
 
-    private static string Percent(double? value) =>
+    public static string Percent(double? value) =>
         value is null ? "n/a" : value.Value.ToString("P0", CultureInfo.InvariantCulture);
 
-    private static string Trim(string value) => value.Length <= 1024 ? value : value[..1021] + "...";
+    public static string Trim(string value) => value.Length <= 1024 ? value : value[..1021] + "...";
 }

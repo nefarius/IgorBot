@@ -13,6 +13,7 @@ Administrators have these command groups:
 - `/config view`: inspect the current guild settings, including screening status, threshold, and context.
 - `/config set`: edit a supported option. Role/channel values accept IDs or mentions; booleans use `true`/`false`. Idle kick uses minutes, with `0` disabling it. **Moderator role (add)** adds a role; honeypot exclusion roles have separate add/remove options. A honeypot-channel value with no parseable ID clears the honeypot setting.
 - `/systemone test`: test decision inference and report guild readiness without changing membership.
+- `/systemone simulate`: classify one synthetic application using the current screening context and threshold. It changes no member, application, database record, or role, and works while screening is disabled.
 - `/jobs run`: queue a maintenance job across all configured servers. The response confirms queuing, not completion. Read the bot log for results.
 
 These administrative slash commands require the invoking user to have Administrator. The bot needs the relevant role/channel/moderation permissions; it does not require Administrator.

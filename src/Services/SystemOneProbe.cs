@@ -23,6 +23,10 @@ internal sealed class SystemOneProbeReport
 
     public double? Confidence { get; init; }
 
+    public double? Threshold { get; init; }
+
+    public OnboardingDecisionOutcome? Outcome { get; init; }
+
     public TimeSpan Elapsed { get; init; }
 
     public string? Failure { get; init; }
@@ -33,6 +37,11 @@ internal sealed class SystemOneProbeReport
 internal interface ISystemOneProbe
 {
     Task<SystemOneProbeReport> ProbeAsync(CancellationToken cancellationToken = default);
+
+    Task<SystemOneProbeReport> SimulateAsync(
+        OnboardingSubmission submission,
+        double threshold,
+        CancellationToken cancellationToken = default);
 }
 
 internal sealed class SystemOneProbe(SystemOneSettings settings, IOnboardingDecisionClient client) : ISystemOneProbe
@@ -53,7 +62,38 @@ internal sealed class SystemOneProbe(SystemOneSettings settings, IOnboardingDeci
         ]
     };
 
-    public async Task<SystemOneProbeReport> ProbeAsync(CancellationToken cancellationToken = default)
+    public Task<SystemOneProbeReport> ProbeAsync(CancellationToken cancellationToken = default) =>
+        EvaluateAsync(Sample, 0.8, requireDecision: true, cancellationToken);
+
+    public Task<SystemOneProbeReport> SimulateAsync(
+        OnboardingSubmission submission,
+        double threshold,
+        CancellationToken cancellationToken = default)
+    {
+        if (!double.IsFinite(threshold) || threshold < 0 || threshold > 1)
+        {
+            Stopwatch watch = Stopwatch.StartNew();
+            watch.Stop();
+            return Task.FromResult(new SystemOneProbeReport
+            {
+                Status = SystemOneProbeStatus.Failed,
+                Endpoint = settings.BaseUri?.GetComponents(UriComponents.SchemeAndServer, UriFormat.SafeUnescaped),
+                Model = settings.Model,
+                Threshold = threshold,
+                Elapsed = watch.Elapsed,
+                Failure = "Auto-promotion threshold is invalid.",
+                UsedAuthorization = settings.ApiToken is not null
+            });
+        }
+
+        return EvaluateAsync(submission, threshold, requireDecision: false, cancellationToken);
+    }
+
+    private async Task<SystemOneProbeReport> EvaluateAsync(
+        OnboardingSubmission submission,
+        double threshold,
+        bool requireDecision,
+        CancellationToken cancellationToken)
     {
         if (!settings.IsConfigured || settings.BaseUri is null)
         {
@@ -61,6 +101,7 @@ internal sealed class SystemOneProbe(SystemOneSettings settings, IOnboardingDeci
             {
                 Status = SystemOneProbeStatus.NotConfigured,
                 Model = settings.Model,
+                Threshold = threshold,
                 UsedAuthorization = settings.ApiToken is not null
             };
         }
@@ -69,22 +110,29 @@ internal sealed class SystemOneProbe(SystemOneSettings settings, IOnboardingDeci
         Stopwatch watch = Stopwatch.StartNew();
         try
         {
-            SystemOneClassification classification = await client.ClassifyAsync(Sample, cancellationToken);
-            OnboardingDecisionResult validation = OnboardingDecisionPolicy.FromClassification(classification, 0.8, DateTime.UtcNow);
-            if (validation.Outcome == OnboardingDecisionOutcome.Unavailable)
+            SystemOneClassification classification = await client.ClassifyAsync(submission, cancellationToken);
+            OnboardingDecisionResult validation = OnboardingDecisionPolicy.FromClassification(
+                classification, threshold, DateTime.UtcNow);
+            if (requireDecision && validation.Outcome == OnboardingDecisionOutcome.Unavailable)
             {
                 throw new InvalidOperationException(validation.Failure);
             }
+
             watch.Stop();
             return new SystemOneProbeReport
             {
-                Status = SystemOneProbeStatus.Succeeded,
+                Status = validation.Outcome == OnboardingDecisionOutcome.Unavailable
+                    ? SystemOneProbeStatus.Failed
+                    : SystemOneProbeStatus.Succeeded,
                 Endpoint = endpoint,
                 Model = classification.Model,
                 Label = classification.Label,
                 Probabilities = classification.Probabilities,
                 Confidence = classification.Confidence,
+                Threshold = threshold,
+                Outcome = validation.Outcome,
                 Elapsed = watch.Elapsed,
+                Failure = validation.Failure,
                 UsedAuthorization = settings.ApiToken is not null
             };
         }
@@ -100,6 +148,7 @@ internal sealed class SystemOneProbe(SystemOneSettings settings, IOnboardingDeci
                 Status = SystemOneProbeStatus.Failed,
                 Endpoint = endpoint,
                 Model = settings.Model,
+                Threshold = threshold,
                 Elapsed = watch.Elapsed,
                 Failure = Redact(ex, settings.ApiToken),
                 UsedAuthorization = settings.ApiToken is not null
