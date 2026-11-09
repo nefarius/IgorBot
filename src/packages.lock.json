@@ -17,9 +17,9 @@
       },
       "DSharpPlus": {
         "type": "Direct",
-        "requested": "[5.0.0-nightly-02614, )",
-        "resolved": "5.0.0-nightly-02614",
-        "contentHash": "1dHlSZxMUMtWfXEBY90BOF64F8ROnrNDI0ykPZFun3raSYVHo1XIhcV3p9Zap+sPLICMv2G5uhlQGQ2QOh/NpA==",
+        "requested": "[5.0.0-nightly-02615, )",
+        "resolved": "5.0.0-nightly-02615",
+        "contentHash": "+xxrckHfCwKxbkciYThYeKy9YRPEyetHKSDpvw696Vkr26ADAwzwCnoFPd6qqlPqD0+b84JpTMHf63QI17Ah3w==",
         "dependencies": {
           "CommunityToolkit.HighPerformance": "8.4.2",
           "Microsoft.Extensions.Caching.Memory": "10.0.11",
@@ -35,11 +35,11 @@
       },
       "DSharpPlus.Commands": {
         "type": "Direct",
-        "requested": "[5.0.0-nightly-02614, )",
-        "resolved": "5.0.0-nightly-02614",
-        "contentHash": "jXqim63Mk6XJjosWTe7rw9QMKflrCYdNCgFVAFF6Fhtw0BKfACq8y2vmD0oQlET7uSmYeS/mqXRiSNaszyhnNg==",
+        "requested": "[5.0.0-nightly-02615, )",
+        "resolved": "5.0.0-nightly-02615",
+        "contentHash": "cu7Vm4p1kB4uDqEvieCpTtXlTDHalrLrVv2nQCjWmXy3e5GJjSm9aLR4++RRGYPriVSsnu0iLCPsvcWluejn4Q==",
         "dependencies": {
-          "DSharpPlus": "5.0.0-nightly-02614",
+          "DSharpPlus": "5.0.0-nightly-02615",
           "Microsoft.Extensions.Logging": "10.0.11",
           "Raffinert.FuzzySharp": "3.0.6",
           "Ulid": "1.4.1"
@@ -47,12 +47,12 @@
       },
       "DSharpPlus.Interactivity": {
         "type": "Direct",
-        "requested": "[5.0.0-nightly-02614, )",
-        "resolved": "5.0.0-nightly-02614",
-        "contentHash": "vCD7ou4i69WfHzlYs2/qSxNOScIGQozw8Ax+4SSI64Uq+Ff9DfZSmLeBxu7h74bg1X5dsGNZ3iYkX959qDTTdQ==",
+        "requested": "[5.0.0-nightly-02615, )",
+        "resolved": "5.0.0-nightly-02615",
+        "contentHash": "HRd9g2S5Jkfn43v5cqCgrwMBWgiQd4UMxGTtF7O+9U0ULlLq4TXMCbOHAc9Gw4pAuz6kkyhBWONIjKAqbZJlrw==",
         "dependencies": {
           "ConcurrentHashSet": "1.3.0",
-          "DSharpPlus": "5.0.0-nightly-02614"
+          "DSharpPlus": "5.0.0-nightly-02615"
         }
       },
       "Microsoft.Extensions.Hosting": {
