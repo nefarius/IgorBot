@@ -50,7 +50,7 @@ Before enabling, run `/systemone test`. It sends a canned application and report
 
 Role and channel checks report independently. The test never approves, kicks, or bans a member. A successful canned inference does not guarantee any particular verdict for a real application. `/config view` shows the saved screening settings and context.
 
-Use `/systemone simulate` to classify one synthetic application against the current questionnaire name, description, screening context, and auto-promote threshold. The command works even while questionnaire screening is disabled, so the context can be checked before enabling it. It sends no Discord identity, creates no application, and changes no database record, member state, or role. Its reported action is the action production would take for that classification; the command itself never promotes anyone. `/systemone test` remains the fixed connectivity and readiness probe and does not use the configured context.
+Use `/systemone simulate` to classify one synthetic application against the current questionnaire name, description, screening context, and auto-promote threshold. The command works even while questionnaire screening is disabled, so the context can be checked before enabling it. It sends no Discord identity, creates no application, and changes no database record, member state, or role. When screening is disabled, the result says so and qualifies automatic promotion as applying only after screening is enabled. The command itself never promotes anyone. `/systemone test` remains the fixed connectivity and readiness probe and does not use the configured context.
 
 ## New submissions and waiting applicants
 

@@ -88,11 +88,26 @@ public sealed class SystemOneReadinessTests
             Confidence = 0.5,
             Threshold = 0.8,
             Outcome = outcome
-        });
+        }, screeningEnabled: true);
 
         embed.Description.Should().Contain("No member, application, database record, or role was changed.");
         embed.Fields!.Single(field => field.Name == "Action").Value.Should().Be(action);
         embed.Fields!.Single(field => field.Name == "Threshold").Value.Should().Be("80 %");
+    }
+
+    [Fact]
+    internal void DisabledScreening_QualifiesAutomaticPromotionWithoutChangingClassification()
+    {
+        DiscordEmbed embed = SystemOneSimulation.Format(new SystemOneProbeReport
+        {
+            Status = SystemOneProbeStatus.Succeeded,
+            Label = OnboardingDecisionLabels.Normal,
+            Outcome = OnboardingDecisionOutcome.AutoPromote
+        }, screeningEnabled: false);
+
+        embed.Fields!.Single(field => field.Name == "Recommendation").Value.Should().Be(OnboardingDecisionLabels.Normal);
+        embed.Fields!.Single(field => field.Name == "Action").Value.Should()
+            .Be("screening is disabled; automatic promotion if screening is enabled");
     }
 
     [Theory]

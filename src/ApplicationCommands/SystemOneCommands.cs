@@ -175,7 +175,8 @@ internal sealed class SystemOneCommands(ISystemOneProbe probe, IGuildConfigServi
             OnboardingSubmission submission = SystemOneSimulation.CreateSubmission(questionnaire, application);
             SystemOneProbeReport report = await probe.SimulateAsync(
                 submission, questionnaire.Automation.AutoPromoteNormalProbability);
-            await ctx.EditResponseAsync(new DiscordMessageBuilder().AddEmbed(SystemOneSimulation.Format(report)));
+            await ctx.EditResponseAsync(new DiscordMessageBuilder().AddEmbed(
+                SystemOneSimulation.Format(report, questionnaire.Automation.Enabled)));
         }
         catch (ArgumentException ex)
         {
@@ -256,7 +257,7 @@ internal static class SystemOneSimulation
             Color = new DiscordColor(0xFF0000)
         }.Build();
 
-    public static DiscordEmbed Format(SystemOneProbeReport report)
+    public static DiscordEmbed Format(SystemOneProbeReport report, bool screeningEnabled)
     {
         DiscordEmbedBuilder embed = new()
         {
@@ -279,7 +280,7 @@ internal static class SystemOneSimulation
 
         embed.AddField("Result", report.Status.ToString(), true);
         embed.AddField("Recommendation", SystemOneReportText.Trim(report.Label ?? "n/a"), true);
-        embed.AddField("Action", Action(report), true);
+        embed.AddField("Action", Action(report, screeningEnabled), true);
         embed.AddField("Threshold", SystemOneReportText.Percent(report.Threshold), true);
         embed.AddField("Confidence", SystemOneReportText.Percent(report.Confidence), true);
         embed.AddField("Probabilities", SystemOneReportText.Trim(SystemOneReportText.FormatProbabilities(report.Probabilities)));
@@ -296,12 +297,19 @@ internal static class SystemOneSimulation
         return embed.Build();
     }
 
-    private static string Action(SystemOneProbeReport report) => report.Outcome switch
+    private static string Action(SystemOneProbeReport report, bool screeningEnabled)
     {
-        OnboardingDecisionOutcome.AutoPromote => "automatic promotion",
-        OnboardingDecisionOutcome.ManualReview => "manual review",
-        _ => "n/a"
-    };
+        string action = report.Outcome switch
+        {
+            OnboardingDecisionOutcome.AutoPromote => screeningEnabled
+                ? "automatic promotion"
+                : "automatic promotion if screening is enabled",
+            OnboardingDecisionOutcome.ManualReview => "manual review",
+            _ => "n/a"
+        };
+
+        return screeningEnabled ? action : $"screening is disabled; {action}";
+    }
 
 }
 
