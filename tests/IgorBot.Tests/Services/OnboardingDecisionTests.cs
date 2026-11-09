@@ -474,6 +474,46 @@ public sealed class SystemOneProbeTests
         report.Failure.Should().Contain("***");
     }
 
+    [Theory]
+    [InlineData(0.90, 0.80, OnboardingDecisionOutcome.AutoPromote)]
+    [InlineData(0.67, 0.80, OnboardingDecisionOutcome.ManualReview)]
+    internal async Task Simulation_UsesConfiguredContextAndThreshold(
+        double normalProbability,
+        double threshold,
+        OnboardingDecisionOutcome expected)
+    {
+        RecordingProbeClient client = new() { NormalProbability = normalProbability };
+        SystemOneProbe probe = new(Configured(null), client);
+        OnboardingSubmission submission = new()
+        {
+            QuestionnaireName = "On-boarding",
+            Description = "Current questionnaire",
+            Context = "Relevant open-source project sharing is legitimate.",
+            Answers = [new OnboardingAnswer("Synthetic application", "I built a virtual controller.")]
+        };
+
+        SystemOneProbeReport report = await probe.SimulateAsync(submission, threshold);
+
+        report.Status.Should().Be(SystemOneProbeStatus.Succeeded);
+        report.Outcome.Should().Be(expected);
+        report.Threshold.Should().Be(threshold);
+        client.Calls.Should().Be(1);
+        client.LastSubmission.Should().BeSameAs(submission);
+    }
+
+    [Fact]
+    public async Task Simulation_ReportsInvalidDecisionWithoutThrowing()
+    {
+        RecordingProbeClient client = new() { Invalid = true };
+        SystemOneProbe probe = new(Configured(null), client);
+
+        SystemOneProbeReport report = await probe.SimulateAsync(SystemOneProbe.Sample, 0.80);
+
+        report.Status.Should().Be(SystemOneProbeStatus.Failed);
+        report.Failure.Should().Be("Classifier response was incomplete.");
+        client.Calls.Should().Be(1);
+    }
+
     [Fact]
     public async Task EndpointReport_OmitsUserInfo()
     {
@@ -496,6 +536,40 @@ public sealed class SystemOneProbeTests
             ApiToken = token,
             TimeoutSeconds = 2
         });
+
+    private sealed class RecordingProbeClient : IOnboardingDecisionClient
+    {
+        public int Calls { get; private set; }
+
+        public double NormalProbability { get; init; } = 1;
+
+        public bool Invalid { get; init; }
+
+        public OnboardingSubmission? LastSubmission { get; private set; }
+
+        public Task<SystemOneClassification> ClassifyAsync(
+            OnboardingSubmission submission,
+            CancellationToken cancellationToken = default)
+        {
+            Calls++;
+            LastSubmission = submission;
+            double remainder = (1 - NormalProbability) / 2;
+            return Task.FromResult(new SystemOneClassification
+            {
+                Model = "d1-3B-Q8_0",
+                Label = OnboardingDecisionLabels.Normal,
+                Confidence = 0.5,
+                Probabilities = Invalid
+                    ? new Dictionary<string, double>()
+                    : new Dictionary<string, double>
+                    {
+                        [OnboardingDecisionLabels.Normal] = NormalProbability,
+                        [OnboardingDecisionLabels.Bot] = remainder,
+                        [OnboardingDecisionLabels.Reject] = remainder
+                    }
+            });
+        }
+    }
 
     private sealed class ProbeClient : IOnboardingDecisionClient
     {

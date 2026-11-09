@@ -3,6 +3,8 @@ using DSharpPlus.Entities;
 using FluentAssertions;
 
 using IgorBot.ApplicationCommands;
+using IgorBot.Core;
+using IgorBot.Services;
 
 namespace IgorBot.Tests.ApplicationCommands;
 
@@ -41,5 +43,55 @@ public sealed class SystemOneReadinessTests
         embed.Fields.Single(f => f.Name == "Submission channel access").Value.Should()
             .Be(channelFails ? "Could not verify (UnauthorizedAccessException). Check the bot log." : "Ready");
         failures.Should().HaveCount((promotionFails ? 1 : 0) + (channelFails ? 1 : 0));
+    }
+
+    [Fact]
+    public void SimulationSubmission_UsesCurrentQuestionnaireContext()
+    {
+        Questionnaire questionnaire = new()
+        {
+            Id = "newbie",
+            Name = "On-boarding",
+            Description = "Current description",
+            Automation = new QuestionnaireAutomation
+            {
+                Enabled = false,
+                Context = "  Technical project sharing is legitimate.  ",
+                AutoPromoteNormalProbability = 0.91
+            }
+        };
+
+        OnboardingSubmission submission = SystemOneSimulation.CreateSubmission(
+            questionnaire, "  I share an open-source controller project.  ");
+
+        submission.QuestionnaireName.Should().Be("On-boarding");
+        submission.Description.Should().Be("Current description");
+        submission.Context.Should().Be("  Technical project sharing is legitimate.  ");
+        submission.Answers.Should().ContainSingle()
+            .Which.Should().Be(new OnboardingAnswer(
+                "Synthetic application", "I share an open-source controller project."));
+    }
+
+    [Theory]
+    [InlineData(OnboardingDecisionOutcome.AutoPromote, "automatic promotion")]
+    [InlineData(OnboardingDecisionOutcome.ManualReview, "manual review")]
+    internal void SimulationResult_ReportsProductionActionWithoutSideEffects(
+        OnboardingDecisionOutcome outcome,
+        string action)
+    {
+        DiscordEmbed embed = SystemOneSimulation.Format(new SystemOneProbeReport
+        {
+            Status = SystemOneProbeStatus.Succeeded,
+            Model = "d1-3B-Q8_0",
+            Label = OnboardingDecisionLabels.Normal,
+            Probabilities = new Dictionary<string, double> { [OnboardingDecisionLabels.Normal] = 0.67 },
+            Confidence = 0.5,
+            Threshold = 0.8,
+            Outcome = outcome
+        });
+
+        embed.Description.Should().Contain("No member, application, database record, or role was changed.");
+        embed.Fields!.Single(field => field.Name == "Action").Value.Should().Be(action);
+        embed.Fields!.Single(field => field.Name == "Threshold").Value.Should().Be("80 %");
     }
 }

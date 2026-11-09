@@ -134,6 +134,49 @@ internal sealed class SystemOneCommands(ISystemOneProbe probe, IGuildConfigServi
         await ctx.EditResponseAsync(new DiscordMessageBuilder().AddEmbed(embed));
     }
 
+    [Command("simulate"), Description("Classify a synthetic application with the current screening context.")]
+    public async Task Simulate(
+        SlashCommandContext ctx,
+        [Parameter("application"), Description("Synthetic application text; no member or role is changed")]
+        string application)
+    {
+        await ctx.DeferResponseAsync(true);
+        GuildConfig? config;
+        try
+        {
+            config = await configs.GetFreshAsync(ctx.RequireGuild().Id);
+        }
+        catch (Exception ex)
+        {
+            ctx.Client.Logger.LogWarning(ex,
+                "System One simulation could not load configuration for guild {GuildId}", ctx.RequireGuild().Id);
+            await ctx.EditResponseAsync(new DiscordMessageBuilder().AddEmbed(new DiscordEmbedBuilder
+            {
+                Title = "System One simulation",
+                Description = "The current server configuration could not be loaded. No membership data was changed.",
+                Color = new DiscordColor(0xFF0000)
+            }));
+            return;
+        }
+
+        if (config?.Questionnaires.TryGetValue(QuestionnaireKeys.Member, out Questionnaire? questionnaire) != true ||
+            questionnaire is null)
+        {
+            await ctx.EditResponseAsync(new DiscordMessageBuilder().AddEmbed(new DiscordEmbedBuilder
+            {
+                Title = "System One simulation",
+                Description = "The Member questionnaire is not configured. No membership data was changed.",
+                Color = new DiscordColor(0xFFAA00)
+            }));
+            return;
+        }
+
+        OnboardingSubmission submission = SystemOneSimulation.CreateSubmission(questionnaire, application);
+        SystemOneProbeReport report = await probe.SimulateAsync(
+            submission, questionnaire.Automation.AutoPromoteNormalProbability);
+        await ctx.EditResponseAsync(new DiscordMessageBuilder().AddEmbed(SystemOneSimulation.Format(report)));
+    }
+
     internal static async Task AddReadinessChecksAsync(DiscordEmbedBuilder embed,
         Func<Task<string?>> promotionCheck, Func<Task<string>> submissionCheck, Action<Exception> logFailure)
     {
@@ -157,6 +200,83 @@ internal sealed class SystemOneCommands(ISystemOneProbe probe, IGuildConfigServi
             embed.AddField("Submission channel access", $"Could not verify ({ex.GetType().Name}). Check the bot log.");
         }
     }
+
+    private static string FormatProbabilities(IReadOnlyDictionary<string, double> probabilities)
+    {
+        if (probabilities.Count == 0)
+        {
+            return "n/a";
+        }
+
+        return string.Join(", ", probabilities.Select(pair => $"{pair.Key} {Percent(pair.Value)}"));
+    }
+
+    private static string Percent(double? value) =>
+        value is null ? "n/a" : value.Value.ToString("P0", CultureInfo.InvariantCulture);
+
+    private static string Trim(string value) => value.Length <= 1024 ? value : value[..1021] + "...";
+}
+
+internal static class SystemOneSimulation
+{
+    public static OnboardingSubmission CreateSubmission(Questionnaire questionnaire, string application) =>
+        new()
+        {
+            QuestionnaireName = questionnaire.Name,
+            Description = questionnaire.Description,
+            Context = questionnaire.Automation.Context,
+            Answers =
+            [
+                new OnboardingAnswer("Synthetic application", application.Trim())
+            ]
+        };
+
+    public static DiscordEmbed Format(SystemOneProbeReport report)
+    {
+        DiscordEmbedBuilder embed = new()
+        {
+            Title = "System One simulation",
+            Description = report.Status switch
+            {
+                SystemOneProbeStatus.Succeeded =>
+                    "The endpoint classified this synthetic application. No member, application, database record, or role was changed.",
+                SystemOneProbeStatus.NotConfigured =>
+                    "Bot:SystemOne:BaseUrl is empty, so no request was sent. No membership data was changed.",
+                _ => "The endpoint did not return a usable decision. No membership data was changed."
+            },
+            Color = report.Status switch
+            {
+                SystemOneProbeStatus.Succeeded => new DiscordColor(0x00FF00),
+                SystemOneProbeStatus.NotConfigured => new DiscordColor(0xFFAA00),
+                _ => new DiscordColor(0xFF0000)
+            }
+        };
+
+        embed.AddField("Result", report.Status.ToString(), true);
+        embed.AddField("Recommendation", Trim(report.Label ?? "n/a"), true);
+        embed.AddField("Action", Action(report), true);
+        embed.AddField("Threshold", Percent(report.Threshold), true);
+        embed.AddField("Confidence", Percent(report.Confidence), true);
+        embed.AddField("Probabilities", Trim(FormatProbabilities(report.Probabilities)));
+        if (!string.IsNullOrWhiteSpace(report.Model))
+        {
+            embed.AddField("Model", Trim(report.Model), true);
+        }
+
+        if (!string.IsNullOrWhiteSpace(report.Failure))
+        {
+            embed.AddField("Failure", Trim(report.Failure));
+        }
+
+        return embed.Build();
+    }
+
+    private static string Action(SystemOneProbeReport report) => report.Outcome switch
+    {
+        OnboardingDecisionOutcome.AutoPromote => "automatic promotion",
+        OnboardingDecisionOutcome.ManualReview => "manual review",
+        _ => "n/a"
+    };
 
     private static string FormatProbabilities(IReadOnlyDictionary<string, double> probabilities)
     {
