@@ -68,8 +68,26 @@ internal sealed class SystemOneProbe(SystemOneSettings settings, IOnboardingDeci
     public Task<SystemOneProbeReport> SimulateAsync(
         OnboardingSubmission submission,
         double threshold,
-        CancellationToken cancellationToken = default) =>
-        EvaluateAsync(submission, threshold, requireDecision: false, cancellationToken);
+        CancellationToken cancellationToken = default)
+    {
+        if (!double.IsFinite(threshold) || threshold < 0 || threshold > 1)
+        {
+            Stopwatch watch = Stopwatch.StartNew();
+            watch.Stop();
+            return Task.FromResult(new SystemOneProbeReport
+            {
+                Status = SystemOneProbeStatus.Failed,
+                Endpoint = settings.BaseUri?.GetComponents(UriComponents.SchemeAndServer, UriFormat.SafeUnescaped),
+                Model = settings.Model,
+                Threshold = threshold,
+                Elapsed = watch.Elapsed,
+                Failure = "Auto-promotion threshold is invalid.",
+                UsedAuthorization = settings.ApiToken is not null
+            });
+        }
+
+        return EvaluateAsync(submission, threshold, requireDecision: false, cancellationToken);
+    }
 
     private async Task<SystemOneProbeReport> EvaluateAsync(
         OnboardingSubmission submission,

@@ -94,4 +94,43 @@ public sealed class SystemOneReadinessTests
         embed.Fields!.Single(field => field.Name == "Action").Value.Should().Be(action);
         embed.Fields!.Single(field => field.Name == "Threshold").Value.Should().Be("80 %");
     }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void SimulationSubmission_RejectsAnEmptyApplication(string application)
+    {
+        Action create = () => SystemOneSimulation.CreateSubmission(Questionnaire(), application);
+
+        create.Should().Throw<ArgumentException>().WithMessage("Provide the synthetic application.*");
+    }
+
+    [Fact]
+    public void SimulationSubmission_RejectsAnApplicationBeyondTheDiscordOptionLimit()
+    {
+        string application = new('a', SystemOneSimulation.MaximumApplicationLength + 1);
+
+        Action create = () => SystemOneSimulation.CreateSubmission(Questionnaire(), application);
+
+        create.Should().Throw<ArgumentException>()
+            .WithMessage("*6000 characters or fewer*");
+    }
+
+    [Fact]
+    public void SimulationFailure_KeepsTheDeferredResponseExplicit()
+    {
+        DiscordEmbed embed = SystemOneSimulation.Failure(
+            "The simulation could not be completed (InvalidOperationException). No membership data was changed.");
+
+        embed.Description.Should().Contain("InvalidOperationException");
+        embed.Description.Should().Contain("No membership data was changed.");
+    }
+
+    private static Questionnaire Questionnaire() => new()
+    {
+        Id = "newbie",
+        Name = "On-boarding",
+        Description = "Current description",
+        Automation = new QuestionnaireAutomation { Context = "Technical community" }
+    };
 }

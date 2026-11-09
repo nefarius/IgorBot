@@ -477,6 +477,8 @@ public sealed class SystemOneProbeTests
     [Theory]
     [InlineData(0.90, 0.80, OnboardingDecisionOutcome.AutoPromote)]
     [InlineData(0.67, 0.80, OnboardingDecisionOutcome.ManualReview)]
+    [InlineData(1, 1, OnboardingDecisionOutcome.AutoPromote)]
+    [InlineData(1, 0, OnboardingDecisionOutcome.AutoPromote)]
     internal async Task Simulation_UsesConfiguredContextAndThreshold(
         double normalProbability,
         double threshold,
@@ -499,6 +501,33 @@ public sealed class SystemOneProbeTests
         report.Threshold.Should().Be(threshold);
         client.Calls.Should().Be(1);
         client.LastSubmission.Should().BeSameAs(submission);
+    }
+
+    [Theory]
+    [InlineData(double.NaN)]
+    [InlineData(double.PositiveInfinity)]
+    [InlineData(-0.01)]
+    [InlineData(1.01)]
+    public async Task Simulation_RejectsInvalidThresholdBeforeInference(double threshold)
+    {
+        RecordingProbeClient client = new();
+        SystemOneProbe probe = new(Configured(null), client);
+
+        SystemOneProbeReport report = await probe.SimulateAsync(SystemOneProbe.Sample, threshold);
+
+        report.Status.Should().Be(SystemOneProbeStatus.Failed);
+        if (double.IsNaN(threshold))
+        {
+            double.IsNaN(report.Threshold!.Value).Should().BeTrue();
+        }
+        else
+        {
+            report.Threshold.Should().Be(threshold);
+        }
+
+        report.Elapsed.Should().BeGreaterThanOrEqualTo(TimeSpan.Zero);
+        report.Failure.Should().Be("Auto-promotion threshold is invalid.");
+        client.Calls.Should().Be(0);
     }
 
     [Fact]
