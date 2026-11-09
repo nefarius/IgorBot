@@ -148,6 +148,7 @@ internal sealed class SystemOneProbe(SystemOneSettings settings, IOnboardingDeci
                 Status = SystemOneProbeStatus.Failed,
                 Endpoint = endpoint,
                 Model = settings.Model,
+                Threshold = threshold,
                 Elapsed = watch.Elapsed,
                 Failure = Redact(ex, settings.ApiToken),
                 UsedAuthorization = settings.ApiToken is not null

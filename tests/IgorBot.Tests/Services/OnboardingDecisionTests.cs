@@ -531,6 +531,22 @@ public sealed class SystemOneProbeTests
     }
 
     [Fact]
+    public async Task Simulation_PreservesThresholdWhenClassificationThrows()
+    {
+        ProbeClient client = new() { Error = new HttpRequestException("connection refused") };
+        SystemOneProbe probe = new(Configured(null), client);
+
+        SystemOneProbeReport report = await probe.SimulateAsync(SystemOneProbe.Sample, 0.91);
+
+        report.Status.Should().Be(SystemOneProbeStatus.Failed);
+        report.Model.Should().Be("loaded");
+        report.Threshold.Should().Be(0.91);
+        report.Elapsed.Should().BeGreaterThanOrEqualTo(TimeSpan.Zero);
+        report.Failure.Should().Contain(nameof(HttpRequestException));
+        client.Calls.Should().Be(1);
+    }
+
+    [Fact]
     public async Task Simulation_ReportsInvalidDecisionWithoutThrowing()
     {
         RecordingProbeClient client = new() { Invalid = true };
