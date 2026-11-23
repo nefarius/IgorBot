@@ -20,7 +20,7 @@
         <PackageVersion Include="MongoDB.Entities" Version="25.1.0"/>
         <PackageVersion Include="OllamaSharp" Version="5.5.2"/>
         <PackageVersion Include="Polly.Core" Version="8.9.1"/>
-        <PackageVersion Include="Serilog.Extensions.Logging" Version="10.0.0"/>
+        <PackageVersion Include="Serilog.Extensions.Logging" Version="11.0.0"/>
         <PackageVersion Include="Serilog.Settings.Configuration" Version="10.0.1"/>
         <PackageVersion Include="Serilog.Sinks.Console" Version="6.1.1"/>
         <PackageVersion Include="xunit" Version="2.9.3"/>
